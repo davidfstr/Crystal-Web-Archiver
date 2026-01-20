@@ -1,17 +1,44 @@
 from collections.abc import Callable
 from crystal.tests import (
     test_about_box,
-    test_bulkheads, test_callout, test_cli, test_disk_io_errors, test_do_not_download_groups,
-    test_download, test_download_body, test_edit_group, test_edit_root_url,
-    test_entitytree, test_file_extension_visibility, test_hibernate,
-    test_icons, test_install_to_desktop, test_load_urls, test_log_drawer,
+    test_bulkheads,
+    test_callout,
+    test_cli,
+    test_disk_io_errors,
+    test_do_not_download_groups,
+    test_download,
+    test_download_body,
+    test_edit_group,
+    test_edit_root_url,
+    test_entitytree,
+    test_external_urls,
+    test_file_extension_visibility,
+    test_hibernate,
+    test_icons,
+    test_install_to_desktop,
+    test_load_urls,
+    test_log_drawer,
     test_main_window,
-    test_menus, test_new_group, test_new_root_url, test_open_project,
-    test_parse_html, test_preferences,
-    test_profile, test_project_migrate, test_readonly_mode,
-    test_runner, test_server, test_shell, test_ssd, test_tasks, test_tasktree,
-    test_untitled_projects, test_url_normalization,
-    test_window_modal_titles, test_workflows, test_xthreading,
+    test_menus,
+    test_new_group,
+    test_new_root_url,
+    test_open_project,
+    test_parse_html,
+    test_preferences,
+    test_profile,
+    test_project_migrate,
+    test_readonly_mode,
+    test_runner,
+    test_server,
+    test_shell,
+    test_ssd,
+    test_tasks,
+    test_tasktree,
+    test_untitled_projects,
+    test_url_normalization,
+    test_window_modal_titles,
+    test_workflows,
+    test_xthreading,
 )
 
 
@@ -29,7 +56,11 @@ def _test_functions_in_module(mod) -> list[Callable]:
         )
     ]
 
-# TODO: Avoid the need to manually enumerate all test modules individually
+# TODO: Avoid the need to manually enumerate all test modules individually.
+#       
+#       Dynamic imports alone won't work to eliminate manual enumeration
+#       because both py2app and py2exe trace explicit imports to determine
+#       what code to bundle in the executables they generate.
 TEST_FUNCS = (
     _test_functions_in_module(test_about_box) +
     _test_functions_in_module(test_bulkheads) +
@@ -42,6 +73,7 @@ TEST_FUNCS = (
     _test_functions_in_module(test_edit_group) +
     _test_functions_in_module(test_edit_root_url) +
     _test_functions_in_module(test_entitytree) +
+    _test_functions_in_module(test_external_urls) +
     _test_functions_in_module(test_file_extension_visibility) +
     _test_functions_in_module(test_hibernate) +
     _test_functions_in_module(test_icons) +

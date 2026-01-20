@@ -2652,10 +2652,11 @@ class Resource:
     its project is read-only. If/when the project transitions to
     writable, any unsaved resources will be saved to disk.
     """
-    # Special IDs, all <0
+    # Special IDs, all < 0
     _DEFER_ID = -1  # type: Literal[-1]
     _DELETED_ID = -2  # type: Literal[-2]
     _UNSAVED_ID = -3  # type: Literal[-3]
+    _EXTERNAL_ID = -4  # type: Literal[-4]
     
     # Optimize per-instance memory use, since there may be very many Resource objects
     __slots__ = (
@@ -2688,6 +2689,7 @@ class Resource:
             project: Project,
             url: str,
             _id: Union[None, int]=None,
+            *, _external_ok: bool=False,
             ) -> Resource:
         """
         Looks up an existing resource with the specified URL or creates a new
@@ -2705,11 +2707,28 @@ class Resource:
         * url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
         """
         # Private API:
-        # - If _id == Resource._DEFER_ID, and there is no existing resource
-        #   corresponding to the URL in the project, the returned Resource
-        #   will not have a valid ID and report _is_finished_initializing() == False.
-        #   The caller will then be responsible for populating the ID later
-        #   using _finish_init().
+        # * _id --
+        #     - If _id is None then any existing resource in the database
+        #       matching the specified URL will be used. If no matching resource
+        #       is found then a new Resource will be created in the database.
+        #       The resulting Resource will always have an _id pointing to
+        #       a Resource in the database.
+        #     - If not (_id < 0) then it points to an existing Resource in the
+        #       database with the specified ID.
+        #     - If _id == Resource._DEFER_ID, and there is no existing resource
+        #       corresponding to the URL in the project, the returned Resource
+        #       will not have a valid ID and report _is_finished_initializing() == False.
+        #       The caller will then be responsible for populating the ID later
+        #       using _finish_init().
+        #     - If _id == Resource._EXTERNAL_ID, then the caller is signaling
+        #       an explicit intent to create an external URL.
+        #     - No other values for _id are valid.
+        # * _external_ok --
+        #     - whether the caller is prepared for the possibility
+        #       that the specified URL corresponds to an external URL.
+        #       In that circumstance the returned Resource will have
+        #       (external_url is not None) and the caller should check
+        #       for that condition to do any special handling required.
         
         if _id is None or _id == Resource._DEFER_ID:
             url_alternatives = cls.resource_url_alternatives(project, url)
@@ -2730,6 +2749,21 @@ class Resource:
             # Always use original URL if loading from saved resource
             normalized_url = url
         del url  # prevent accidental usage later
+        
+        # Ensure that if an external URL is used then the caller opts-in
+        # to handling that possibility, so that they aren't created unintentionally
+        is_external = Alias.parse_external_url(normalized_url) is not None
+        if is_external:
+            if not _external_ok:
+                raise ValueError(
+                    f'Cannot create Resource with external URL {normalized_url!r} '
+                    f'unless caller signals it supports that possibility '
+                    f'using _external_ok=True')
+            if not (_id is None or _id < 0):  # non-special ID
+                raise ValueError(
+                    f'Cannot create Resource with external URL {normalized_url!r} '
+                    f'with in-database id={_id}.')
+            _id = Resource._EXTERNAL_ID  # reinterpret
         
         self = object.__new__(cls)
         self.project = _resolve_proxy(project)  # type: ignore[assignment]
@@ -2754,6 +2788,10 @@ class Resource:
             # Can't have revisions because it was just created this session
             self._definitely_has_no_revisions = True
         
+        if _id == Resource._EXTERNAL_ID:
+            # External resources are in-memory only and never have revisions
+            self._definitely_has_no_revisions = True
+        
         if _id == Resource._DEFER_ID:
             self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         else:
@@ -2776,24 +2814,28 @@ class Resource:
         * creating -- whether this resource is being created and did not exist in the database
         """
         # Private API:
-        # - id may be _UNSAVED_ID
+        # - id may be _UNSAVED_ID or _EXTERNAL_ID
         self._id = id
         
         if creating:
             project = self.project  # cache
             
-            # Record self in Project
-            project._resource_for_url[self._url] = self
-            if id == Resource._UNSAVED_ID:
-                project._unsaved_resources.append(self)
+            if id == Resource._EXTERNAL_ID:
+                # External resources are in-memory only, not saved to project
+                pass
             else:
-                assert id >= 0  # not any other kind of special ID
-                project._resource_for_id[id] = self
-            if project._sorted_resource_urls is not None:
-                project._sorted_resource_urls.add(self._url)
-            # NOTE: Don't check invariants here to save a little performance,
-            #       since this method (_finish_init) is called very many times
-            #project._check_url_collection_invariants()
+                # Record self in Project
+                project._resource_for_url[self._url] = self
+                if id == Resource._UNSAVED_ID:
+                    project._unsaved_resources.append(self)
+                else:
+                    assert id >= 0  # not any other kind of special ID
+                    project._resource_for_id[id] = self
+                if project._sorted_resource_urls is not None:
+                    project._sorted_resource_urls.add(self._url)
+                # NOTE: Don't check invariants here to save a little performance,
+                #       since this method (_finish_init) is called very many times
+                #project._check_url_collection_invariants()
             
             # Notify listeners that self did instantiate
             project._resource_did_instantiate(self)
@@ -2831,6 +2873,7 @@ class Resource:
             project: Project,
             urls: list[str],
             origin_url: str,
+            *, _external_ok: bool=False,
             ) -> list[Resource]:
         """
         Get or creates several Resources for the specified list of URLs, in bulk.
@@ -2852,7 +2895,19 @@ class Resource:
         * urls -- absolute URLs.
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
         """
-        (already_created, created) = cls._bulk_get_or_create(project, urls, origin_url)
+        # Private API:
+        # * _external_ok --
+        #     - whether the caller is prepared for the possibility
+        #       that any of the specified URLs correspond to an external URL.
+        #       In that circumstance the returned list
+        #       may contain one or more Resources where
+        #       (external_url is not None) and the caller should check
+        #       for that condition to do any special handling required.
+        
+        (already_created, created) = cls._bulk_get_or_create(
+            project, urls, origin_url,
+            _external_ok=_external_ok,
+        )
         return already_created + created
     
     @classmethod
@@ -2883,7 +2938,14 @@ class Resource:
         * urls -- absolute URLs.
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
         """
-        (already_created, created) = cls._bulk_get_or_create(project, urls, origin_url)
+        (_, created) = cls._bulk_get_or_create(
+            project, urls, origin_url,
+            # NOTE: _external_ok=True is always safe in this context because
+            #       any created Resources with an external URL won't be exposed
+            #       to the caller. Therefore the caller cannot observe such
+            #       Resources and does not need any special handling for them.
+            _external_ok=True,
+        )
         return created
     
     @classmethod
@@ -2892,25 +2954,39 @@ class Resource:
             project: Project,
             urls: list[str],
             origin_url: str,
+            *, _external_ok: bool=False,
             ) -> tuple[list[Resource], list[Resource]]:
+        # Private API:
+        # * _external_ok --
+        #     - whether the caller is prepared for the possibility
+        #       that any of the specified URLs correspond to an external URL.
+        #       In that circumstance the returned list of
+        #       `resources_already_created` may contain one or more Resources where
+        #       (external_url is not None) and the caller should check
+        #       for that condition to do any special handling required.
+        
         # 1. Create Resources in memory initially, deferring any database INSERTs
         # 2. Identify new resources that need to be inserted in the database
         resource_for_new_url = OrderedDict()  # type: Dict[str, Resource]
         resources_already_created = []
         for url in urls:
             # Get/create Resource in memory and normalize its URL
-            new_r = Resource(project, url, _id=Resource._DEFER_ID)
-            if new_r._is_finished_initializing:
-                # Resource with normalized URL already existed in memory
+            new_r = Resource(project, url, _id=Resource._DEFER_ID, _external_ok=_external_ok)
+            if new_r.external_url is not None:
+                # Report external URLs which exist only in memory as being "already created"
                 resources_already_created.append(new_r)
             else:
-                # Resource with normalized URL needs to be created in database
-                if new_r.url in resource_for_new_url:
-                    # Resource with normalized URL is already scheduled to be created in database
-                    pass
+                if new_r._is_finished_initializing:
+                    # Resource with normalized URL already existed in memory
+                    resources_already_created.append(new_r)
                 else:
-                    # Schedule resource with normalized URL to be created in database
-                    resource_for_new_url[new_r.url] = new_r
+                    # Resource with normalized URL needs to be created in database
+                    if new_r.url in resource_for_new_url:
+                        # Resource with normalized URL is already scheduled to be created in database
+                        pass
+                    else:
+                        # Schedule resource with normalized URL to be created in database
+                        resource_for_new_url[new_r.url] = new_r
         
         if len(resource_for_new_url) > 0:
             if project.readonly:
@@ -3043,6 +3119,27 @@ class Resource:
                     alternatives.append(new_url)
                     old_url = new_url  # reinterpret
         
+        # Apply user-defined alias-based normalization,
+        # after all other normalizations
+        old_url = new_url
+        for alias in project.aliases:
+            if not old_url.startswith(alias.source_url_prefix):
+                continue
+            
+            # Replace source prefix with target prefix
+            new_url = alias.target_url_prefix + old_url[len(alias.source_url_prefix):]
+            
+            # If target is external, format as external URL
+            if alias.target_is_external:
+                new_url = Alias.format_external_url(new_url)
+            
+            if new_url != old_url:
+                alternatives.append(new_url)
+                old_url = new_url  # reinterpret
+            
+            # Only apply the first matching alias
+            break
+        
         return alternatives
     
     @property
@@ -3065,6 +3162,18 @@ class Resource:
     @property
     def normalized_url(self) -> str:
         return self.resource_url_alternatives(self.project, self._url)[-1]
+    
+    @property
+    def external_url(self) -> str | None:
+        """
+        If this Resource points to live URL on the internet external to the project,
+        returns what that external URL is. Otherwise returns None.
+        """
+        if self._id != Resource._EXTERNAL_ID:
+            return None
+        external_url = Alias.parse_external_url(self._url)
+        assert external_url is not None
+        return external_url
     
     def _get_already_downloaded_this_session(self) -> bool:
         return self._already_downloaded_this_session
@@ -4765,6 +4874,39 @@ class Alias:
         
         self._target_is_external = target_is_external
     target_is_external = cast(bool, property(_get_target_is_external, _set_target_is_external))
+    
+    # === External URLs ===
+    
+    @staticmethod
+    def format_external_url(external_url: str) -> str:
+        """
+        Given an external URL (pointing to a live resource on the internet),
+        returns the corresponding archive URL that should be used internally
+        within the project to represent this external resource.
+        
+        Example:
+        >>> Alias.format_external_url('https://example.com/page')
+        'crystal://external/https://example.com/page'
+        """
+        return f'crystal://external/{external_url}'
+    
+    @staticmethod
+    def parse_external_url(archive_url: str) -> str | None:
+        """
+        Given an archive URL, returns the corresponding external URL if the
+        archive URL represents an external resource, or None otherwise.
+        
+        Example:
+        >>> Alias.parse_external_url('crystal://external/https://example.com/page')
+        'https://example.com/page'
+        >>> Alias.parse_external_url('https://example.com/page')
+        None
+        """
+        prefix = 'crystal://external/'
+        if archive_url.startswith(prefix):
+            return archive_url[len(prefix):]
+        else:
+            return None
     
     # === Utility ===
     

@@ -1296,9 +1296,18 @@ class DownloadResourceTask(Task['ResourceRevision']):
                         #       was deleted sometime between being created
                         #       by ParseResourceRevisionLinks and being
                         #       accessed here.
-                        link_resource = Resource(project, link_url)
-                        if not any([g.contains_url(link_resource.url) for g in dnd_groups]):
-                            embedded_resources.append(link_resource)
+                        link_resource = Resource(project, link_url, _external_ok=True)
+                        
+                        # Do not try to add external resources to the project
+                        if link_resource.external_url is not None:
+                            continue
+                        
+                        # Don't automatically download embedded URLs that are
+                        # in a Do Not Download group
+                        if any([g.contains_url(link_resource.url) for g in dnd_groups]):
+                            continue
+                        
+                        embedded_resources.append(link_resource)
                     return embedded_resources
                 embedded_resources = fg_call_and_wait(fg_task)
                 
@@ -1474,6 +1483,12 @@ class ParseResourceRevisionLinks(_LeafTask['Tuple[List[Link], List[Resource]]'])
     @bg_affinity
     def __call__(self) -> Tuple[List[Link], List[Resource]]:
         """
+        Returns a list of parsed Links and Resources, which may be of different lengths.
+        
+        Additionally, one or more of the returned Resources might correspond to
+        external URLs. Callers that need special handling for such Resources
+        should check .external_url on each returned Resource.
+        
         Raises:
         * RevisionBodyMissingError
         """
@@ -1488,7 +1503,7 @@ class ParseResourceRevisionLinks(_LeafTask['Tuple[List[Link], List[Resource]]'])
         else:
             self.subtitle = 'Recording links...'
             def record_links() -> list[Resource]:
-                return Resource.bulk_get_or_create(r.project, urls, r.url)
+                return Resource.bulk_get_or_create(r.project, urls, r.url, _external_ok=True)
             linked_resources = fg_call_and_wait(record_links)
         
         return (links, linked_resources)
