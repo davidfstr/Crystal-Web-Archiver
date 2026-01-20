@@ -37,7 +37,7 @@ from crystal.util.bulkheads import (
 from crystal.util.bulkheads import capture_crashes_to_stderr, run_bulkhead_call
 from crystal.util.db import (
     DatabaseConnection, DatabaseCursor, get_column_names_of_table,
-    get_index_names, is_no_such_column_error_for,
+    get_index_names, get_table_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.listenable import ListenableMixin
@@ -287,6 +287,7 @@ class Project(ListenableMixin):
         self._sorted_resource_urls = None       # type: Optional[SortedList[str]]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
+        self._aliases = []                      # type: List[Alias]
         
         self._min_fetch_date = None  # type: Optional[datetime.datetime]
         
@@ -559,6 +560,7 @@ class Project(ListenableMixin):
         # Add missing database columns and indexes
         if True:
             index_names = get_index_names(c)  # cache
+            table_names = get_table_names(c)  # cache
             
             # Add resource_group.do_not_download column if missing
             if 'do_not_download' not in get_column_names_of_table(c, 'resource_group'):
@@ -593,6 +595,11 @@ class Project(ListenableMixin):
                     'create index resource_revision__status_code on resource_revision '
                     '(json_extract(metadata, "$.status_code"), resource_id) '
                     'where json_extract(metadata, "$.status_code") != 200')
+            
+            # Add alias table if missing
+            if 'alias' not in table_names:
+                progress_listener.upgrading_project('Adding aliases table...')
+                c.execute('create table alias (id integer primary key, source_url_prefix text unique not null, target_url_prefix text not null, target_is_external integer not null default 0)')
             
             commit()
         
@@ -853,6 +860,7 @@ class Project(ListenableMixin):
         c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
         c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
         c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
+        c.execute('create table alias (id integer primary key, source_url_prefix text unique not null, target_url_prefix text not null, target_is_external integer not null default 0)')
         c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         
         # (Define indexes later in _apply_migrations())
@@ -929,6 +937,13 @@ class Project(ListenableMixin):
             else:
                 raise ProjectFormatError('Resource group {} has invalid source type "{}".'.format(group._id, source_type))
             group.init_source(source_obj)
+        
+        # Load Aliases
+        table_names = get_table_names(c)
+        if 'alias' in table_names:
+            for (source_url_prefix, target_url_prefix, target_is_external, id) in c.execute(
+                    'select source_url_prefix, target_url_prefix, target_is_external, id from alias order by id'):
+                Alias(self, source_url_prefix, target_url_prefix, target_is_external=bool(target_is_external), _id=id)
         
         # (ResourceRevisions are loaded on demand)
     
@@ -1670,6 +1685,39 @@ class Project(ListenableMixin):
     def _get_resource_group_with_id(self, resource_group_id) -> ResourceGroup | None:
         """Returns the ResourceGroup with the specified ID or None if no such group exists."""
         return self.get_resource_group(id=resource_group_id)
+    
+    @property
+    def aliases(self) -> Iterable[Alias]:
+        """Returns all Aliases in the project in the order they were created."""
+        return self._aliases
+    
+    @fg_affinity
+    def get_alias(self,
+            source_url_prefix: str | _Missing = _Missing.VALUE,
+            *, target_url_prefix: str | _Missing = _Missing.VALUE,
+            id: int | _Missing = _Missing.VALUE,
+            ) -> Alias | None:
+        """
+        Returns the Alias with the specified URL prefix or ID.
+        Returns None if no matching alias exists.
+        """
+        if source_url_prefix != _Missing.VALUE:
+            for existing_alias in self._aliases:
+                if existing_alias.source_url_prefix == source_url_prefix:
+                    return existing_alias
+            return None
+        elif target_url_prefix != _Missing.VALUE:
+            for existing_alias in self._aliases:
+                if existing_alias.target_url_prefix == target_url_prefix:
+                    return existing_alias
+            return None
+        elif id != _Missing.VALUE:
+            for existing_alias in self._aliases:
+                if existing_alias._id == id:
+                    return existing_alias
+            return None
+        else:
+            raise ValueError('Expected source_url_prefix, target_url_prefix, or id to be specified')
     
     # NOTE: Used by tests
     def _revision_count(self) -> int:
@@ -3617,6 +3665,7 @@ class RootResource:
         Raised when an attempt is made to create a new `RootResource` for a `Resource`
         that is already associated with an existing `RootResource`.
         """
+        pass
 
 
 class ResourceRevision:
@@ -4564,8 +4613,176 @@ class _PersistedError(Exception):
         self.type = type
 
 
-ResourceGroupSource: TypeAlias = Union['RootResource', 'ResourceGroup', None]
+class Alias:
+    """
+    An Alias causes URLs with a particular Source URL Prefix to be considered
+    equivalent to the URL with the prefix replaced with a Target URL Prefix.
+    
+    In particular any links to URLs matching the Source URL Prefix of an Alias
+    will be rewritten to point to the equivalent URL with the Target URL Prefix.
+    
+    An alias's target can be marked as External, meaning that it points to a
+    live URL on the internet rather than to a downloaded URL in the project.
+    
+    Persisted and auto-saved.
+    """
+    project: Project
+    _source_url_prefix: str
+    _target_url_prefix: str
+    _target_is_external: bool
+    _id: int | None  # or None if deleted
+    
+    # === Init ===
+    
+    @fg_affinity
+    def __init__(self,
+            project: Project,
+            source_url_prefix: str,
+            target_url_prefix: str,
+            *, target_is_external: bool = False,
+            _id: int | None = None) -> None:
+        """
+        Creates a new alias.
+        
+        Arguments:
+        * project -- associated `Project`.
+        * source_url_prefix -- source URL prefix. Must end in '/'.
+        * target_url_prefix -- target URL prefix. Must end in '/'.
+        * target_is_external -- whether target is external to the project.
+        
+        Raises:
+        * ProjectReadOnlyError
+        * Alias.AlreadyExists --
+            if there is already an `Alias` with specified `source_url_prefix`.
+        * ValueError --
+            if `source_url_prefix` or `target_url_prefix` do not end in slash (/).
+        """
+        project = _resolve_proxy(project)  # type: ignore[assignment]
+        if not isinstance(project, Project):
+            raise TypeError()
+        if not isinstance(source_url_prefix, str):
+            raise TypeError()
+        if not isinstance(target_url_prefix, str):
+            raise TypeError()
+        if not isinstance(target_is_external, bool):
+            raise TypeError()
+        
+        # Validate that URL prefixes end in slash
+        if not source_url_prefix.endswith('/'):
+            raise ValueError('source_url_prefix must end in slash (/)')
+        if not target_url_prefix.endswith('/'):
+            raise ValueError('target_url_prefix must end in slash (/)')
+        
+        # Check for duplicate source_url_prefix
+        if not project._loading:
+            if project.get_alias(source_url_prefix) is not None:
+                raise Alias.AlreadyExists(
+                    f'Alias with source_url_prefix {source_url_prefix!r} already exists')        
+        
+        self.project = project
+        self._source_url_prefix = source_url_prefix
+        self._target_url_prefix = target_url_prefix
+        self._target_is_external = target_is_external
+        
+        if project._loading:
+            assert _id is not None
+            self._id = _id
+        else:
+            if project.readonly:
+                raise ProjectReadOnlyError()
+            with closing(project._db.cursor()) as c:
+                c.execute(
+                    'insert into alias (source_url_prefix, target_url_prefix, target_is_external) values (?, ?, ?)',
+                    (source_url_prefix, target_url_prefix, int(target_is_external)))
+                project._db.commit()
+                self._id = c.lastrowid
+        project._aliases.append(self)
+    
+    # === Delete ===
+    
+    @fg_affinity
+    def delete(self) -> None:
+        """
+        Deletes this alias.
+        
+        Raises:
+        * ProjectReadOnlyError
+        """
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        with closing(self.project._db.cursor()) as c:
+            c.execute('delete from alias where id=?', (self._id,))
+        self.project._db.commit()
+        self._id = None
+        
+        self.project._aliases.remove(self)
+    
+    # === Properties ===
+    
+    @property
+    def source_url_prefix(self) -> str:
+        """Source URL prefix. Always ends in '/'."""
+        return self._source_url_prefix
+    
+    def _get_target_url_prefix(self) -> str:
+        """Target URL prefix. Always ends in '/'."""
+        return self._target_url_prefix
+    @fg_affinity
+    def _set_target_url_prefix(self, target_url_prefix: str) -> None:
+        if not target_url_prefix.endswith('/'):
+            raise ValueError('target_url_prefix must end in slash (/)')
+        if self._target_url_prefix == target_url_prefix:
+            return
+        
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        with closing(self.project._db.cursor()) as c:
+            c.execute('update alias set target_url_prefix=? where id=?', (
+                target_url_prefix,
+                self._id,))
+        self.project._db.commit()
+        
+        self._target_url_prefix = target_url_prefix
+    target_url_prefix = cast(str, property(_get_target_url_prefix, _set_target_url_prefix))
+    
+    def _get_target_is_external(self) -> bool:
+        """Whether target is external to the project."""
+        return self._target_is_external
+    @fg_affinity
+    def _set_target_is_external(self, target_is_external: bool) -> None:
+        if not isinstance(target_is_external, bool):
+            raise TypeError()
+        if self._target_is_external == target_is_external:
+            return
+        
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        with closing(self.project._db.cursor()) as c:
+            c.execute('update alias set target_is_external=? where id=?', (
+                int(target_is_external),
+                self._id,))
+        self.project._db.commit()
+        
+        self._target_is_external = target_is_external
+    target_is_external = cast(bool, property(_get_target_is_external, _set_target_is_external))
+    
+    # === Utility ===
+    
+    def __repr__(self):
+        if self.target_is_external:
+            return f'Alias({self.source_url_prefix!r}, {self.target_url_prefix!r}, target_is_external={True!r})'
+        else:
+            return f'Alias({self.source_url_prefix!r}, {self.target_url_prefix!r})'
+    
+    class AlreadyExists(Exception):
+        """
+        Raised when an attempt is made to create a new `Alias` with a
+        `source_url_prefix` that is already used by an existing `Alias`.
+        """
+        pass
 
+
+ResourceGroupSource: TypeAlias = Union['RootResource', 'ResourceGroup', None]
 
 class ResourceGroup(ListenableMixin):
     """

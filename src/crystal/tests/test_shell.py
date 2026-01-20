@@ -40,9 +40,11 @@ _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'OPENER_FILE_EXTENSION',
     'PARTIAL_FILE_EXTENSION',
     'add_task',
+    'aliases',
     'close',
     'default_url_prefix',
     'entity_title_format',
+    'get_alias',
     'get_display_url',
     'get_resource',
     'get_resource_group',
@@ -309,6 +311,20 @@ def test_can_read_project_with_shell(subtests: SubtestsContext) -> None:
                     "Resource('https://xkcd.com/1/')\n",
                     py_eval(crystal, f'list(rg.members)[0]'))
             
+            with subtests.test(case='test can list and get aliases'):
+                # Test can import Alias
+                py_exec(crystal, 'from crystal.model import Alias')
+                
+                # Test can list aliases (should be empty initially)
+                assertEqual(
+                    '[]\n',
+                    py_eval(crystal, 'list(p.aliases)'))
+                
+                # Test can get alias by source_url_prefix (should be None when doesn't exist)
+                assertEqual(
+                    True,
+                    py_eval_literal(crystal, 'p.get_alias("https://www.example.com/") is None'))
+            
             with subtests.test(case='test can read content of resource revision'):
                 assertEqual(
                     {
@@ -434,6 +450,72 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 py_exec(crystal, f'r.delete()')
                 # Ensure Resource itself is deleted
                 py_exec(crystal, f'p.get_resource(r.url)')
+            
+            with subtests.test(case='test can create and delete aliases', return_if_failure=True):
+                # Test can import Alias
+                py_exec(crystal, 'from crystal.model import Alias')
+                
+                # Test can create Alias
+                assertEqual(
+                    "Alias('https://www.example.com/', 'https://example.com/')\n",
+                    py_eval(crystal, "a1 = Alias(p, 'https://www.example.com/', 'https://example.com/'); a1"))
+                
+                # Test can create external Alias
+                assertEqual(
+                    "Alias('https://old.example.com/', 'https://external.example.com/', target_is_external=True)\n",
+                    py_eval(crystal, "a2 = Alias(p, 'https://old.example.com/', 'https://external.example.com/', target_is_external=True); a2"))
+                
+                # Test can list aliases
+                assertEqual(
+                    2,
+                    py_eval_literal(crystal, 'len(list(p.aliases))'))
+                
+                # Test can get alias by source_url_prefix
+                assertEqual(
+                    "Alias('https://www.example.com/', 'https://example.com/')\n",
+                    py_eval(crystal, 'p.get_alias("https://www.example.com/")'))
+                
+                # Test get_alias returns the same object
+                assertEqual(
+                    True,
+                    py_eval_literal(crystal, 'p.get_alias("https://www.example.com/") is a1'))
+                
+                # Test get_alias returns None for non-existent alias
+                assertEqual(
+                    True,
+                    py_eval_literal(crystal, 'p.get_alias("https://nonexistent.example.com/") is None'))
+                
+                # Test can read alias properties
+                assertEqual(
+                    "'https://www.example.com/'\n",
+                    py_eval(crystal, 'a1.source_url_prefix'))
+                assertEqual(
+                    "'https://example.com/'\n",
+                    py_eval(crystal, 'a1.target_url_prefix'))
+                assertEqual(
+                    'False\n',
+                    py_eval(crystal, 'a1.target_is_external'))
+                
+                # Test can update alias target_url_prefix
+                py_exec(crystal, "a1.target_url_prefix = 'https://example.org/'")
+                assertEqual(
+                    "'https://example.org/'\n",
+                    py_eval(crystal, 'a1.target_url_prefix'))
+                
+                # Test can update alias target_is_external
+                py_exec(crystal, 'a2.target_is_external = False')
+                assertEqual(
+                    'False\n',
+                    py_eval(crystal, 'a2.target_is_external'))
+                
+                # Test can delete Alias
+                py_exec(crystal, 'a1.delete()')
+                assertEqual(
+                    True,
+                    py_eval_literal(crystal, 'p.get_alias("https://www.example.com/") is None'))
+                assertEqual(
+                    1,
+                    py_eval_literal(crystal, 'len(list(p.aliases))'))
             
             with subtests.test(case='test can download project entities', return_if_failure=True):
                 # Recreate home Resource
