@@ -3388,6 +3388,9 @@ class Resource:
         """
         Tries to alter this resource's URL to be in normal form,
         unless there is already an existing resource with that URL.
+        
+        Raises:
+        * ProjectReadOnlyError
         """
         new_url = self.normalized_url
         if new_url == self._url:
@@ -3398,6 +3401,9 @@ class Resource:
         """
         Tries to alter this resource's URL to new specified URL,
         unless there is already an existing resource with that URL.
+        
+        Raises:
+        * ProjectReadOnlyError
         """
         project = self.project  # cache
         
@@ -3419,6 +3425,11 @@ class Resource:
     
     # NOTE: Only used from a Python REPL at the moment
     def delete(self) -> None:
+        """
+        Raises:
+        * ProjectReadOnlyError
+        * ValueError -- if this resource is referenced by a RootResource
+        """
         project = self.project
         
         if project.readonly:
