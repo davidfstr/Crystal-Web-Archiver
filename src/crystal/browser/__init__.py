@@ -11,7 +11,7 @@ from crystal.browser.new_root_url import ChangePrefixCommand, NewRootUrlDialog
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree, TaskTreeNode
 from crystal.model import (
-    Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
+    Alias, Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
 from crystal.progress import (
     CancelLoadUrls, CancelSaveAs, DummyOpenProjectProgressListener,
@@ -815,7 +815,8 @@ class MainWindow(CloakMixin):
         """
         is_project_empty = (
             is_iterable_empty(self.project.root_resources) and
-            is_iterable_empty(self.project.resource_groups)
+            is_iterable_empty(self.project.resource_groups) and
+            is_iterable_empty(self.project.aliases)
         )
         
         sizer_index = self._entity_tree_sizer_index  # cache
@@ -1498,6 +1499,7 @@ class MainWindow(CloakMixin):
     def _on_download_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
         assert selected_entity is not None
+        assert not isinstance(selected_entity, Alias)
         
         # Show progress dialog in advance if will need to load all project URLs
         if isinstance(selected_entity, ResourceGroup):
@@ -1612,21 +1614,33 @@ class MainWindow(CloakMixin):
     def resource_group_did_forget(self, group: ResourceGroup) -> None:
         self._update_entity_pane_empty_state_visibility()
     
+    # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
+    @capture_crashes_to_stderr
+    @cloak
+    def alias_did_instantiate(self, alias: Alias) -> None:
+        self._update_entity_pane_empty_state_visibility()
+    
+    # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
+    @capture_crashes_to_stderr
+    @cloak
+    def alias_did_forget(self, alias: Alias) -> None:
+        self._update_entity_pane_empty_state_visibility()
+    
     def _on_selected_entity_changed(self, event: wx.TreeEvent | None=None) -> None:
         selected_entity = self.entity_tree.selected_entity  # cache
         
         readonly = self._readonly  # cache
         self._edit_action.enabled = (
-            isinstance(selected_entity, (ResourceGroup, RootResource)))
+            isinstance(selected_entity, (Alias, ResourceGroup, RootResource)))
         self._forget_action.enabled = (
             (not readonly) and
-            isinstance(selected_entity, (ResourceGroup, RootResource)))
+            isinstance(selected_entity, (Alias, ResourceGroup, RootResource)))
         self._update_members_action.enabled = (
             (not readonly) and
             isinstance(selected_entity, ResourceGroup))
         self._download_action.enabled = (
             (not readonly) and
-            selected_entity is not None)
+            isinstance(selected_entity, (Resource, ResourceGroup, RootResource)))
         self._view_action.enabled = (
             isinstance(selected_entity, (Resource, RootResource)))
     

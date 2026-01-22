@@ -13,6 +13,7 @@ def TREE_NODE_ICONS() -> dict[str, wx.Bitmap]:
         (icon_name, _load_png_resource(f'treenodeicon_{icon_name}.png'))
         for icon_name in [
             # Entity Tree Icons
+            'entitytree_alias',
             'entitytree_cluster_embedded',
             'entitytree_cluster_offsite',
             'entitytree_loading',

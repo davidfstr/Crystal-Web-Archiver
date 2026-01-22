@@ -1164,8 +1164,17 @@ class Project(ListenableMixin):
     def get_display_url(self, url):
         """
         Returns a displayable version of the provided URL.
-        If the URL lies under the configured `default_url_prefix`, that prefix will be stripped.
+        
+        - If the URL is an external URL (pointing to a live resource on the internet),
+          it will be formatted with an icon prefix.
+        - If the URL is not external and lies under the configured `default_url_prefix`, 
+          that prefix will be stripped.
         """
+        # Check if this is an external URL first
+        if (external_url := Alias.parse_external_url(url)) is not None:
+            return Alias.format_external_url_for_display(external_url)
+        
+        # Apply default URL prefix shortening for non-external URLs
         default_url_prefix = self.default_url_prefix
         if default_url_prefix is None:
             return url
@@ -1988,6 +1997,27 @@ class Project(ListenableMixin):
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_forget'):
                 run_bulkhead_call(lis.resource_group_did_forget, group)  # type: ignore[attr-defined]
+    
+    # === Events: Alias Lifecycle ===
+    
+    # Called when a new Alias is created after the project has loaded
+    def _alias_did_instantiate(self, alias: Alias) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'alias_did_instantiate'):
+                run_bulkhead_call(lis.alias_did_instantiate, alias)  # type: ignore[attr-defined]
+    
+    def _alias_did_change(self, alias: Alias) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'alias_did_change'):
+                run_bulkhead_call(lis.alias_did_change, alias)  # type: ignore[attr-defined]
+    
+    def _alias_did_forget(self, alias: Alias) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'alias_did_forget'):
+                run_bulkhead_call(lis.alias_did_forget, alias)  # type: ignore[attr-defined]
     
     # === Events: Root Task Lifecycle ===
     
@@ -4806,6 +4836,10 @@ class Alias:
                 project._db.commit()
                 self._id = c.lastrowid
         project._aliases.append(self)
+        
+        # Notify listeners if not loading
+        if not project._loading:
+            project._alias_did_instantiate(self)
     
     # === Delete ===
     
@@ -4825,6 +4859,8 @@ class Alias:
         self._id = None
         
         self.project._aliases.remove(self)
+        
+        self.project._alias_did_forget(self)
     
     # === Properties ===
     
@@ -4852,6 +4888,8 @@ class Alias:
         self.project._db.commit()
         
         self._target_url_prefix = target_url_prefix
+        
+        self.project._alias_did_change(self)
     target_url_prefix = cast(str, property(_get_target_url_prefix, _set_target_url_prefix))
     
     def _get_target_is_external(self) -> bool:
@@ -4873,6 +4911,8 @@ class Alias:
         self.project._db.commit()
         
         self._target_is_external = target_is_external
+        
+        self.project._alias_did_change(self)
     target_is_external = cast(bool, property(_get_target_is_external, _set_target_is_external))
     
     # === External URLs ===
@@ -4907,6 +4947,10 @@ class Alias:
             return archive_url[len(prefix):]
         else:
             return None
+    
+    @staticmethod
+    def format_external_url_for_display(external_url: str) -> str:
+        return f'🌐 {external_url}'
     
     # === Utility ===
     

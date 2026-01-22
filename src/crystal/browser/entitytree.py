@@ -7,7 +7,7 @@ from crystal.browser.icons import (
 from crystal.doc.generic import Link
 from crystal.doc.html.soup import TEXT_LINK_TYPE_TITLE
 from crystal.model import (
-    Project, ProjectHasTooManyRevisionsError, Resource, ResourceGroup,
+    Alias, Project, ProjectHasTooManyRevisionsError, Resource, ResourceGroup,
     ResourceGroupSource, ResourceRevision, RevisionBodyMissingError,
     RevisionDeletedError, RootResource,
 )
@@ -306,6 +306,39 @@ class EntityTree(Bulkhead):
         # may need to be updated
         self.root.update_icon_set_of_descendants_in_group(group)
     
+    # === Events: Alias Lifecycle ===
+    
+    @capture_crashes_to_self
+    def alias_did_instantiate(self, alias: Alias) -> None:
+        selection_was_empty = self.view.selected_node in [None, self.view.root]  # capture
+        
+        self.update()
+        
+        if selection_was_empty:
+            # Select the newly-created entity
+            for child in self.root.children:
+                if child.entity == alias:
+                    child.view.peer.SelectItem()
+                    break
+    
+    @capture_crashes_to_self
+    # TODO: Do not recommend asserting that a listener method will be called
+    #       from any particular thread
+    @fg_affinity
+    def alias_did_change(self, alias: Alias) -> None:
+        # Update the title of the AliasNode
+        for child in self.root.children:
+            if isinstance(child, AliasNode) and child.alias == alias:
+                child.view.title = child.calculate_title()
+                break
+    
+    @capture_crashes_to_self
+    # TODO: Do not recommend asserting that a listener method will be called
+    #       from any particular thread
+    @fg_affinity
+    def alias_did_forget(self, alias: Alias) -> None:
+        self.update()
+    
     # === Event: Min Fetch Date Did Change ===
     
     @capture_crashes_to_self
@@ -524,7 +557,7 @@ def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     return [old_seq_selfdict.get(x, x) for x in new_seq]
 
 
-NodeEntity: TypeAlias = Union['RootResource', 'Resource', 'ResourceGroup']
+NodeEntity: TypeAlias = Union['RootResource', 'Resource', 'ResourceGroup', 'Alias']
 
 
 class Node(Bulkhead):
@@ -771,6 +804,9 @@ class RootNode(Node):
         for (index, rg) in enumerate(self._project.resource_groups):
             children.append(ResourceGroupNode(rg))
         
+        for alias in self._project.aliases:
+            children.append(AliasNode(alias))
+        
         self.set_children(children, progress_listener)
 
 
@@ -1013,7 +1049,7 @@ class _ResourceNode(Node):
         if self.resource_links:
             for link in self.resource_links:
                 url = urljoin(self.resource.url, link.relative_url)
-                resource = Resource(self._project, url)
+                resource = Resource(self._project, url, _external_ok=True)
                 resources_2_links[resource].append(link)
         
         linked_root_resources = []
@@ -1554,6 +1590,80 @@ class ResourceGroupNode(_GroupedNode):
         )
     def __hash__(self) -> int:
         return hash(self.resource_group)
+
+
+class AliasNode(Node):
+    """Node representing an Alias in the entity tree."""
+    entity_tooltip = 'alias'
+    
+    ICON = '🔗'
+    ICON_TRUNCATION_FIX = '' 
+    
+    def __init__(self, alias: Alias) -> None:
+        super().__init__(source=None)
+        self.alias = alias
+        
+        self.view = NodeView()
+        # NOTE: Defer expensive calculation until if/when the icon_set is used
+        self.view.icon_set = self.calculate_icon_set
+        self.view.title = self.calculate_title()
+        self.view.expandable = False
+        
+        # Aliases have no children
+        self.children = []
+    
+    # === Properties ===
+    
+    @override
+    def calculate_icon_set(self) -> IconSet | None:
+        return (
+            (wx.TreeItemIcon_Normal, TREE_NODE_ICONS()['entitytree_alias']),
+        )
+    
+    @override
+    @property
+    def icon_tooltip(self) -> str | None:
+        return self.entity_tooltip.capitalize()
+    
+    @override
+    def calculate_title(self) -> str:
+        return self.calculate_title_of(self.alias)
+    
+    @staticmethod
+    def calculate_title_of(alias: Alias) -> str:
+        target_url_prefix = alias.target_url_prefix
+        if alias.target_is_external:
+            target_url_prefix = Alias.format_external_url_for_display(target_url_prefix)
+        assert alias.source_url_prefix.endswith('/')
+        assert target_url_prefix.endswith('/')
+        return f'{alias.source_url_prefix}** → {target_url_prefix}**'
+    
+    @override
+    @property
+    def label_tooltip(self) -> str:
+        tooltip = (
+            f'Source: {self.alias.source_url_prefix}**\n'
+            f'Target: {self.alias.target_url_prefix}**'
+        )
+        if self.alias.target_is_external:
+            tooltip += '\nExternal: Yes (on internet, outside project)'
+        return tooltip
+    
+    @override
+    @property
+    def entity(self) -> Alias:
+        return self.alias
+    
+    # === Comparison ===
+    
+    def __eq__(self, other):
+        return (
+            isinstance(other, AliasNode) and
+            self.alias == other.alias
+        )
+    
+    def __hash__(self):
+        return hash(self.alias)
 
 
 class GroupedLinkedResourcesNode(_GroupedNode):

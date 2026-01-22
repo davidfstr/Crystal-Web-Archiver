@@ -8,6 +8,7 @@ from crystal.tests import (
     test_do_not_download_groups,
     test_download,
     test_download_body,
+    test_edit_alias,
     test_edit_group,
     test_edit_root_url,
     test_entitytree,
@@ -20,6 +21,7 @@ from crystal.tests import (
     test_log_drawer,
     test_main_window,
     test_menus,
+    test_new_alias,
     test_new_group,
     test_new_root_url,
     test_open_project,
@@ -70,6 +72,7 @@ TEST_FUNCS = (
     _test_functions_in_module(test_do_not_download_groups) +
     _test_functions_in_module(test_download) +
     _test_functions_in_module(test_download_body) +
+    _test_functions_in_module(test_edit_alias) +
     _test_functions_in_module(test_edit_group) +
     _test_functions_in_module(test_edit_root_url) +
     _test_functions_in_module(test_entitytree) +
@@ -82,6 +85,7 @@ TEST_FUNCS = (
     _test_functions_in_module(test_log_drawer) +
     _test_functions_in_module(test_main_window) +
     _test_functions_in_module(test_menus) +
+    _test_functions_in_module(test_new_alias) +
     _test_functions_in_module(test_new_group) +
     _test_functions_in_module(test_new_root_url) +
     _test_functions_in_module(test_open_project) +
