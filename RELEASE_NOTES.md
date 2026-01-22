@@ -12,6 +12,15 @@ Release Notes ⋮
 
 ### main
 
+* Workflow improvements
+    * Aliases are now supported for redirecting similar patterns of URLs,
+      such as `https://www.folklore.org/ → https://folklore.org/`.
+        * Use the "New Alias..." menuitem in the "Entity" menu to create an Alias.
+    * Aliases can be used to redirect to external URLs outside the project,
+      on the live internet.
+        * This can be useful if a subset of a project's URLs are hosted in
+          a different internet-accessible subsystem, such as AWS Glacier.
+
 * Shell improvements
     * Uses the new [interactive interpreter] from Python 3.13.
     * Supports using `await` with Crystal's testing utilities
