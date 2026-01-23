@@ -6,12 +6,13 @@ from crystal import APP_NAME
 from crystal.app_preferences import app_prefs
 from crystal.browser.entitytree import EntityTree
 from crystal.browser.icons import TREE_NODE_ICONS
+from crystal.browser.new_alias import NewAliasDialog
 from crystal.browser.new_group import NewGroupDialog
 from crystal.browser.new_root_url import ChangePrefixCommand, NewRootUrlDialog
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree, TaskTreeNode
 from crystal.model import (
-    Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
+    Alias, Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
 from crystal.progress import (
     CancelLoadUrls, CancelSaveAs, DummyOpenProjectProgressListener,
@@ -316,6 +317,11 @@ class MainWindow(CloakMixin):
             enabled=(not self._readonly),
             button_bitmap=dict(DEFAULT_FOLDER_ICON_SET())[wx.TreeItemIcon_Normal],
             button_label='New &Group...')
+        self._new_alias_action = Action(wx.ID_ANY,
+            'New &Alias...',
+            wx.AcceleratorEntry(wx.ACCEL_CTRL | wx.ACCEL_SHIFT, ord('A')),
+            self._on_new_alias,
+            enabled=(not self._readonly))
         self._edit_action = Action(wx.ID_ANY,
             self._EDIT_ACTION_LABEL if not self._readonly else self._GET_INFO_ACTION_LABEL,
             accel=wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_RETURN),
@@ -438,6 +444,7 @@ class MainWindow(CloakMixin):
         entity_menu.AppendSeparator()
         self._new_root_url_action.append_menuitem_to(entity_menu)
         self._new_group_action.append_menuitem_to(entity_menu)
+        self._new_alias_action.append_menuitem_to(entity_menu)
         self._edit_action.append_menuitem_to(entity_menu)
         self._forget_action.append_menuitem_to(entity_menu)
         entity_menu.AppendSeparator()
@@ -815,7 +822,8 @@ class MainWindow(CloakMixin):
         """
         is_project_empty = (
             is_iterable_empty(self.project.root_resources) and
-            is_iterable_empty(self.project.resource_groups)
+            is_iterable_empty(self.project.resource_groups) and
+            is_iterable_empty(self.project.aliases)
         )
         
         sizer_index = self._entity_tree_sizer_index  # cache
@@ -1412,16 +1420,56 @@ class MainWindow(CloakMixin):
         
         assert download_immediately == False
     
-    def _saving_source_would_create_cycle(self, rg: ResourceGroup, source: ResourceGroupSource) -> bool:
-        ancestor_source = source  # type: ResourceGroupSource
-        while ancestor_source is not None:
-            if ancestor_source == rg:
-                return True
-            if isinstance(ancestor_source, ResourceGroup):
-                ancestor_source = ancestor_source.source  # reinterpret
-            else:
-                ancestor_source = None
-        return False
+    # === Entity Pane: New/Edit Alias ===
+    
+    def _on_new_alias(self, event: wx.CommandEvent) -> None:
+        restore_menuitems = self._disable_menus_during_showwindowmodal()
+        NewAliasDialog(
+            self._frame,
+            self._on_new_alias_dialog_ok,
+            alias_exists_func=self._alias_exists,
+            on_close=restore_menuitems,
+        )
+    
+    def _alias_exists(self, source_url_prefix: str) -> bool:
+        return self.project.get_alias(source_url_prefix) is not None
+    
+    @fg_affinity
+    def _on_new_alias_dialog_ok(self,
+            source_url_prefix: str,
+            target_url_prefix: str,
+            target_is_external: bool,
+            ) -> None:
+        if source_url_prefix == '':
+            raise ValueError('Invalid blank source URL prefix')
+        if target_url_prefix == '':
+            raise ValueError('Invalid blank target URL prefix')
+        
+        try:
+            alias = Alias(self.project, source_url_prefix, target_url_prefix,
+                         target_is_external=target_is_external)
+        except Alias.AlreadyExists:
+            raise ValueError('Invalid duplicate source URL prefix')
+    
+    @fg_affinity
+    def _on_edit_alias_dialog_ok(self,
+            alias: Alias,
+            source_url_prefix: str,
+            target_url_prefix: str,
+            target_is_external: bool,
+            ) -> None:
+        if source_url_prefix != alias.source_url_prefix:
+            raise ValueError(
+                'Attempted to change source_url_prefix of existing Alias. '
+                'Source URL prefix cannot be changed after alias is created.'
+            )
+        
+        if target_url_prefix == '':
+            raise ValueError('Invalid blank target URL prefix')
+        
+        # NOTE: Entity tree update will be triggered by property setters
+        alias.target_url_prefix = target_url_prefix
+        alias.target_is_external = target_is_external
     
     # === Entity Pane: Other Commands ===
     
@@ -1486,8 +1534,37 @@ class MainWindow(CloakMixin):
                     raise
             except CancelLoadUrls:
                 pass
+        elif isinstance(selected_entity, Alias):
+            alias = selected_entity
+            restore_menuitems = self._disable_menus_during_showwindowmodal()
+            try:
+                NewAliasDialog(
+                    self._frame,
+                    partial(self._on_edit_alias_dialog_ok, alias),
+                    alias_exists_func=self._alias_exists,
+                    initial_source_url_prefix=alias.source_url_prefix,
+                    initial_target_url_prefix=alias.target_url_prefix,
+                    initial_target_is_external=alias.target_is_external,
+                    is_edit=True,
+                    readonly=self._readonly,
+                    on_close=restore_menuitems,
+                )
+            except:
+                restore_menuitems()
+                raise
         else:
             raise AssertionError()
+    
+    def _saving_source_would_create_cycle(self, rg: ResourceGroup, source: ResourceGroupSource) -> bool:
+        ancestor_source = source  # type: ResourceGroupSource
+        while ancestor_source is not None:
+            if ancestor_source == rg:
+                return True
+            if isinstance(ancestor_source, ResourceGroup):
+                ancestor_source = ancestor_source.source  # reinterpret
+            else:
+                ancestor_source = None
+        return False
     
     def _on_forget_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
@@ -1498,6 +1575,7 @@ class MainWindow(CloakMixin):
     def _on_download_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
         assert selected_entity is not None
+        assert not isinstance(selected_entity, Alias)
         
         # Show progress dialog in advance if will need to load all project URLs
         if isinstance(selected_entity, ResourceGroup):
@@ -1612,21 +1690,33 @@ class MainWindow(CloakMixin):
     def resource_group_did_forget(self, group: ResourceGroup) -> None:
         self._update_entity_pane_empty_state_visibility()
     
+    # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
+    @capture_crashes_to_stderr
+    @cloak
+    def alias_did_instantiate(self, alias: Alias) -> None:
+        self._update_entity_pane_empty_state_visibility()
+    
+    # NOTE: Can't capture to the Entity Tree itself reliably since may not be visible
+    @capture_crashes_to_stderr
+    @cloak
+    def alias_did_forget(self, alias: Alias) -> None:
+        self._update_entity_pane_empty_state_visibility()
+    
     def _on_selected_entity_changed(self, event: wx.TreeEvent | None=None) -> None:
         selected_entity = self.entity_tree.selected_entity  # cache
         
         readonly = self._readonly  # cache
         self._edit_action.enabled = (
-            isinstance(selected_entity, (ResourceGroup, RootResource)))
+            isinstance(selected_entity, (Alias, ResourceGroup, RootResource)))
         self._forget_action.enabled = (
             (not readonly) and
-            isinstance(selected_entity, (ResourceGroup, RootResource)))
+            isinstance(selected_entity, (Alias, ResourceGroup, RootResource)))
         self._update_members_action.enabled = (
             (not readonly) and
             isinstance(selected_entity, ResourceGroup))
         self._download_action.enabled = (
             (not readonly) and
-            selected_entity is not None)
+            isinstance(selected_entity, (Resource, ResourceGroup, RootResource)))
         self._view_action.enabled = (
             isinstance(selected_entity, (Resource, RootResource)))
     

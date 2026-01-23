@@ -37,7 +37,7 @@ from crystal.util.bulkheads import (
 from crystal.util.bulkheads import capture_crashes_to_stderr, run_bulkhead_call
 from crystal.util.db import (
     DatabaseConnection, DatabaseCursor, get_column_names_of_table,
-    get_index_names, is_no_such_column_error_for,
+    get_index_names, get_table_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis, EllipsisType
 from crystal.util.listenable import ListenableMixin
@@ -287,6 +287,7 @@ class Project(ListenableMixin):
         self._sorted_resource_urls = None       # type: Optional[SortedList[str]]
         self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
         self._resource_groups = []              # type: List[ResourceGroup]
+        self._aliases = []                      # type: List[Alias]
         
         self._min_fetch_date = None  # type: Optional[datetime.datetime]
         
@@ -559,6 +560,7 @@ class Project(ListenableMixin):
         # Add missing database columns and indexes
         if True:
             index_names = get_index_names(c)  # cache
+            table_names = get_table_names(c)  # cache
             
             # Add resource_group.do_not_download column if missing
             if 'do_not_download' not in get_column_names_of_table(c, 'resource_group'):
@@ -593,6 +595,11 @@ class Project(ListenableMixin):
                     'create index resource_revision__status_code on resource_revision '
                     '(json_extract(metadata, "$.status_code"), resource_id) '
                     'where json_extract(metadata, "$.status_code") != 200')
+            
+            # Add alias table if missing
+            if 'alias' not in table_names:
+                progress_listener.upgrading_project('Adding aliases table...')
+                c.execute('create table alias (id integer primary key, source_url_prefix text unique not null, target_url_prefix text not null, target_is_external integer not null default 0)')
             
             commit()
         
@@ -853,6 +860,7 @@ class Project(ListenableMixin):
         c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
         c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
         c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
+        c.execute('create table alias (id integer primary key, source_url_prefix text unique not null, target_url_prefix text not null, target_is_external integer not null default 0)')
         c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         
         # (Define indexes later in _apply_migrations())
@@ -929,6 +937,13 @@ class Project(ListenableMixin):
             else:
                 raise ProjectFormatError('Resource group {} has invalid source type "{}".'.format(group._id, source_type))
             group.init_source(source_obj)
+        
+        # Load Aliases
+        table_names = get_table_names(c)
+        if 'alias' in table_names:
+            for (source_url_prefix, target_url_prefix, target_is_external, id) in c.execute(
+                    'select source_url_prefix, target_url_prefix, target_is_external, id from alias order by id'):
+                Alias(self, source_url_prefix, target_url_prefix, target_is_external=bool(target_is_external), _id=id)
         
         # (ResourceRevisions are loaded on demand)
     
@@ -1149,8 +1164,17 @@ class Project(ListenableMixin):
     def get_display_url(self, url):
         """
         Returns a displayable version of the provided URL.
-        If the URL lies under the configured `default_url_prefix`, that prefix will be stripped.
+        
+        - If the URL is an external URL (pointing to a live resource on the internet),
+          it will be formatted with an icon prefix.
+        - If the URL is not external and lies under the configured `default_url_prefix`, 
+          that prefix will be stripped.
         """
+        # Check if this is an external URL first
+        if (external_url := Alias.parse_external_url(url)) is not None:
+            return Alias.format_external_url_for_display(external_url)
+        
+        # Apply default URL prefix shortening for non-external URLs
         default_url_prefix = self.default_url_prefix
         if default_url_prefix is None:
             return url
@@ -1671,6 +1695,39 @@ class Project(ListenableMixin):
         """Returns the ResourceGroup with the specified ID or None if no such group exists."""
         return self.get_resource_group(id=resource_group_id)
     
+    @property
+    def aliases(self) -> Iterable[Alias]:
+        """Returns all Aliases in the project in the order they were created."""
+        return self._aliases
+    
+    @fg_affinity
+    def get_alias(self,
+            source_url_prefix: str | _Missing = _Missing.VALUE,
+            *, target_url_prefix: str | _Missing = _Missing.VALUE,
+            id: int | _Missing = _Missing.VALUE,
+            ) -> Alias | None:
+        """
+        Returns the Alias with the specified URL prefix or ID.
+        Returns None if no matching alias exists.
+        """
+        if source_url_prefix != _Missing.VALUE:
+            for existing_alias in self._aliases:
+                if existing_alias.source_url_prefix == source_url_prefix:
+                    return existing_alias
+            return None
+        elif target_url_prefix != _Missing.VALUE:
+            for existing_alias in self._aliases:
+                if existing_alias.target_url_prefix == target_url_prefix:
+                    return existing_alias
+            return None
+        elif id != _Missing.VALUE:
+            for existing_alias in self._aliases:
+                if existing_alias._id == id:
+                    return existing_alias
+            return None
+        else:
+            raise ValueError('Expected source_url_prefix, target_url_prefix, or id to be specified')
+    
     # NOTE: Used by tests
     def _revision_count(self) -> int:
         with closing(self._db.cursor()) as c:
@@ -1940,6 +1997,27 @@ class Project(ListenableMixin):
         for lis in self.listeners:
             if hasattr(lis, 'resource_group_did_forget'):
                 run_bulkhead_call(lis.resource_group_did_forget, group)  # type: ignore[attr-defined]
+    
+    # === Events: Alias Lifecycle ===
+    
+    # Called when a new Alias is created after the project has loaded
+    def _alias_did_instantiate(self, alias: Alias) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'alias_did_instantiate'):
+                run_bulkhead_call(lis.alias_did_instantiate, alias)  # type: ignore[attr-defined]
+    
+    def _alias_did_change(self, alias: Alias) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'alias_did_change'):
+                run_bulkhead_call(lis.alias_did_change, alias)  # type: ignore[attr-defined]
+    
+    def _alias_did_forget(self, alias: Alias) -> None:
+        # Notify normal listeners
+        for lis in self.listeners:
+            if hasattr(lis, 'alias_did_forget'):
+                run_bulkhead_call(lis.alias_did_forget, alias)  # type: ignore[attr-defined]
     
     # === Events: Root Task Lifecycle ===
     
@@ -2604,10 +2682,11 @@ class Resource:
     its project is read-only. If/when the project transitions to
     writable, any unsaved resources will be saved to disk.
     """
-    # Special IDs, all <0
+    # Special IDs, all < 0
     _DEFER_ID = -1  # type: Literal[-1]
     _DELETED_ID = -2  # type: Literal[-2]
     _UNSAVED_ID = -3  # type: Literal[-3]
+    _EXTERNAL_ID = -4  # type: Literal[-4]
     
     # Optimize per-instance memory use, since there may be very many Resource objects
     __slots__ = (
@@ -2640,6 +2719,7 @@ class Resource:
             project: Project,
             url: str,
             _id: Union[None, int]=None,
+            *, _external_ok: bool=False,
             ) -> Resource:
         """
         Looks up an existing resource with the specified URL or creates a new
@@ -2657,11 +2737,28 @@ class Resource:
         * url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
         """
         # Private API:
-        # - If _id == Resource._DEFER_ID, and there is no existing resource
-        #   corresponding to the URL in the project, the returned Resource
-        #   will not have a valid ID and report _is_finished_initializing() == False.
-        #   The caller will then be responsible for populating the ID later
-        #   using _finish_init().
+        # * _id --
+        #     - If _id is None then any existing resource in the database
+        #       matching the specified URL will be used. If no matching resource
+        #       is found then a new Resource will be created in the database.
+        #       The resulting Resource will always have an _id pointing to
+        #       a Resource in the database.
+        #     - If not (_id < 0) then it points to an existing Resource in the
+        #       database with the specified ID.
+        #     - If _id == Resource._DEFER_ID, and there is no existing resource
+        #       corresponding to the URL in the project, the returned Resource
+        #       will not have a valid ID and report _is_finished_initializing() == False.
+        #       The caller will then be responsible for populating the ID later
+        #       using _finish_init().
+        #     - If _id == Resource._EXTERNAL_ID, then the caller is signaling
+        #       an explicit intent to create an external URL.
+        #     - No other values for _id are valid.
+        # * _external_ok --
+        #     - whether the caller is prepared for the possibility
+        #       that the specified URL corresponds to an external URL.
+        #       In that circumstance the returned Resource will have
+        #       (external_url is not None) and the caller should check
+        #       for that condition to do any special handling required.
         
         if _id is None or _id == Resource._DEFER_ID:
             url_alternatives = cls.resource_url_alternatives(project, url)
@@ -2682,6 +2779,21 @@ class Resource:
             # Always use original URL if loading from saved resource
             normalized_url = url
         del url  # prevent accidental usage later
+        
+        # Ensure that if an external URL is used then the caller opts-in
+        # to handling that possibility, so that they aren't created unintentionally
+        is_external = Alias.parse_external_url(normalized_url) is not None
+        if is_external:
+            if not _external_ok:
+                raise ValueError(
+                    f'Cannot create Resource with external URL {normalized_url!r} '
+                    f'unless caller signals it supports that possibility '
+                    f'using _external_ok=True')
+            if not (_id is None or _id < 0):  # non-special ID
+                raise ValueError(
+                    f'Cannot create Resource with external URL {normalized_url!r} '
+                    f'with in-database id={_id}.')
+            _id = Resource._EXTERNAL_ID  # reinterpret
         
         self = object.__new__(cls)
         self.project = _resolve_proxy(project)  # type: ignore[assignment]
@@ -2706,6 +2818,10 @@ class Resource:
             # Can't have revisions because it was just created this session
             self._definitely_has_no_revisions = True
         
+        if _id == Resource._EXTERNAL_ID:
+            # External resources are in-memory only and never have revisions
+            self._definitely_has_no_revisions = True
+        
         if _id == Resource._DEFER_ID:
             self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         else:
@@ -2728,24 +2844,28 @@ class Resource:
         * creating -- whether this resource is being created and did not exist in the database
         """
         # Private API:
-        # - id may be _UNSAVED_ID
+        # - id may be _UNSAVED_ID or _EXTERNAL_ID
         self._id = id
         
         if creating:
             project = self.project  # cache
             
-            # Record self in Project
-            project._resource_for_url[self._url] = self
-            if id == Resource._UNSAVED_ID:
-                project._unsaved_resources.append(self)
+            if id == Resource._EXTERNAL_ID:
+                # External resources are in-memory only, not saved to project
+                pass
             else:
-                assert id >= 0  # not any other kind of special ID
-                project._resource_for_id[id] = self
-            if project._sorted_resource_urls is not None:
-                project._sorted_resource_urls.add(self._url)
-            # NOTE: Don't check invariants here to save a little performance,
-            #       since this method (_finish_init) is called very many times
-            #project._check_url_collection_invariants()
+                # Record self in Project
+                project._resource_for_url[self._url] = self
+                if id == Resource._UNSAVED_ID:
+                    project._unsaved_resources.append(self)
+                else:
+                    assert id >= 0  # not any other kind of special ID
+                    project._resource_for_id[id] = self
+                if project._sorted_resource_urls is not None:
+                    project._sorted_resource_urls.add(self._url)
+                # NOTE: Don't check invariants here to save a little performance,
+                #       since this method (_finish_init) is called very many times
+                #project._check_url_collection_invariants()
             
             # Notify listeners that self did instantiate
             project._resource_did_instantiate(self)
@@ -2783,6 +2903,7 @@ class Resource:
             project: Project,
             urls: list[str],
             origin_url: str,
+            *, _external_ok: bool=False,
             ) -> list[Resource]:
         """
         Get or creates several Resources for the specified list of URLs, in bulk.
@@ -2804,7 +2925,19 @@ class Resource:
         * urls -- absolute URLs.
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
         """
-        (already_created, created) = cls._bulk_get_or_create(project, urls, origin_url)
+        # Private API:
+        # * _external_ok --
+        #     - whether the caller is prepared for the possibility
+        #       that any of the specified URLs correspond to an external URL.
+        #       In that circumstance the returned list
+        #       may contain one or more Resources where
+        #       (external_url is not None) and the caller should check
+        #       for that condition to do any special handling required.
+        
+        (already_created, created) = cls._bulk_get_or_create(
+            project, urls, origin_url,
+            _external_ok=_external_ok,
+        )
         return already_created + created
     
     @classmethod
@@ -2835,7 +2968,14 @@ class Resource:
         * urls -- absolute URLs.
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
         """
-        (already_created, created) = cls._bulk_get_or_create(project, urls, origin_url)
+        (_, created) = cls._bulk_get_or_create(
+            project, urls, origin_url,
+            # NOTE: _external_ok=True is always safe in this context because
+            #       any created Resources with an external URL won't be exposed
+            #       to the caller. Therefore the caller cannot observe such
+            #       Resources and does not need any special handling for them.
+            _external_ok=True,
+        )
         return created
     
     @classmethod
@@ -2844,25 +2984,39 @@ class Resource:
             project: Project,
             urls: list[str],
             origin_url: str,
+            *, _external_ok: bool=False,
             ) -> tuple[list[Resource], list[Resource]]:
+        # Private API:
+        # * _external_ok --
+        #     - whether the caller is prepared for the possibility
+        #       that any of the specified URLs correspond to an external URL.
+        #       In that circumstance the returned list of
+        #       `resources_already_created` may contain one or more Resources where
+        #       (external_url is not None) and the caller should check
+        #       for that condition to do any special handling required.
+        
         # 1. Create Resources in memory initially, deferring any database INSERTs
         # 2. Identify new resources that need to be inserted in the database
         resource_for_new_url = OrderedDict()  # type: Dict[str, Resource]
         resources_already_created = []
         for url in urls:
             # Get/create Resource in memory and normalize its URL
-            new_r = Resource(project, url, _id=Resource._DEFER_ID)
-            if new_r._is_finished_initializing:
-                # Resource with normalized URL already existed in memory
+            new_r = Resource(project, url, _id=Resource._DEFER_ID, _external_ok=_external_ok)
+            if new_r.external_url is not None:
+                # Report external URLs which exist only in memory as being "already created"
                 resources_already_created.append(new_r)
             else:
-                # Resource with normalized URL needs to be created in database
-                if new_r.url in resource_for_new_url:
-                    # Resource with normalized URL is already scheduled to be created in database
-                    pass
+                if new_r._is_finished_initializing:
+                    # Resource with normalized URL already existed in memory
+                    resources_already_created.append(new_r)
                 else:
-                    # Schedule resource with normalized URL to be created in database
-                    resource_for_new_url[new_r.url] = new_r
+                    # Resource with normalized URL needs to be created in database
+                    if new_r.url in resource_for_new_url:
+                        # Resource with normalized URL is already scheduled to be created in database
+                        pass
+                    else:
+                        # Schedule resource with normalized URL to be created in database
+                        resource_for_new_url[new_r.url] = new_r
         
         if len(resource_for_new_url) > 0:
             if project.readonly:
@@ -2995,6 +3149,27 @@ class Resource:
                     alternatives.append(new_url)
                     old_url = new_url  # reinterpret
         
+        # Apply user-defined alias-based normalization,
+        # after all other normalizations
+        old_url = new_url
+        for alias in project.aliases:
+            if not old_url.startswith(alias.source_url_prefix):
+                continue
+            
+            # Replace source prefix with target prefix
+            new_url = alias.target_url_prefix + old_url[len(alias.source_url_prefix):]
+            
+            # If target is external, format as external URL
+            if alias.target_is_external:
+                new_url = Alias.format_external_url(new_url)
+            
+            if new_url != old_url:
+                alternatives.append(new_url)
+                old_url = new_url  # reinterpret
+            
+            # Only apply the first matching alias
+            break
+        
         return alternatives
     
     @property
@@ -3017,6 +3192,18 @@ class Resource:
     @property
     def normalized_url(self) -> str:
         return self.resource_url_alternatives(self.project, self._url)[-1]
+    
+    @property
+    def external_url(self) -> str | None:
+        """
+        If this Resource points to live URL on the internet external to the project,
+        returns what that external URL is. Otherwise returns None.
+        """
+        if self._id != Resource._EXTERNAL_ID:
+            return None
+        external_url = Alias.parse_external_url(self._url)
+        assert external_url is not None
+        return external_url
     
     def _get_already_downloaded_this_session(self) -> bool:
         return self._already_downloaded_this_session
@@ -3617,6 +3804,7 @@ class RootResource:
         Raised when an attempt is made to create a new `RootResource` for a `Resource`
         that is already associated with an existing `RootResource`.
         """
+        pass
 
 
 class ResourceRevision:
@@ -4564,8 +4752,223 @@ class _PersistedError(Exception):
         self.type = type
 
 
-ResourceGroupSource: TypeAlias = Union['RootResource', 'ResourceGroup', None]
+class Alias:
+    """
+    An Alias causes URLs with a particular Source URL Prefix to be considered
+    equivalent to the URL with the prefix replaced with a Target URL Prefix.
+    
+    In particular any links to URLs matching the Source URL Prefix of an Alias
+    will be rewritten to point to the equivalent URL with the Target URL Prefix.
+    
+    An alias's target can be marked as External, meaning that it points to a
+    live URL on the internet rather than to a downloaded URL in the project.
+    
+    Persisted and auto-saved.
+    """
+    project: Project
+    _source_url_prefix: str
+    _target_url_prefix: str
+    _target_is_external: bool
+    _id: int | None  # or None if deleted
+    
+    # === Init ===
+    
+    @fg_affinity
+    def __init__(self,
+            project: Project,
+            source_url_prefix: str,
+            target_url_prefix: str,
+            *, target_is_external: bool = False,
+            _id: int | None = None) -> None:
+        """
+        Creates a new alias.
+        
+        Arguments:
+        * project -- associated `Project`.
+        * source_url_prefix -- source URL prefix. Must end in '/'.
+        * target_url_prefix -- target URL prefix. Must end in '/'.
+        * target_is_external -- whether target is external to the project.
+        
+        Raises:
+        * ProjectReadOnlyError
+        * Alias.AlreadyExists --
+            if there is already an `Alias` with specified `source_url_prefix`.
+        * ValueError --
+            if `source_url_prefix` or `target_url_prefix` do not end in slash (/).
+        """
+        project = _resolve_proxy(project)  # type: ignore[assignment]
+        if not isinstance(project, Project):
+            raise TypeError()
+        if not isinstance(source_url_prefix, str):
+            raise TypeError()
+        if not isinstance(target_url_prefix, str):
+            raise TypeError()
+        if not isinstance(target_is_external, bool):
+            raise TypeError()
+        
+        # Validate that URL prefixes end in slash
+        if not source_url_prefix.endswith('/'):
+            raise ValueError('source_url_prefix must end in slash (/)')
+        if not target_url_prefix.endswith('/'):
+            raise ValueError('target_url_prefix must end in slash (/)')
+        
+        # Check for duplicate source_url_prefix
+        if not project._loading:
+            if project.get_alias(source_url_prefix) is not None:
+                raise Alias.AlreadyExists(
+                    f'Alias with source_url_prefix {source_url_prefix!r} already exists')        
+        
+        self.project = project
+        self._source_url_prefix = source_url_prefix
+        self._target_url_prefix = target_url_prefix
+        self._target_is_external = target_is_external
+        
+        if project._loading:
+            assert _id is not None
+            self._id = _id
+        else:
+            if project.readonly:
+                raise ProjectReadOnlyError()
+            with closing(project._db.cursor()) as c:
+                c.execute(
+                    'insert into alias (source_url_prefix, target_url_prefix, target_is_external) values (?, ?, ?)',
+                    (source_url_prefix, target_url_prefix, int(target_is_external)))
+                project._db.commit()
+                self._id = c.lastrowid
+        project._aliases.append(self)
+        
+        # Notify listeners if not loading
+        if not project._loading:
+            project._alias_did_instantiate(self)
+    
+    # === Delete ===
+    
+    @fg_affinity
+    def delete(self) -> None:
+        """
+        Deletes this alias.
+        
+        Raises:
+        * ProjectReadOnlyError
+        """
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        with closing(self.project._db.cursor()) as c:
+            c.execute('delete from alias where id=?', (self._id,))
+        self.project._db.commit()
+        self._id = None
+        
+        self.project._aliases.remove(self)
+        
+        self.project._alias_did_forget(self)
+    
+    # === Properties ===
+    
+    @property
+    def source_url_prefix(self) -> str:
+        """Source URL prefix. Always ends in '/'."""
+        return self._source_url_prefix
+    
+    def _get_target_url_prefix(self) -> str:
+        """Target URL prefix. Always ends in '/'."""
+        return self._target_url_prefix
+    @fg_affinity
+    def _set_target_url_prefix(self, target_url_prefix: str) -> None:
+        if not target_url_prefix.endswith('/'):
+            raise ValueError('target_url_prefix must end in slash (/)')
+        if self._target_url_prefix == target_url_prefix:
+            return
+        
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        with closing(self.project._db.cursor()) as c:
+            c.execute('update alias set target_url_prefix=? where id=?', (
+                target_url_prefix,
+                self._id,))
+        self.project._db.commit()
+        
+        self._target_url_prefix = target_url_prefix
+        
+        self.project._alias_did_change(self)
+    target_url_prefix = cast(str, property(_get_target_url_prefix, _set_target_url_prefix))
+    
+    def _get_target_is_external(self) -> bool:
+        """Whether target is external to the project."""
+        return self._target_is_external
+    @fg_affinity
+    def _set_target_is_external(self, target_is_external: bool) -> None:
+        if not isinstance(target_is_external, bool):
+            raise TypeError()
+        if self._target_is_external == target_is_external:
+            return
+        
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        with closing(self.project._db.cursor()) as c:
+            c.execute('update alias set target_is_external=? where id=?', (
+                int(target_is_external),
+                self._id,))
+        self.project._db.commit()
+        
+        self._target_is_external = target_is_external
+        
+        self.project._alias_did_change(self)
+    target_is_external = cast(bool, property(_get_target_is_external, _set_target_is_external))
+    
+    # === External URLs ===
+    
+    @staticmethod
+    def format_external_url(external_url: str) -> str:
+        """
+        Given an external URL (pointing to a live resource on the internet),
+        returns the corresponding archive URL that should be used internally
+        within the project to represent this external resource.
+        
+        Example:
+        >>> Alias.format_external_url('https://example.com/page')
+        'crystal://external/https://example.com/page'
+        """
+        return f'crystal://external/{external_url}'
+    
+    @staticmethod
+    def parse_external_url(archive_url: str) -> str | None:
+        """
+        Given an archive URL, returns the corresponding external URL if the
+        archive URL represents an external resource, or None otherwise.
+        
+        Example:
+        >>> Alias.parse_external_url('crystal://external/https://example.com/page')
+        'https://example.com/page'
+        >>> Alias.parse_external_url('https://example.com/page')
+        None
+        """
+        prefix = 'crystal://external/'
+        if archive_url.startswith(prefix):
+            return archive_url[len(prefix):]
+        else:
+            return None
+    
+    @staticmethod
+    def format_external_url_for_display(external_url: str) -> str:
+        return f'🌐 {external_url}'
+    
+    # === Utility ===
+    
+    def __repr__(self):
+        if self.target_is_external:
+            return f'Alias({self.source_url_prefix!r}, {self.target_url_prefix!r}, target_is_external={True!r})'
+        else:
+            return f'Alias({self.source_url_prefix!r}, {self.target_url_prefix!r})'
+    
+    class AlreadyExists(Exception):
+        """
+        Raised when an attempt is made to create a new `Alias` with a
+        `source_url_prefix` that is already used by an existing `Alias`.
+        """
+        pass
 
+
+ResourceGroupSource: TypeAlias = Union['RootResource', 'ResourceGroup', None]
 
 class ResourceGroup(ListenableMixin):
     """

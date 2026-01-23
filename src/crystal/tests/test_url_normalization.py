@@ -27,9 +27,9 @@ For more information, see the doccomment on:
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, closing
-from crystal.model import Project, Resource, RootResource
+from crystal.model import Project, Resource, RootResource, Alias
 from crystal.server import ProjectServer
-from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual, assertNotIn
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual, assertNotIn, assertRaises
 from crystal.util.controls import TreeItem
 from crystal.tests.util.runner import bg_fetch_url
 from crystal.tests.util.server import MockHttpServer
@@ -39,10 +39,13 @@ from crystal.tests.util import xtempfile
 import os
 from textwrap import dedent
 from unittest import skip
-from unittest.mock import ANY, patch
+from unittest.mock import MagicMock, patch
 
 
-_DUMMY_PROJECT: Project = ANY
+# Create a mock Project with no aliases
+# TODO: Replace with MockProjectWithAliases([])
+_DUMMY_PROJECT = MagicMock()
+_DUMMY_PROJECT.configure_mock(aliases=[])
 
 
 # === Test: Normalization Rules ===
@@ -102,6 +105,29 @@ def test_normalized_url_is_percent_encoded() -> None:
 @skip('not yet automated')
 def test_plugins_can_normalize_urls() -> None:
     pass
+
+
+def test_aliases_can_rewrite_urls_via_normalization():
+    """
+    1. Test that URLs matching an alias source prefix are normalized to the target prefix.
+    2. Test that aliases with target_is_external=True format URLs as external.
+    """
+    
+    # Non-external target
+    project = MockProjectWithAliases([
+        MockAlias('https://old-domain.com/', 'https://new-domain.com/', target_is_external=False)
+    ])
+    assertEqual(
+        'https://new-domain.com/page',
+        Resource.resource_url_alternatives(project, 'https://old-domain.com/page')[-1])
+    
+    # External target
+    project = MockProjectWithAliases([
+        MockAlias('https://archive.local/', 'https://live.example.com/', target_is_external=True)
+    ])
+    assertEqual(
+        Alias.format_external_url('https://live.example.com/resource'),
+        Resource.resource_url_alternatives(project, 'https://archive.local/resource')[-1])
 
 
 # === Test: Normalization Effects ===
@@ -247,3 +273,19 @@ async def _html_page_pointing_to_other_domain_with_non_canonical_url(
                 await wait_for_future(revision_future)
                 
                 yield (HTML_URL, NON_NORMALIZED_URL, NORMALIZED_URL, mw, project)
+
+
+# === Utility: Mock Alias and Project ===
+
+class MockAlias:
+    """Mock Alias for testing URL normalization without a real project."""
+    def __init__(self, source_url_prefix: str, target_url_prefix: str, target_is_external: bool = False):
+        self.source_url_prefix = source_url_prefix
+        self.target_url_prefix = target_url_prefix
+        self.target_is_external = target_is_external
+
+
+class MockProjectWithAliases:
+    """Mock Project with aliases for testing URL normalization without a real project."""
+    def __init__(self, aliases: list):
+        self.aliases = aliases

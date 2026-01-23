@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
-    Project, Resource, ResourceGroup, ResourceGroupSource, ResourceRevision,
+    Alias, Project, Resource, ResourceGroup, ResourceGroupSource, ResourceRevision,
     RootResource,
 )
 from crystal import resources
@@ -720,22 +720,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         # or whether it should be created in a different form
         resource = self.project.get_resource(archive_url)
         if resource is None:
-            archive_url_alternatives = Resource.resource_url_alternatives(
-                self.project, archive_url)
-            if len(archive_url_alternatives) >= 2:
-                assert archive_url_alternatives[0] == archive_url
-                # TODO: Optimize to use a bulk version of Project.get_resource()
-                #       rather than making several individual queries
-                for urla in archive_url_alternatives[1:]:
-                    if self.project.get_resource(urla) is not None:
-                        # Redirect to existing URL in archive
-                        yield SwitchToThread.BACKGROUND
-                        self.send_redirect(self.get_request_url(urla))
-                        return
-                
-                # Redirect to canonical form of URL in archive
-                yield SwitchToThread.BACKGROUND
-                self.send_redirect(self.get_request_url(archive_url_alternatives[-1]))
+            if (yield from self._try_redirect_to_best_alternative_url(archive_url)):
                 return
         # (Either resource exists at archive_url, or archive_url is in canonical form)
         
@@ -802,6 +787,12 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     return
             
             assert revision is None  # still
+            yield SwitchToThread.FOREGROUND
+            if (yield from self._try_redirect_to_best_alternative_url(archive_url)):
+                return
+            # (archive_url is in canonical form)
+            
+            yield SwitchToThread.BACKGROUND
             self.send_resource_not_in_archive(archive_url)
             return
         
@@ -834,7 +825,39 @@ class _RequestHandler(BaseHTTPRequestHandler):
         
         self.send_revision(revision, archive_url)
         return
-
+    
+    @fg_affinity
+    def _try_redirect_to_best_alternative_url(self, archive_url: str) -> Generator[SwitchToThread, None, bool]:
+        """
+        Returns whether successfully sent a redirect.
+        Fails only if archive_url is already in canonical form.
+        """
+        archive_url_alternatives = Resource.resource_url_alternatives(
+            self.project, archive_url)
+        if not (len(archive_url_alternatives) >= 2):
+            return False
+        assert archive_url_alternatives[0] == archive_url
+        
+        # TODO: Optimize to use a bulk version of Project.get_resource()
+        #       rather than making several individual queries
+        for urla in archive_url_alternatives[1:]:
+            if self.project.get_resource(urla) is not None:
+                request_url = self.get_request_url(urla)
+            elif (external_url := Alias.parse_external_url(urla)) is not None:
+                request_url = external_url
+            else:
+                continue
+            
+            # Redirect to existing URL in archive
+            yield SwitchToThread.BACKGROUND
+            self.send_redirect(request_url)
+            return True
+        
+        # Redirect to canonical form of URL in archive
+        yield SwitchToThread.BACKGROUND
+        self.send_redirect(self.get_request_url(archive_url_alternatives[-1]))
+        return True
+    
     def _find_root_resource_matching_archive_url(self, archive_url: str) -> RootResource | None:
         for rr in self.project.root_resources:
             if rr.resource.url == archive_url:

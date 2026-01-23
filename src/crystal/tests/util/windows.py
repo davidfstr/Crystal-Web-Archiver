@@ -16,6 +16,9 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from crystal.browser.new_alias import (
+    NewAliasDialog as RealNewAliasDialog,
+)
 from crystal.browser.new_root_url import (
     NewRootUrlDialog as RealNewRootUrlDialog,
 )
@@ -436,6 +439,9 @@ class MainWindow:
         close_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_CLOSE)
         wx.PostEvent(close_menuitem.Menu, wx.CommandEvent(wx.EVT_MENU.typeId, close_menuitem.Id))
     
+    async def start_new_alias_with_menuitem(self) -> None:
+        select_menuitem_now(self.entity_menu, self.entity_menu.FindItem('New Alias...'))
+    
     # === Properties ===
     
     @property
@@ -660,6 +666,70 @@ class NewRootUrlDialog:
         
         assert False == self.set_as_default_domain_checkbox.Value
         assert False == self.set_as_default_directory_checkbox.Value
+
+
+class NewAliasDialog:
+    _dialog: wx.Dialog
+    _controller: RealNewAliasDialog
+    source_url_prefix_field: wx.TextCtrl
+    source_url_prefix_copy_button: wx.Button
+    target_url_prefix_field: wx.TextCtrl
+    target_url_prefix_copy_button: wx.Button
+    target_is_external_checkbox: wx.CheckBox
+    ok_button: wx.Button  # or None
+    cancel_button: wx.Button
+    
+    @staticmethod
+    async def wait_for() -> NewAliasDialog:
+        self = NewAliasDialog(_ready=True)
+        self._dialog = await wait_for_and_return(window_condition('cr-new-alias-dialog'), stacklevel_extra=1)
+        assert isinstance(self._dialog, wx.Dialog)
+        assert RealNewAliasDialog._last_opened is not None
+        self._controller = RealNewAliasDialog._last_opened
+        self.source_url_prefix_field = self._dialog.FindWindow(name='cr-new-alias-dialog__source-url-prefix-field')
+        assert isinstance(self.source_url_prefix_field, wx.TextCtrl)
+        self.source_url_prefix_copy_button = self._dialog.FindWindow(name='cr-new-alias-dialog__source-url-prefix-copy-button')
+        assert isinstance(self.source_url_prefix_copy_button, wx.Button)
+        self.target_url_prefix_field = self._dialog.FindWindow(name='cr-new-alias-dialog__target-url-prefix-field')
+        assert isinstance(self.target_url_prefix_field, wx.TextCtrl)
+        self.target_url_prefix_copy_button = self._dialog.FindWindow(name='cr-new-alias-dialog__target-url-prefix-copy-button')
+        assert isinstance(self.target_url_prefix_copy_button, wx.Button)
+        self.target_is_external_checkbox = self._dialog.FindWindow(name='cr-new-alias-dialog__target-is-external-checkbox')
+        assert isinstance(self.target_is_external_checkbox, wx.CheckBox)
+        self.ok_button = self._dialog.FindWindow(id=wx.ID_NEW)
+        if self.ok_button is None:
+            self.ok_button = self._dialog.FindWindow(id=wx.ID_SAVE)
+        # OK button may not exist in readonly mode
+        assert (
+            self.ok_button is None or
+            isinstance(self.ok_button, wx.Button)
+        )
+        self.cancel_button = self._dialog.FindWindow(id=wx.ID_CANCEL)
+        assert isinstance(self.cancel_button, wx.Button)
+        
+        return self
+    
+    def __init__(self, *, _ready: bool=False) -> None:
+        assert _ready, 'Did you mean to use NewAliasDialog.wait_for()?'
+    
+    # === Properties ===
+    
+    @property
+    def shown(self) -> bool:
+        if self._controller._is_destroying_or_destroyed:
+            return False
+        return self._dialog.IsShown()
+    
+    async def ok(self, wait_for_dismiss: bool = True) -> None:
+        if self.ok_button is None:
+            raise ValueError('Cannot click OK button - dialog is in readonly mode')
+        click_button(self.ok_button)
+        if wait_for_dismiss:
+            await wait_for(not_condition(window_condition('cr-new-alias-dialog')), stacklevel_extra=1)
+    
+    async def cancel(self) -> None:
+        click_button(self.cancel_button)
+        await wait_for(not_condition(window_condition('cr-new-alias-dialog')), stacklevel_extra=1)
 
 
 class NewGroupDialog:
