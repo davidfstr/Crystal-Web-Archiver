@@ -22,11 +22,16 @@ Release Notes ⋮
           a different internet-accessible subsystem, such as AWS Glacier.
 
 * Shell improvements
-    * Uses the new [interactive interpreter] from Python 3.13.
+    * Uses the new [interactive interpreter] from Python 3.13, featuring:
+        * Colors: Prompts are colored. Typed code has syntax highlighting.
+        * Multi-line Editing
+        * Copying and Pasting
     * Supports using `await` with Crystal's testing utilities
       such as `wait_for()`.
-    * Hide Crystal-internal frames from tracebacks,
+    * Hides Crystal-internal frames from tracebacks,
       making them easier to read.
+    * Prints now always appear above partial command line input
+      rather than being mixed with it.
 
 * Support changes
     * Embedded Python upgraded from Python 3.11 to 3.13.

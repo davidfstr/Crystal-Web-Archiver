@@ -29,10 +29,10 @@ import os
 import selectors
 import signal
 import sys
-from threading import Thread
+from threading import Lock, Thread
 import time
 import types
-from typing import Any, Literal, Optional, TypeAlias, TypeVar, assert_never
+from typing import IO, Any, Literal, Optional, TextIO, TypeAlias, TypeVar, assert_never
 from typing_extensions import override
 
 
@@ -420,6 +420,10 @@ class _CrystalInteractiveConsole(code.InteractiveConsole):
     # For implementation() == 'py_repl' only
     _pyrepl_multiline_input: Callable[[], str] | None
     _pyrepl_interrupted: bool
+    _pyrepl_is_active: bool
+    _output_handler: _OutputBuffer | None
+    _original_stdout: TextIO | None
+    _original_stderr: TextIO | None
     
     def __init__(self,
             *args,
@@ -481,12 +485,44 @@ class _CrystalInteractiveConsole(code.InteractiveConsole):
         else:
             self._interruptible_stdin = None
         
+        # Buffer writes to stdout/stderr while pyrepl is active
+        # to prevent garbled output from non-shell threads
+        if self.implementation() == 'py_repl':
+            self._pyrepl_is_active = False
+            self._output_handler = _OutputBuffer()
+            
+            # Wrap stdout and stderr to defer output
+            if True:
+                self._original_stdout = sys.stdout
+                sys.stdout = _DeferredWriter(
+                    self._original_stdout,
+                    self._output_handler,
+                    lambda: self._pyrepl_is_active
+                )  # type: ignore[assignment]
+                
+                self._original_stderr = sys.stderr
+                sys.stderr = _DeferredWriter(
+                    self._original_stderr,
+                    self._output_handler,
+                    lambda: self._pyrepl_is_active
+                )  # type: ignore[assignment]
+        else:
+            self._output_handler = None
+            self._original_stdout = None
+            self._original_stderr = None
+        
         # Customize how unhandled exceptions are printed
         self._old_sys_excepthook = sys.excepthook
         sys.excepthook = lambda *args: self._sys_excepthook(*args)
     
     def close(self) -> None:
         sys.excepthook = self._old_sys_excepthook
+        
+        # Restore original stdout/stderr
+        if self._original_stdout is not None:
+            sys.stdout = self._original_stdout
+        if self._original_stderr is not None:
+            sys.stderr = self._original_stderr
         
         # Clean up interrupt pipe
         try:
@@ -570,10 +606,29 @@ class _CrystalInteractiveConsole(code.InteractiveConsole):
                         self.finish = True
                 reader.commands['interrupt-from-thread'] = InterruptCommand
                 
+                # Track when pyrepl is active
+                if True:
+                    super_prepare = reader.prepare
+                    def prepare():
+                        super_prepare()
+                        self._pyrepl_is_active = True
+                    reader.prepare = prepare
+                    
+                    super_restore = reader.restore
+                    def restore(*, _cr_keep_active: bool = False):
+                        super_restore()
+                        if not _cr_keep_active:
+                            self._pyrepl_is_active = False
+                    reader.restore = restore
+                
                 # Add hook to check whether Ctrl-C pressed,
                 # every 100ms in the Python 3.14 pyrepl implementation
                 super_run_hooks = reader.run_hooks
                 def run_hooks() -> None:
+                    # Output flush hook
+                    if self._output_handler is not None:
+                        self._output_handler.flush_to_console(reader)
+                    
                     # Interrupt hook
                     try:
                         self._interrupt_pipe.readable_end.read(1)
@@ -862,6 +917,110 @@ class _CrystalInteractiveConsole(code.InteractiveConsole):
                 return True
             else:
                 return False
+
+
+class _DeferredWriter:
+    """
+    Wraps stdout or stderr to redirect writes to an _OutputBuffer.
+    """
+    
+    def __init__(self,
+            original: IO[str],
+            output_buffer: _OutputBuffer,
+            is_active_func: Callable[[], bool]
+            ) -> None:
+        self._original = original
+        self._output_buffer = output_buffer
+        self._is_active_func = is_active_func
+    
+    def write(self, s: str) -> int:
+        if self._is_active_func():
+            # Queue for later flush
+            self._output_buffer.add(s)
+            return len(s)
+        else:
+            # Write immediately
+            return self._original.write(s)
+    
+    def flush(self) -> None:
+        if self._is_active_func():
+            # No effect
+            pass
+        else:
+            # Flush immediately
+            self._original.flush()
+    
+    def __getattr__(self, name: str):
+        # Delegate all other attributes to the original
+        return getattr(self._original, name)
+
+
+class _OutputBuffer:  # an IO[str], conceptually
+    """
+    Thread-safe handler for queuing output from non-shell threads
+    when pyrepl is active, to prevent garbled output.
+    """
+    
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._messages = []  # type: list[str]
+    
+    def add(self, s: str) -> None:
+        """Queue a message to be flushed later."""
+        if not s:
+            return
+        with self._lock:
+            self._messages.append(s)
+    
+    def flush_to_console(self, reader) -> None:
+        """
+        Flush all queued messages to the console.
+        
+        Temporarily exits raw mode, prints messages, and re-enters raw mode.
+        """
+        with self._lock:
+            if not self._messages:
+                return
+            messages = self._messages.copy()
+            self._messages.clear()
+        
+        # Save the user's partial input
+        saved_buffer = reader.buffer.copy()
+        saved_pos = reader.pos
+        saved_paste_mode = reader.paste_mode
+        
+        # Clear any partial input from the display before printing queued messages
+        reader.buffer[:] = []
+        reader.pos = 0
+        reader.paste_mode = False
+        reader.dirty = True
+        reader.refresh()
+        
+        # Exit raw mode so output displays correctly
+        # NOTE: Use _cr_keep_active=True to prevent concurrent prints to
+        #       {sys.__stdout__, sys.__stderr__} before the next call to prepare()
+        reader.restore(_cr_keep_active=True)
+        
+        # Print all queued messages.
+        # If output doesn't end with a newline, add one to ensure
+        # the next-printed prompt appears in the leftmost column.
+        assert sys.__stdout__ is not None
+        if not messages or not messages[-1].endswith('\n'):
+            messages.append('\n')
+        sys.__stdout__.write(''.join(messages))
+        sys.__stdout__.flush()
+        
+        # Re-enter raw mode
+        reader.prepare()
+        
+        # Restore the user's partial input
+        reader.buffer[:] = saved_buffer
+        reader.pos = saved_pos
+        reader.paste_mode = saved_paste_mode
+        reader.dirty = True
+        
+        # Force redraw of the prompt so the user knows pyrepl is waiting for input
+        reader.refresh()
 
 
 def _main_loop_has_exited() -> bool:

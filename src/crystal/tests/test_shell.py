@@ -602,6 +602,14 @@ def test_can_import_guppy_in_shell() -> None:
 
 
 # ------------------------------------------------------------------------------
+# Tests: Concurrent Prints
+
+@skip('not yet automated; difficult to automate without access to a terminal emulator')
+def test_given_pyrepl_waiting_for_input_when_write_to_stdouterr_then_write_deferred_and_printed_above_pyrepl_prompt_and_partial_input() -> None:
+    pass
+
+
+# ------------------------------------------------------------------------------
 # Tests: Ctrl-C (and KeyboardInterrupt)
 
 def test_given_crystal_started_without_shell_when_ctrl_c_pressed_then_exits_with_exit_code_sigint() -> None:
