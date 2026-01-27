@@ -91,7 +91,7 @@ show_contexts = true
 [tool.poetry.dependencies]
 # NOTE: Python 3.13 is the latest Python supported by py2exe 0.14.0.0,
 #       the latest version of py2exe as of 2025-10-15.
-python = ">=3.11,<3.15"
+python = ">=3.13,<3.15"
 # NOTE: When changing the version of wxPython to Y, you'll need to make sure
 #       there is a precompiled wheel for {Python 3.X, wxPython Y, OS}
 #       for every {Python 3.X, OS} in continuous integration (CI) jobs

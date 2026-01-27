@@ -52,6 +52,7 @@ Additionally it is now possible to create an Alias in a Crystal project.
 * Support changes
     * Embedded Python for binary distributions of Crystal upgraded from
       Python 3.11 to 3.13.
+    * Minimum Python version increased from Python 3.11 to 3.13. **(Breaking Change)**
 
 * Development improvements
     * Tests can now be run in parallel using `crystal test --parallel <test_names>...` 
