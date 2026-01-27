@@ -84,11 +84,51 @@ def _main1(args: list[str]) -> Never:
 
 
 def _main2(args: list[str]) -> None:
+    # If running as Windows executable attach stdout/stderr to parent console
+    # if available. macOS/Linux do this automatically.
+    log_to_windows_console = False
+    if getattr(sys, 'frozen', None) == 'windows_exe':
+        import ctypes
+        
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        ATTACH_PARENT_PROCESS = -1
+        STD_OUTPUT_HANDLE = -11
+        STD_ERROR_HANDLE = -12
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        
+        # Attach to parent console if available
+        if kernel32.AttachConsole(ATTACH_PARENT_PROCESS):
+            log_to_windows_console = True
+            
+            # Rebind stdout and stderr to the attached console
+            # NOTE: Use line buffering (buffering=1) for immediate output visibility
+            try:
+                sys.stdout = open('CONOUT$', 'w', encoding='utf-8', buffering=1)
+                sys.stderr = open('CONOUT$', 'w', encoding='utf-8', buffering=1)
+                sys.stdin = open('CONIN$', 'r', encoding='utf-8')
+            except OSError:
+                # If opening console fails, continue with default streams
+                pass
+            
+            # Enable VT mode for ANSI escape sequences
+            if True:
+                hOut = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+                if hOut and hOut != -1:
+                    mode = ctypes.c_uint32()
+                    if kernel32.GetConsoleMode(hOut, ctypes.byref(mode)):
+                        kernel32.SetConsoleMode(hOut, mode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+                
+                hErr = kernel32.GetStdHandle(STD_ERROR_HANDLE)
+                if hErr and hErr != -1:
+                    mode = ctypes.c_uint32()
+                    if kernel32.GetConsoleMode(hErr, ctypes.byref(mode)):
+                        kernel32.SetConsoleMode(hErr, mode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+    
     # If running as Mac app or as Windows executable, redirect stdout and 
     # stderr to file (or socket), since these don't exist in these environments.
     # Use line buffering (buffering=1) so that prints are observable immediately.
     interactive = 'TERM' in os.environ
-    log_to_file = (
+    log_to_file = not log_to_windows_console and (
         (getattr(sys, 'frozen', None) == 'macosx_app' and not interactive) or
         (getattr(sys, 'frozen', None) == 'windows_exe')
     )
@@ -201,10 +241,11 @@ def _main2(args: list[str]) -> None:
             # TODO: Consider using shlex.split() here to support quoted arguments
             args = args_line.strip().split(' ')  # reinterpret
     
-    # 1. Enable terminal colors on Windows, by wrapping stdout and stderr
-    # 2. Strip colorizing ANSI escape sequences when printing to a log file
-    import colorama
-    colorama.init()
+    # Strip colorizing ANSI escape sequences when printing to a log file on Windows
+    # NOTE: Disable colorama effects if already talking to a console on Windows
+    if not log_to_windows_console:
+        import colorama
+        colorama.init()
     
     # Ensure the main package can be imported
     try:
