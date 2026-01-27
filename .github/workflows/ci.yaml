@@ -67,8 +67,8 @@ jobs:
           # NOTE: py2app 0.28.8 only supports Python 3.6 - 3.13.
           - "3.13.5"
       fail-fast: false
-    # NOTE: macos-13 is the last macOS runner to run on Intel rather than arm64
-    runs-on: macos-13
+    # NOTE: macos-15 is the last macOS runner planned by GitHub to support Intel rather than arm64
+    runs-on: macos-15-intel
     timeout-minutes: 60  # high limit; last resort to detect hangs
     env:
       # Suppress warning "malloc: nano zone abandoned due to inability to preallocate reserved vm space"
