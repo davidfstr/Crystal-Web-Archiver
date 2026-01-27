@@ -1,13 +1,13 @@
 [Setup]
 AppName=Crystal
-AppVersion=2.1.0
+AppVersion=2.2.0
 AppCopyright=Copyright (C) 2011-2026 David Foster. Licensed under PolyForm NC 1.0.0
 DefaultDirName={autopf}\Crystal
 DefaultGroupName=Crystal
 UninstallDisplayIcon={app}\Crystal.exe
 Compression=lzma2
 SolidCompression=yes
-OutputBaseFilename=crystal-win-2.1.0
+OutputBaseFilename=crystal-win-2.2.0
 OutputDir=dist-win
 DisableProgramGroupPage=yes
 ; Tell Explorer to refresh file extension information after (un)install,
