@@ -10,7 +10,23 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### v2.2.0 (January 27, 2026)
+
+Many developer-facing improvements are in this release:
+- The shell (for macOS and Linux) has been significantly improved,
+  with support for colors, multi-line editing, and copy/paste.
+- Tests now support running in parallel, significantly speeding up test runs.
+- AI coding agents using Crystal's shell interface are given special
+  tools for navigating/controlling the Crystal's graphical UI,
+  so that they can independently test in-progress UI changes.
+
+Additionally it is now possible to create an Alias in a Crystal project.
+- An Alias can be used to standardize on `www.` or no-`www.` versions of
+  URLs in a site.
+- An Alias can also be used to redirect URLs within a certain directory
+  to live URLs on the internet, which can be useful for advanced projects
+  that store some of their content in an internet-accessible form,
+  such as in AWS Glacier storage.
 
 * Workflow improvements
     * Aliases are now supported for redirecting similar patterns of URLs,
@@ -34,7 +50,8 @@ Release Notes ⋮
       rather than being mixed with it.
 
 * Support changes
-    * Embedded Python upgraded from Python 3.11 to 3.13.
+    * Embedded Python for binary distributions of Crystal upgraded from
+      Python 3.11 to 3.13.
 
 * Development improvements
     * Tests can now be run in parallel using `crystal test --parallel <test_names>...` 
