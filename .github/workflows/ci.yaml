@@ -577,7 +577,7 @@ jobs:
       - name: Upload distribution artifact
         if: ${{ github.event_name == 'workflow_dispatch' && 
                 github.event.inputs.build_dist_artifact == 'true' && 
-                matrix.python-version == '3.11.9' && 
+                matrix.python-version == '3.13.5' && 
                 matrix.os == 'macos-14' }}
         uses: actions/upload-artifact@v4
         with:
@@ -833,7 +833,7 @@ jobs:
       - name: Upload distribution artifact
         if: ${{ github.event_name == 'workflow_dispatch' &&
                 github.event.inputs.build_dist_artifact == 'true' &&
-                matrix.python-version == '3.11.9' &&
+                matrix.python-version == '3.13.5' &&
                 matrix.os == 'windows-2025' }}
         uses: actions/upload-artifact@v4
         with:
