@@ -40,6 +40,7 @@ from crystal.util.db import (
     get_index_names, get_table_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis, EllipsisType
+from crystal.util.filesystem import flush_rename_of_file
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import create_profiling_context, warn_if_slow
 from crystal.util.progress import DevNullFile
@@ -49,6 +50,7 @@ from crystal.util.thread_debug import get_thread_stack
 from crystal.app_preferences import app_prefs
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
+from crystal.util import windows_filesystem
 from crystal.util.xappdirs import user_untitled_projects_dir
 from crystal.util.xbisect import bisect_key_right
 from crystal.util.xcollections.ordereddict import as_ordereddict
@@ -65,6 +67,7 @@ from crystal.util.xthreading import (
 )
 import datetime
 from enum import Enum
+import errno
 import itertools
 import json
 import math
@@ -296,6 +299,13 @@ class Project(ListenableMixin):
         self._aliases = []                      # type: List[Alias]
         
         self._min_fetch_date = None  # type: Optional[datetime.datetime]
+        
+        # Windows: Detect whether the filesystem supports journaling
+        if is_windows():
+            self._win_filesystem_known_to_support_journaling = \
+                windows_filesystem.filesystem_supports_journaling(path) or False
+        else:
+            self._win_filesystem_known_to_support_journaling = False
         
         progress_listener.opening_project()
         
@@ -4012,6 +4022,10 @@ class ResourceRevision:
                         dir=os.path.join(project.path, Project._TEMPORARY_DIRNAME),
                         delete=False) as body_file:
                     xshutil.copyfileobj_readinto(body_stream, body_file)
+                    
+                    # Ensure data is flushed to stable storage
+                    body_file.flush()
+                    os.fsync(body_file.fileno())
                 body_file_downloaded_ok = True
             else:
                 body_file = None
@@ -4031,6 +4045,12 @@ class ResourceRevision:
                         except FileNotFoundError:  # probably missing parent directory
                             os.makedirs(os.path.dirname(revision_filepath), exist_ok=True)
                             os.rename(body_file.name, revision_filepath)
+                        
+                        # Ensure os.rename() is flushed to disk
+                        flush_rename_of_file(
+                            revision_filepath,
+                            project._win_filesystem_known_to_support_journaling,
+                        )
                     else:
                         # Remove body file
                         os.remove(body_file.name)
