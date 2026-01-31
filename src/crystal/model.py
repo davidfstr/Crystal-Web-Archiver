@@ -569,6 +569,9 @@ class Project(ListenableMixin):
         Upgrades this project's directory structure and database schema
         to the latest version.
         
+        The major version 1 -> 2 migration is resumable if cancelled or interrupted.
+        Migration progress is periodically synced to disk (every ~4,096 revisions).
+        
         Raises:
         * ProjectReadOnlyError
         * CancelOpenProject
@@ -724,6 +727,30 @@ class Project(ListenableMixin):
                 tmp_revisions_dirpath = os.path.join(
                     self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
                 
+                def calculate_new_revision_filepath(id: int) -> tuple[str, str]:
+                    new_revision_filepath_parts = f'{id:015x}'
+                    if len(new_revision_filepath_parts) != 15:
+                        # NOTE: Raising an AssertionError rather than a
+                        #       ProjectHasTooManyRevisionsError because
+                        #       will_upgrade_revisions() should have detected
+                        #       this case early and not permitted the upgrade
+                        #       to continue
+                        raise AssertionError(
+                            'Revision ID {id} is too high to migrate to the '
+                            'major version 2 project format')
+                    new_revision_parent_relpath = (
+                        new_revision_filepath_parts[0:3] + os_path_sep +
+                        new_revision_filepath_parts[3:6] + os_path_sep +
+                        new_revision_filepath_parts[6:9] + os_path_sep +
+                        new_revision_filepath_parts[9:12]
+                    )
+                    new_revision_filepath = (
+                        ip_revisions_dirpath + os_path_sep + 
+                        new_revision_parent_relpath + os_path_sep +
+                        new_revision_filepath_parts[12:15]
+                    )
+                    return (new_revision_filepath, new_revision_parent_relpath)
+                
                 # Ensure old revisions directory exists
                 assert os.path.isdir(revisions_dirpath)
                 
@@ -769,27 +796,8 @@ class Project(ListenableMixin):
                         str(id)
                     )
                     
-                    new_revision_filepath_parts = f'{id:015x}'
-                    if len(new_revision_filepath_parts) != 15:
-                        # NOTE: Raising an AssertionError rather than a
-                        #       ProjectHasTooManyRevisionsError because
-                        #       will_upgrade_revisions() should have detected
-                        #       this case early and not permitted the upgrade
-                        #       to continue
-                        raise AssertionError(
-                            'Revision ID {id} is too high to migrate to the '
-                            'major version 2 project format')
-                    new_revision_parent_relpath = (
-                        new_revision_filepath_parts[0:3] + os_path_sep +
-                        new_revision_filepath_parts[3:6] + os_path_sep +
-                        new_revision_filepath_parts[6:9] + os_path_sep +
-                        new_revision_filepath_parts[9:12]
-                    )
-                    new_revision_filepath = (
-                        ip_revisions_dirpath + os_path_sep + 
-                        new_revision_parent_relpath + os_path_sep +
-                        new_revision_filepath_parts[12:15]
-                    )
+                    (new_revision_filepath, new_revision_parent_relpath) = \
+                        calculate_new_revision_filepath(id)
                     
                     # Create parent directory for new location if needed
                     # 
@@ -811,8 +819,18 @@ class Project(ListenableMixin):
                         #    (if this migration is being resumed from an earlier canceled migration)
                         # 2. Revision was missing in old location before, and will be missing in new location.
                         pass
+                    
+                    if new_revision_filepath.endswith('fff'):
+                        # Flush all changes to leaf directory before moving
+                        # on to the next leaf directory
+                        flush_rename_of_file(
+                            # NOTE: The revision file itself may not exist,
+                            #       but its parent directory should exist
+                            new_revision_filepath,
+                            self._win_filesystem_known_to_support_journaling
+                        )
                 # TODO: Dump profiling context immediately upon exit of context
-                #       rather then waiting to program to exit
+                #       rather then waiting for program to exit
                 with create_profiling_context(
                         'migrate_revisions.prof', enabled=_PROFILE_MIGRATE_REVISIONS):
                     try:
@@ -822,7 +840,8 @@ class Project(ListenableMixin):
                             #       significantly faster than the exact query
                             #       ('select count(1) from resource_revision') because it
                             #       does not require a full table scan.
-                            'select id from resource_revision order by id desc limit 1',
+                            max_revision_id_query := 
+                                'select id from resource_revision order by id desc limit 1',
                             'select id from resource_revision order by id asc',
                             migrate_revision,
                             will_upgrade_revisions,
@@ -833,6 +852,24 @@ class Project(ListenableMixin):
                     except VetoUpgradeProject:
                         pass
                     else:
+                        # Locate last revision ID.
+                        # Flush all changes to its parent directory.
+                        rows = list(c.execute(max_revision_id_query))
+                        if len(rows) == 1:
+                            [(max_revision_id,)] = rows
+                        else:
+                            [] = rows
+                            max_revision_id = 0
+                        if max_revision_id > 0:
+                            (new_revision_filepath, _) = \
+                                calculate_new_revision_filepath(max_revision_id)
+                            flush_rename_of_file(
+                                # NOTE: The revision file itself may not exist,
+                                #       but its parent directory should exist
+                                new_revision_filepath,
+                                self._win_filesystem_known_to_support_journaling
+                            )
+                        
                         # Move aside old revisions directory and queue it for deletion
                         os.rename(revisions_dirpath, tmp_revisions_dirpath)
                         
@@ -981,7 +1018,7 @@ class Project(ListenableMixin):
         if len(rows) == 1:
             [(approx_row_count,)] = rows
         else:
-            assert len(rows) == 0
+            [] = rows
             approx_row_count = 0
         report_approx_row_count_func(approx_row_count)  # may raise
         
