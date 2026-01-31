@@ -5177,16 +5177,21 @@ class ResourceGroup(ListenableMixin):
         else:
             if project.readonly:
                 raise ProjectReadOnlyError()
+            
+            # Queue: Create ResourceGroup in database
             with closing(project._db.cursor()) as c:
                 c.execute('insert into resource_group (name, url_pattern, do_not_download) values (?, ?, ?)', (name, url_pattern, do_not_download))
-                project._db.commit()
+                # (Defer commit until after source is set)
                 self._id = c.lastrowid
             
+            # Queue: Set source of ResourceGroup in database
             if source is Ellipsis:
                 raise ValueError()
-            # NOTE: Performs 1 database query to update above database row
-            self.source = source
+            self._set_source(source, commit=False)
             assert self._source == source
+            
+            # Apply database changes
+            project._db.commit()
         project._resource_groups.append(self)
         
         if not project._loading:
