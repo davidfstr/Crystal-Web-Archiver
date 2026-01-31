@@ -249,6 +249,7 @@ class Project(ListenableMixin):
         * ProjectTooNewError -- 
             if the project is a version newer than this version of Crystal can open safely
         * CancelOpenProject
+        * sqlite3.DatabaseError, OSError
         """
         super().__init__()
         
@@ -340,6 +341,9 @@ class Project(ListenableMixin):
                         else DummyOpenProjectProgressListener()
                     )
                     self._load(c, self._db, load_progress_listener)
+        
+                    # Apply repairs
+                    self._repair_incomplete_rollback_of_resource_revision_create(c, self._db.commit)
                     
                     # Reset dirty state after loading
                     self._is_dirty = is_dirty
@@ -575,6 +579,7 @@ class Project(ListenableMixin):
         Raises:
         * ProjectReadOnlyError
         * CancelOpenProject
+        * sqlite3.DatabaseError, OSError
         """
         # Add missing database columns and indexes
         if True:
@@ -740,6 +745,10 @@ class Project(ListenableMixin):
             commit: Callable[[], None],
             progress_listener: OpenProjectProgressListener,
             ) -> None:
+        """
+        Raises:
+        * sqlite3.DatabaseError, OSError
+        """
         revisions_dirpath = os.path.join(
             self.path, self._REVISIONS_DIRNAME)  # cache
         ip_revisions_dirpath = os.path.join(
@@ -860,8 +869,7 @@ class Project(ListenableMixin):
                     #       significantly faster than the exact query
                     #       ('select count(1) from resource_revision') because it
                     #       does not require a full table scan.
-                    max_revision_id_query := 
-                        'select id from resource_revision order by id desc limit 1',
+                    ResourceRevision._MAX_REVISION_ID_QUERY,
                     'select id from resource_revision order by id asc',
                     migrate_revision,
                     will_upgrade_revisions,
@@ -874,13 +882,13 @@ class Project(ListenableMixin):
             else:
                 # Locate last revision ID.
                 # Flush all changes to its parent directory.
-                rows = list(c.execute(max_revision_id_query))
+                rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
                 if len(rows) == 1:
                     [(max_revision_id,)] = rows
                 else:
                     [] = rows
-                    max_revision_id = 0
-                if max_revision_id > 0:
+                    max_revision_id = None
+                if max_revision_id is not None:
                     (new_revision_filepath, _) = \
                         calculate_new_revision_filepath(max_revision_id)
                     flush_rename_of_file(
@@ -896,6 +904,10 @@ class Project(ListenableMixin):
             c: DatabaseCursor,
             commit: Callable[[], None],
             ) -> None:
+        """
+        Raises:
+        * sqlite3.DatabaseError, OSError
+        """
         assert self._get_major_version(c) in [1, 2]
         
         revisions_dirpath = os.path.join(
@@ -922,6 +934,142 @@ class Project(ListenableMixin):
             revisions_dirpath,
             self._win_filesystem_known_to_support_journaling,
         )
+    
+    def _repair_incomplete_rollback_of_resource_revision_create(self,
+            c: DatabaseCursor,
+            commit: Callable[[], None],
+            ) -> None:
+        """
+        If the last revision was likely intended to be deleted by a
+        failed rollback in ResourceRevision._create_from_stream,
+        then delete it.
+        
+        Rationale for checking only the last revision:
+        - Revisions are written with sequential IDs from the database.
+        - A rollback which failed due to a permanent I/O failure (that prevented
+          any further I/O operations on the project the last time it was opened)
+          would have occurred during the most recent write operation
+          (the revision with the highest ID).
+            - Disk disconnection - especially for network filesystems - is a
+              common case of a permanent I/O failure
+        - Older revisions completed successfully or failed and were
+          rolled back fully.
+        
+        Raises:
+        * sqlite3.DatabaseError
+        """
+        
+        # Locate last revision
+        rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+        if len(rows) == 1:
+            [(max_revision_id,)] = rows
+        else:
+            [] = rows
+            max_revision_id = None
+        if max_revision_id is None:
+            # No max revision exists to repair rollback for
+            return
+        try:
+            last_revision = ResourceRevision.load(self, max_revision_id)
+        except Exception as e:
+            # Database potentially corrupt?
+            # Abort further repair attempts.
+            return
+        assert last_revision is not None
+        
+        # Check whether last revision's body is missing,
+        # which could be the result of a failed rollback
+        try:
+            with last_revision.open() as f:
+                # Body exists. No rollback was attempted.
+                return
+        except RevisionBodyMissingError:
+            # Body is missing
+            pass  # keep going
+        except NoRevisionBodyError:
+            # No body expected. No rollback could have been attempted.
+            return
+        except (OSError, IOError):
+            # Database or filesystem potentially corrupt?
+            # Abort further repair attempts.
+            return
+        
+        # Check whether at least 3 other revisions have readable bodies.
+        # If so then the last revision's body being missing is likely to
+        # be legitimately orphaned by a failed rollback.
+        rows = list(c.execute(
+            'select id from resource_revision '
+                # NOTE: error == "null" filters out revisions where
+                #       no body is expected (i.e. has_body == False)
+                'where error == "null" and id < ? '
+                'order by id desc '
+                'limit 3',
+            (max_revision_id,)
+        ))
+        if len(rows) < 3:
+            # Not enough revisions to make a determination RE whether a rollback failed.
+            # Be conservative and don't try to continue the rollback.
+            return
+        try:
+            other_revisions = [ResourceRevision.load(self, id) for (id,) in rows]
+        except Exception as e:
+            # Database potentially corrupt?
+            # Abort further repair attempts.
+            return
+        unreadable_body_count = 0
+        for rev in other_revisions:
+            assert rev is not None, 'Revision not found yet already verified to exist'
+            assert rev.has_body, 'Revision not expecting a body should have been filtered out'
+            try:
+                with rev.open() as f:
+                    # Body exists and is readable enough to successfully open
+                    pass
+            except RevisionBodyMissingError:
+                # Body is missing
+                unreadable_body_count += 1
+            except NoRevisionBodyError:
+                # No body expected
+                raise AssertionError(
+                    'Revision not expecting a body should have been filtered out')
+            except (OSError, IOError):
+                # Body is corrupted or inaccessible
+                unreadable_body_count += 1
+        if unreadable_body_count != 0:
+            # Multiple revision bodies are unreadable
+            # (the last one and at least one other) which suggests something
+            # strange is going on, separate from a rollback failure.
+            # Abort further repair attempts.
+            # 
+            # Likely causes:
+            # - Revisions directory is on a temporarily-unmounted filesystem.
+            #   All revision bodies are unreadable.
+            # - Revisions directory is on a filesystem with intermittent
+            #   availability (packet loss, flaky connection).
+            #   Revision bodies are unreadable at random times.
+            # - Multiple revisions have filesystem corruption.
+            return
+        else:
+            # At least 3 other revision bodies are readable,
+            # which is strong evidence that:
+            # 1. The filesystem is mounted and accessible
+            # 2. The filesystem does not have intermittent availability issues
+            # 3. The last revision's missing body is unusual and likely
+            #    related to a failed rollback when writing the most recent
+            #    revision during the previous project session
+            pass
+        
+        # Resume failed rollback of the last revision, by deleting it
+        print(
+            f'*** Cleaning up likely-orphaned revision {last_revision._id}. '
+            'Missing body file. Probable rollback failure.',
+            file=sys.stderr,
+        )
+        # Delete database row. Ignore the missing body file.
+        try:
+            last_revision.delete()
+        except Exception as e:
+            # Repair failed. Continue opening the project anyway.
+            return
     
     @staticmethod
     def _get_major_version(c: DatabaseCursor | sqlite3.Cursor) -> int:
@@ -967,6 +1115,10 @@ class Project(ListenableMixin):
             c: DatabaseCursor,
             db: DatabaseConnection,
             progress_listener: OpenProjectProgressListener) -> None:
+        """
+        Raises:
+        * sqlite3.DatabaseError, OSError
+        """
         
         # Upgrade database schema to latest version (unless is readonly)
         if not self.readonly:
@@ -3973,6 +4125,8 @@ class ResourceRevision:
     _id: int | None  # None if deleted
     has_body: bool
     
+    _MAX_REVISION_ID_QUERY = 'select id from resource_revision order by id desc limit 1'
+    
     # === Init ===
     
     # NOTE: This method is not used by the UI at this time.
@@ -4114,7 +4268,13 @@ class ResourceRevision:
             disk-wide permanent I/O error then it is possible that a
             ResourceRevision was partially saved to the database but not
             rolled back, left pointing to a missing revision body file.
-            Attempting to read that revision's body later will result in
+            
+            When the project is next reopened as writable, any such
+            incomplete rollback is automatically repaired by detecting and
+            deleting the last revision if its body file is missing and
+            the filesystem is confirmed accessible.
+            
+            Attempting to read this revision's body later will result in
             a RevisionBodyMissingError, which callers are expected to handle
             gracefully.
         """
@@ -4294,7 +4454,7 @@ class ResourceRevision:
             ))
         if len(rows) == 0:
             return None
-        [(resource_id)] = rows
+        [(resource_id,)] = rows
         
         # Get the resource by URL from memory
         r = project._get_resource_with_id(resource_id)
