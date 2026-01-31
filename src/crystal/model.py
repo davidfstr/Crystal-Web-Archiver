@@ -4045,7 +4045,12 @@ class RootResource:
     # === Properties ===
     
     def _get_name(self) -> str:
-        """Name of this root resource. Possibly ''."""
+        """
+        Name of this root resource. Possibly ''.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
+        """
         return self._name
     @fg_affinity
     def _set_name(self, name: str) -> None:
@@ -5262,7 +5267,12 @@ class Alias:
         return self._source_url_prefix
     
     def _get_target_url_prefix(self) -> str:
-        """Target URL prefix. Always ends in '/'."""
+        """
+        Target URL prefix. Always ends in '/'.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
+        """
         return self._target_url_prefix
     @fg_affinity
     def _set_target_url_prefix(self, target_url_prefix: str) -> None:
@@ -5499,7 +5509,12 @@ class ResourceGroup(ListenableMixin):
     # === Properties ===
     
     def _get_name(self) -> str:
-        """Name of this resource group. Possibly ''."""
+        """
+        Name of this resource group. Possibly ''.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
+        """
         return self._name
     def _set_name(self, name: str) -> None:
         if self._name == name:
@@ -5528,6 +5543,9 @@ class ResourceGroup(ListenableMixin):
         If the source of a resource group is set, the user asserts that downloading
         the source will reveal all of the members of this group. Thus a group's source
         acts as the source of its members.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
         """
         if isinstance(self._source, EllipsisType):
             raise ValueError('Expected ResourceGroup.init_source() to have been already called')
@@ -5564,6 +5582,18 @@ class ResourceGroup(ListenableMixin):
     source = cast(ResourceGroupSource, property(_get_source, _set_source))
     
     def _get_do_not_download(self) -> bool:
+        """
+        Whether members of this group should not be automatically downloaded
+        in circumstances where otherwise they would be. Useful to explicitly
+        exclude ads and other unwanted resources from the project.
+        
+        For example if members of a do-not-download group are embedded in
+        an HTML resource those members will NOT be automatically downloaded
+        when the HTML resource is downloaded.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
+        """
         return self._do_not_download
     def _set_do_not_download(self, value: bool) -> None:
         if self._do_not_download == value:
