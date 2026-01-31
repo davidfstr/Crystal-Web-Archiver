@@ -720,171 +720,208 @@ class Project(ListenableMixin):
             
             # Upgrade major version 1 -> 2
             if major_version == 1:
-                revisions_dirpath = os.path.join(
-                    self.path, self._REVISIONS_DIRNAME)  # cache
-                ip_revisions_dirpath = os.path.join(
-                    self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
-                tmp_revisions_dirpath = os.path.join(
-                    self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
-                
-                def calculate_new_revision_filepath(id: int) -> tuple[str, str]:
-                    new_revision_filepath_parts = f'{id:015x}'
-                    if len(new_revision_filepath_parts) != 15:
-                        # NOTE: Raising an AssertionError rather than a
-                        #       ProjectHasTooManyRevisionsError because
-                        #       will_upgrade_revisions() should have detected
-                        #       this case early and not permitted the upgrade
-                        #       to continue
-                        raise AssertionError(
-                            'Revision ID {id} is too high to migrate to the '
-                            'major version 2 project format')
-                    new_revision_parent_relpath = (
-                        new_revision_filepath_parts[0:3] + os_path_sep +
-                        new_revision_filepath_parts[3:6] + os_path_sep +
-                        new_revision_filepath_parts[6:9] + os_path_sep +
-                        new_revision_filepath_parts[9:12]
-                    )
-                    new_revision_filepath = (
-                        ip_revisions_dirpath + os_path_sep + 
-                        new_revision_parent_relpath + os_path_sep +
-                        new_revision_filepath_parts[12:15]
-                    )
-                    return (new_revision_filepath, new_revision_parent_relpath)
-                
-                # Ensure old revisions directory exists
-                assert os.path.isdir(revisions_dirpath)
-                
-                # 1. Confirm want to migrate now
-                # 2. Create new revisions directory
-                def will_upgrade_revisions(approx_revision_count: int) -> None:
-                    """
-                    Raises:
-                    * VetoUpgradeProject
-                    * CancelOpenProject
-                    """
-                    migration_was_in_progress = os.path.isdir(ip_revisions_dirpath)  # capture
-                    
-                    if approx_revision_count > Project._MAX_REVISION_ID:
-                        assert not migration_was_in_progress
-                        
-                        # Veto the migration automatically because it would fail
-                        # due to inability to migrate revisions with very high IDs
-                        raise VetoUpgradeProject()
-                    
-                    try:
-                        progress_listener.will_upgrade_revisions(
-                            approx_revision_count,
-                            can_veto=not migration_was_in_progress)
-                    except VetoUpgradeProject:
-                        if migration_was_in_progress:
-                            raise AssertionError('Cannot veto migration that was in progress')
-                        raise
-                    except CancelOpenProject:
-                        raise
-                    
-                    # Create new revisions directory
-                    if not migration_was_in_progress:
-                        os.mkdir(ip_revisions_dirpath)
-                
-                # Move revisions to appropriate locations in new revisions directory
-                os_path_sep = os.path.sep  # cache
-                last_new_revision_parent_relpath = None  # type: Optional[str]
-                def migrate_revision(row: tuple) -> None:
-                    (id,) = row
-                    old_revision_filepath = (
-                        revisions_dirpath + os_path_sep +
-                        str(id)
-                    )
-                    
-                    (new_revision_filepath, new_revision_parent_relpath) = \
-                        calculate_new_revision_filepath(id)
-                    
-                    # Create parent directory for new location if needed
-                    # 
-                    # NOTE: Avoids extra calls to os.makedirs() when easy to
-                    #       prove that there's no work to be done
-                    nonlocal last_new_revision_parent_relpath
-                    if new_revision_parent_relpath != last_new_revision_parent_relpath:
-                        new_revision_parent_dirpath = \
-                            ip_revisions_dirpath + os_path_sep + new_revision_parent_relpath
-                        os.makedirs(new_revision_parent_dirpath, exist_ok=True)
-                        last_new_revision_parent_relpath = new_revision_parent_relpath
-                    
-                    # Move revision from old location to new location
-                    try:
-                        os.rename(old_revision_filepath, new_revision_filepath)
-                    except FileNotFoundError:
-                        # Either:
-                        # 1. Revision has already been moved from old location to new location
-                        #    (if this migration is being resumed from an earlier canceled migration)
-                        # 2. Revision was missing in old location before, and will be missing in new location.
-                        pass
-                    
-                    if new_revision_filepath.endswith('fff'):
-                        # Flush all changes to leaf directory before moving
-                        # on to the next leaf directory
-                        flush_rename_of_file(
-                            # NOTE: The revision file itself may not exist,
-                            #       but its parent directory should exist
-                            new_revision_filepath,
-                            self._win_filesystem_known_to_support_journaling
-                        )
-                # TODO: Dump profiling context immediately upon exit of context
-                #       rather then waiting for program to exit
-                with create_profiling_context(
-                        'migrate_revisions.prof', enabled=_PROFILE_MIGRATE_REVISIONS):
-                    try:
-                        self._process_table_rows(
-                            c,
-                            # NOTE: The following query to approximate row count is
-                            #       significantly faster than the exact query
-                            #       ('select count(1) from resource_revision') because it
-                            #       does not require a full table scan.
-                            max_revision_id_query := 
-                                'select id from resource_revision order by id desc limit 1',
-                            'select id from resource_revision order by id asc',
-                            migrate_revision,
-                            will_upgrade_revisions,
-                            progress_listener.upgrading_revision,
-                            progress_listener.did_upgrade_revisions)
-                    except CancelOpenProject:
-                        raise
-                    except VetoUpgradeProject:
-                        pass
-                    else:
-                        # Locate last revision ID.
-                        # Flush all changes to its parent directory.
-                        rows = list(c.execute(max_revision_id_query))
-                        if len(rows) == 1:
-                            [(max_revision_id,)] = rows
-                        else:
-                            [] = rows
-                            max_revision_id = 0
-                        if max_revision_id > 0:
-                            (new_revision_filepath, _) = \
-                                calculate_new_revision_filepath(max_revision_id)
-                            flush_rename_of_file(
-                                # NOTE: The revision file itself may not exist,
-                                #       but its parent directory should exist
-                                new_revision_filepath,
-                                self._win_filesystem_known_to_support_journaling
-                            )
-                        
-                        # Move aside old revisions directory and queue it for deletion
-                        os.rename(revisions_dirpath, tmp_revisions_dirpath)
-                        
-                        # Move new revisions directory to final location
-                        os.rename(ip_revisions_dirpath, revisions_dirpath)
-                        
-                        # Commit upgrade
-                        major_version = 2
-                        self._set_major_version(major_version, c, commit)
+                self._migrate_v1_to_v2(c, commit, progress_listener)
             
             # At latest major version 2
             if major_version == 2:
+                # If did not finish commit of "Upgrade major version 1 -> 2",
+                # resume the commit
+                ip_revisions_dirpath = os.path.join(
+                    self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
+                if os.path.exists(ip_revisions_dirpath):
+                    self._commit_migrate_v1_to_v2(c, commit)
+                
                 # Nothing to do
                 pass
             assert self._LATEST_SUPPORTED_MAJOR_VERSION == 2
+    
+    def _migrate_v1_to_v2(self,
+            c: DatabaseCursor,
+            commit: Callable[[], None],
+            progress_listener: OpenProjectProgressListener,
+            ) -> None:
+        revisions_dirpath = os.path.join(
+            self.path, self._REVISIONS_DIRNAME)  # cache
+        ip_revisions_dirpath = os.path.join(
+            self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
+        tmp_revisions_dirpath = os.path.join(
+            self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
+        
+        def calculate_new_revision_filepath(id: int) -> tuple[str, str]:
+            new_revision_filepath_parts = f'{id:015x}'
+            if len(new_revision_filepath_parts) != 15:
+                # NOTE: Raising an AssertionError rather than a
+                #       ProjectHasTooManyRevisionsError because
+                #       will_upgrade_revisions() should have detected
+                #       this case early and not permitted the upgrade
+                #       to continue
+                raise AssertionError(
+                    'Revision ID {id} is too high to migrate to the '
+                    'major version 2 project format')
+            new_revision_parent_relpath = (
+                new_revision_filepath_parts[0:3] + os_path_sep +
+                new_revision_filepath_parts[3:6] + os_path_sep +
+                new_revision_filepath_parts[6:9] + os_path_sep +
+                new_revision_filepath_parts[9:12]
+            )
+            new_revision_filepath = (
+                ip_revisions_dirpath + os_path_sep + 
+                new_revision_parent_relpath + os_path_sep +
+                new_revision_filepath_parts[12:15]
+            )
+            return (new_revision_filepath, new_revision_parent_relpath)
+        
+        # Ensure old revisions directory exists
+        assert os.path.isdir(revisions_dirpath)
+        
+        # 1. Confirm want to migrate now
+        # 2. Create new revisions directory
+        def will_upgrade_revisions(approx_revision_count: int) -> None:
+            """
+            Raises:
+            * VetoUpgradeProject
+            * CancelOpenProject
+            """
+            migration_was_in_progress = os.path.isdir(ip_revisions_dirpath)  # capture
+            
+            if approx_revision_count > Project._MAX_REVISION_ID:
+                assert not migration_was_in_progress
+                
+                # Veto the migration automatically because it would fail
+                # due to inability to migrate revisions with very high IDs
+                raise VetoUpgradeProject()
+            
+            try:
+                progress_listener.will_upgrade_revisions(
+                    approx_revision_count,
+                    can_veto=not migration_was_in_progress)
+            except VetoUpgradeProject:
+                if migration_was_in_progress:
+                    raise AssertionError('Cannot veto migration that was in progress')
+                raise
+            except CancelOpenProject:
+                raise
+            
+            # Create new revisions directory
+            if not migration_was_in_progress:
+                os.mkdir(ip_revisions_dirpath)
+        
+        # Move revisions to appropriate locations in new revisions directory
+        os_path_sep = os.path.sep  # cache
+        last_new_revision_parent_relpath = None  # type: Optional[str]
+        def migrate_revision(row: tuple) -> None:
+            (id,) = row
+            old_revision_filepath = (
+                revisions_dirpath + os_path_sep +
+                str(id)
+            )
+            
+            (new_revision_filepath, new_revision_parent_relpath) = \
+                calculate_new_revision_filepath(id)
+            
+            # Create parent directory for new location if needed
+            # 
+            # NOTE: Avoids extra calls to os.makedirs() when easy to
+            #       prove that there's no work to be done
+            nonlocal last_new_revision_parent_relpath
+            if new_revision_parent_relpath != last_new_revision_parent_relpath:
+                new_revision_parent_dirpath = \
+                    ip_revisions_dirpath + os_path_sep + new_revision_parent_relpath
+                os.makedirs(new_revision_parent_dirpath, exist_ok=True)
+                last_new_revision_parent_relpath = new_revision_parent_relpath
+            
+            # Move revision from old location to new location
+            try:
+                os.rename(old_revision_filepath, new_revision_filepath)
+            except FileNotFoundError:
+                # Either:
+                # 1. Revision has already been moved from old location to new location
+                #    (if this migration is being resumed from an earlier canceled migration)
+                # 2. Revision was missing in old location before, and will be missing in new location.
+                pass
+            
+            if new_revision_filepath.endswith('fff'):
+                # Flush all changes to leaf directory before moving
+                # on to the next leaf directory
+                flush_rename_of_file(
+                    # NOTE: The revision file itself may not exist,
+                    #       but its parent directory should exist
+                    new_revision_filepath,
+                    self._win_filesystem_known_to_support_journaling
+                )
+        # TODO: Dump profiling context immediately upon exit of context
+        #       rather then waiting for program to exit
+        with create_profiling_context(
+                'migrate_revisions.prof', enabled=_PROFILE_MIGRATE_REVISIONS):
+            try:
+                self._process_table_rows(
+                    c,
+                    # NOTE: The following query to approximate row count is
+                    #       significantly faster than the exact query
+                    #       ('select count(1) from resource_revision') because it
+                    #       does not require a full table scan.
+                    max_revision_id_query := 
+                        'select id from resource_revision order by id desc limit 1',
+                    'select id from resource_revision order by id asc',
+                    migrate_revision,
+                    will_upgrade_revisions,
+                    progress_listener.upgrading_revision,
+                    progress_listener.did_upgrade_revisions)
+            except CancelOpenProject:
+                raise
+            except VetoUpgradeProject:
+                pass
+            else:
+                # Locate last revision ID.
+                # Flush all changes to its parent directory.
+                rows = list(c.execute(max_revision_id_query))
+                if len(rows) == 1:
+                    [(max_revision_id,)] = rows
+                else:
+                    [] = rows
+                    max_revision_id = 0
+                if max_revision_id > 0:
+                    (new_revision_filepath, _) = \
+                        calculate_new_revision_filepath(max_revision_id)
+                    flush_rename_of_file(
+                        # NOTE: The revision file itself may not exist,
+                        #       but its parent directory should exist
+                        new_revision_filepath,
+                        self._win_filesystem_known_to_support_journaling
+                    )
+                
+                self._commit_migrate_v1_to_v2(c, commit)
+    
+    def _commit_migrate_v1_to_v2(self,
+            c: DatabaseCursor,
+            commit: Callable[[], None],
+            ) -> None:
+        assert self._get_major_version(c) in [1, 2]
+        
+        revisions_dirpath = os.path.join(
+            self.path, self._REVISIONS_DIRNAME)  # cache
+        ip_revisions_dirpath = os.path.join(
+            self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
+        tmp_revisions_dirpath = os.path.join(
+            self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
+        
+        # Start commit
+        major_version = 2
+        self._set_major_version(major_version, c, commit)
+        # (If crash happens between here and "Finish commit",
+        #  reopening the project will resume the commit)
+        
+        # Move aside old revisions directory and queue it for deletion
+        os.rename(revisions_dirpath, tmp_revisions_dirpath)
+        
+        # Move new revisions directory to final location
+        os.rename(ip_revisions_dirpath, revisions_dirpath)
+        
+        # Finish commit
+        flush_rename_of_file(
+            revisions_dirpath,
+            self._win_filesystem_known_to_support_journaling,
+        )
     
     @staticmethod
     def _get_major_version(c: DatabaseCursor | sqlite3.Cursor) -> int:
