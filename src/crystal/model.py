@@ -3632,7 +3632,11 @@ class Resource:
     # NOTE: Only used from a Python REPL at the moment
     def delete(self) -> None:
         """
+        Deletes this resource, including any related revisions.
+        
         Raises:
+        * sqlite3.DatabaseError, OSError --
+            if the delete partially failed, leaving behind zero or more revisions
         * ProjectReadOnlyError
         * ValueError -- if this resource is referenced by a RootResource
         """
@@ -3652,6 +3656,10 @@ class Resource:
             raise ValueError(f'Cannot delete {self!r} referenced by RootResource {root_resource_ids!r}')
         
         # Delete ResourceRevision children
+        # NOTE: If any revision fails to delete, the remaining revisions will be
+        #       left intact. In particular the most-recently downloaded revisions,
+        #       including the default_revision(), will be left intact, which
+        #       is what most users of Resource care about.
         for rev in list(self.revisions()):
             rev.delete()
         
@@ -4716,25 +4724,41 @@ class ResourceRevision:
         return ResourceRevision._create_unsaved_from_revision_and_new_metadata(
             target_revision, new_metadata)
     
-    def delete(self):
+    def delete(self) -> None:
+        """
+        Deletes this revision.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if the delete fully failed due to a database error
+        * OSError -- 
+            if the delete partially failed, leaving behind a revision body file
+        * ProjectReadOnlyError
+        """
         project = self.project
+        body_filepath = self._body_filepath  # capture
         
         if project.readonly:
             raise ProjectReadOnlyError()
         
-        body_filepath = self._body_filepath  # cache
-        try:
-            os.remove(body_filepath)
-        except FileNotFoundError:
-            # OK. The revision may have already been partially deleted outside of Crystal.
-            pass
-        
+        # Delete revision's database row
+        # NOTE: If crash occurs after database commit but before revision body
+        #       is deleted, a dangling revision's body file will be left behind.
+        #       That dangling file will occupy some disk space unnecessarily
+        #       but shouldn't interfere with any future project operations.
         with closing(project._db.cursor()) as c:
             c.execute('delete from resource_revision where id=?', (self._id,))
         project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.resource.already_downloaded_this_session = False
+        
+        # Delete revision's body file
+        try:
+            os.remove(body_filepath)
+        except FileNotFoundError:
+            # OK. The revision may have already been partially deleted outside of Crystal.
+            pass
     
     def __repr__(self) -> str:
         return "<ResourceRevision {} for '{}'>".format(self._id, self.resource.url)
