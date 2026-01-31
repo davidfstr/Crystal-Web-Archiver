@@ -2754,6 +2754,10 @@ class Resource:
         Arguments:
         * project -- associated `Project`.
         * url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of the new Resource.
         """
         # Private API:
         # * _id --
@@ -2943,6 +2947,10 @@ class Resource:
         * project -- associated `Project`.
         * urls -- absolute URLs.
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the lookup/creation of any Resources.
         """
         # Private API:
         # * _external_ok --
@@ -2986,6 +2994,10 @@ class Resource:
         * project -- associated `Project`.
         * urls -- absolute URLs.
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the lookup/creation of any Resources.
         """
         (_, created) = cls._bulk_get_or_create(
             project, urls, origin_url,
@@ -3005,6 +3017,11 @@ class Resource:
             origin_url: str,
             *, _external_ok: bool=False,
             ) -> tuple[list[Resource], list[Resource]]:
+        """
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the lookup/creation of any Resources.
+        """
         # Private API:
         # * _external_ok --
         #     - whether the caller is prepared for the possibility
@@ -3065,6 +3082,11 @@ class Resource:
             normalized_urls: list[str],
             origin_url: str | None,
             ) -> list[int]:
+        """
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of any ids.
+        """
         from crystal.task import PROFILE_RECORD_LINKS
         
         # Create many Resource rows in database with a single bulk INSERT,
@@ -3635,10 +3657,10 @@ class Resource:
         Deletes this resource, including any related revisions.
         
         Raises:
-        * sqlite3.DatabaseError, OSError --
-            if the delete partially failed, leaving behind zero or more revisions
         * ProjectReadOnlyError
         * ValueError -- if this resource is referenced by a RootResource
+        * sqlite3.DatabaseError, OSError --
+            if the delete partially/fully failed, leaving behind zero or more revisions
         """
         project = self.project
         
@@ -3713,6 +3735,8 @@ class RootResource:
         * CrossProjectReferenceError -- if `resource` belongs to a different project.
         * RootResource.AlreadyExists -- 
             if there is already a `RootResource` associated with the specified resource.
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of the new RootResource.
         """
         project = _resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
@@ -3757,6 +3781,10 @@ class RootResource:
         """
         Deletes this root resource.
         If it is referenced as a source, it will be replaced with None.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if the delete fully failed due to a database error
         """
         for rg in self.project.resource_groups:
             if rg.source == self:
@@ -3872,7 +3900,16 @@ class ResourceRevision:
         Raises:
         * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
-        * Exception -- if could not write revision to disk
+        * sqlite3.DatabaseError, OSError -- 
+            if could not read old revision from disk or write new revision to disk.
+            
+            If the error is related to disk disconnection, disk full, or other
+            disk-wide permanent I/O error then it is possible that a
+            ResourceRevision was partially saved to the database but not
+            rolled back, left pointing to a missing revision body file.
+            Attempting to read that revision's body later will result in
+            a RevisionBodyMissingError, which callers are expected to handle
+            gracefully.
         """
         if revision.error is not None:
             return ResourceRevision.create_from_error(resource, revision.error)
@@ -3896,7 +3933,8 @@ class ResourceRevision:
         Raises:
         * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
-        * Exception -- if could not write revision to disk
+        * sqlite3.DatabaseError -- 
+            if could not write revision to disk.
         """
         return ResourceRevision._create_from_stream(
             resource,
@@ -3924,7 +3962,16 @@ class ResourceRevision:
         Raises:
         * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
-        * Exception -- if could not read revision from stream or write to disk
+        * sqlite3.DatabaseError, OSError -- 
+            if could not read from stream or write revision to disk.
+            
+            If the error is related to disk disconnection, disk full, or other
+            disk-wide permanent I/O error then it is possible that a
+            ResourceRevision was partially saved to the database but not
+            rolled back, left pointing to a missing revision body file.
+            Attempting to read that revision's body later will result in
+            a RevisionBodyMissingError, which callers are expected to handle
+            gracefully.
         """
         try:
             # If no HTTP Date header was returned by the origin server,
@@ -3971,7 +4018,16 @@ class ResourceRevision:
         Raises:
         * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
-        * Exception -- if could not read revision from stream or write to disk
+        * sqlite3.DatabaseError, OSError -- 
+            if could not read from stream or write revision to disk.
+            
+            If the error is related to disk disconnection, disk full, or other
+            disk-wide permanent I/O error then it is possible that a
+            ResourceRevision was partially saved to the database but not
+            rolled back, left pointing to a missing revision body file.
+            Attempting to read that revision's body later will result in
+            a RevisionBodyMissingError, which callers are expected to handle
+            gracefully.
         """
         self = ResourceRevision()
         self.resource = resource
@@ -4134,6 +4190,10 @@ class ResourceRevision:
         """
         Loads the existing revision with the specified ID,
         or returns None if no such revision exists.
+        
+        Raises:
+        * sqlite3.DatabaseError -- 
+            if could not read revision metadata from disk.
         """
         # Fetch the revision's resource URL
         with closing(project._db.cursor()) as c:
@@ -4530,6 +4590,8 @@ class ResourceRevision:
         Raises:
         * NoRevisionBodyError
         * RevisionBodyMissingError
+        * OSError --
+            if I/O error while reading revision body
         """
         self._ensure_has_body()
         try:
@@ -4544,6 +4606,8 @@ class ResourceRevision:
         Raises:
         * NoRevisionBodyError
         * RevisionBodyMissingError
+        * OSError --
+            if I/O error while opening revision body
         """
         self._ensure_has_body()
         try:
@@ -4666,6 +4730,15 @@ class ResourceRevision:
             new_metadata: ResourceRevisionMetadata,
             *, ignore_readonly: bool=False
             ) -> None:
+        """
+        Changes the metadata of this revision in place.
+        
+        ONLY FOR USE BY AUTOMATED TESTS.
+        
+        Raises:
+        * sqlite3.DatabaseError -- 
+            if could not write revision metadata to disk.
+        """
         project = self.project
         
         # Alter ResourceRevision's metadata in memory
@@ -4729,11 +4802,11 @@ class ResourceRevision:
         Deletes this revision.
         
         Raises:
+        * ProjectReadOnlyError
         * sqlite3.DatabaseError --
             if the delete fully failed due to a database error
         * OSError -- 
             if the delete partially failed, leaving behind a revision body file
-        * ProjectReadOnlyError
         """
         project = self.project
         body_filepath = self._body_filepath  # capture
@@ -4861,6 +4934,8 @@ class Alias:
             if there is already an `Alias` with specified `source_url_prefix`.
         * ValueError --
             if `source_url_prefix` or `target_url_prefix` do not end in slash (/).
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of the new Alias.
         """
         project = _resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
@@ -4916,6 +4991,8 @@ class Alias:
         
         Raises:
         * ProjectReadOnlyError
+        * sqlite3.DatabaseError --
+            if the delete fully failed due to a database error
         """
         if self.project.readonly:
             raise ProjectReadOnlyError()
@@ -5063,6 +5140,10 @@ class ResourceGroup(ListenableMixin):
         * name -- name of this group. Possibly ''.
         * url_pattern -- url pattern matched by this group.
         * source -- source of this group, or Ellipsis if init_source() will be called later.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of the new ResourceGroup.
         """
         super().__init__()
         
@@ -5126,6 +5207,13 @@ class ResourceGroup(ListenableMixin):
         """
         Deletes this resource group.
         If it is referenced as a source, it will be replaced with None.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if the delete partially/fully failed due to a database error.
+            
+            If a partial failure occurred, one or more other groups that had
+            this group as a source may have their source cleared.
         """
         for rg in self.project.resource_groups:
             if rg.source == self:
