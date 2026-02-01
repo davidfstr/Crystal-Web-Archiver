@@ -106,6 +106,9 @@ if TYPE_CHECKING:
     )
 
 
+# ------------------------------------------------------------------------------
+# Constants + Type Utilities
+
 # Whether to collect profiling information about Project._apply_migrations().
 # 
 # When True, a 'migrate_revisions.prof' file is written to the current directory
@@ -118,6 +121,9 @@ _PROFILE_MIGRATE_REVISIONS = False
 _OptionalStr = TypeVar('_OptionalStr', bound=Optional[str])
 _TK = TypeVar('_TK', bound='Task')
 
+
+# ------------------------------------------------------------------------------
+# Project
 
 class _Missing(Enum):
     VALUE = 1
@@ -2638,6 +2644,9 @@ class ProjectClosedError(Exception):
     pass
 
 
+# ------------------------------------------------------------------------------
+# Resource
+
 class _WeakTaskRef(Generic[_TK]):
     """
     Holds a reference to a Task until that task completes.
@@ -3650,6 +3659,13 @@ class Resource:
         return 'Resource({})'.format(repr(self.url))
 
 
+class _TaskNotFoundException(Exception):
+    pass
+
+
+# ------------------------------------------------------------------------------
+# RootResource
+
 class RootResource:
     """
     Represents a resource whose existence is manually defined by the user.
@@ -3806,6 +3822,9 @@ class RootResource:
         """
         pass
 
+
+# ------------------------------------------------------------------------------
+# ResourceRevision
 
 class ResourceRevision:
     """
@@ -4752,6 +4771,9 @@ class _PersistedError(Exception):
         self.type = type
 
 
+# ------------------------------------------------------------------------------
+# Alias
+
 class Alias:
     """
     An Alias causes URLs with a particular Source URL Prefix to be considered
@@ -4967,6 +4989,9 @@ class Alias:
         """
         pass
 
+
+# ------------------------------------------------------------------------------
+# ResourceGroup
 
 ResourceGroupSource: TypeAlias = Union['RootResource', 'ResourceGroup', None]
 
@@ -5299,6 +5324,9 @@ class ResourceGroup(ListenableMixin):
         return 'ResourceGroup({},{})'.format(repr(self.name), repr(self.url_pattern))
 
 
+# ------------------------------------------------------------------------------
+# Utility
+
 def _resolve_proxy(maybe_proxy: object) -> object:
     from crystal.shell import _Proxy
     if isinstance(maybe_proxy, _Proxy):
@@ -5317,5 +5345,4 @@ def _is_ascii(s: str) -> bool:
         return True
 
 
-class _TaskNotFoundException(Exception):
-    pass
+# ------------------------------------------------------------------------------
