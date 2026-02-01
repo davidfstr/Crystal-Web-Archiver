@@ -1,31 +1,47 @@
 from crystal.util.xos import is_linux, is_mac_os, is_windows
+import ctypes
 import errno
 import os
 
 
-# TODO: Alter API to be "rename_and_flush(src_filepath, dst_filepath)"
-#       so that on Windows MoveFileExW with flag MOVEFILE_WRITE_THROUGH
-#       can be used to guarantee a durable rename.
-def flush_rename_of_file(filepath: str) -> None:
+def rename_and_flush(src_filepath: str, dst_filepath: str) -> None:
     """
-    Ensures that a rename of the specified file is flushed to disk.
+    Renames a file and ensures the rename is flushed to disk.
     
-    If the operating system does not provide an API to bulk-flush renames
-    in a directory - like Windows - then take no action.
-    
-    If the filesystem on which the file resides does not support flushing then take no action.
-    
-    If the parent directory of the specified file does not exist,
-    an OSError will be raised. It is OK if the specified file itself does not exist. 
-    
-    Arguments:
-    - filepath --
-        Path to a recently renamed file.
+    If the filesystem on which the file resides does not support flushing
+    then take no action when attempting to flush.
     
     Raises:
     - OSError -- if an I/O error occurred while flushing
     """
-    flush_renames_in_directory(os.path.dirname(filepath))
+    if is_windows():
+        from ctypes import wintypes  # type: ignore[import]
+        
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)  # type: ignore[attr-defined]
+        
+        # Define MoveFileExW signature
+        MoveFileExW = kernel32.MoveFileExW
+        MoveFileExW.argtypes = [
+            wintypes.LPCWSTR,   # lpExistingFileName
+            wintypes.LPCWSTR,   # lpNewFileName
+            wintypes.DWORD,     # dwFlags
+        ]
+        MoveFileExW.restype = wintypes.BOOL
+        
+        # Constants
+        MOVEFILE_WRITE_THROUGH = 0x8
+        
+        result = MoveFileExW(
+            src_filepath,
+            dst_filepath,
+            MOVEFILE_WRITE_THROUGH,  # flush rename to disk
+        )
+        if result == 0:
+            # Raise an OSError with the Windows error code
+            raise ctypes.WinError(ctypes.get_last_error())  # type: ignore[attr-defined]
+    else:
+        os.rename(src_filepath, dst_filepath)
+        flush_renames_in_directory(os.path.dirname(dst_filepath))
 
 
 def flush_renames_in_directory(parent_dirpath: str) -> None:

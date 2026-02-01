@@ -40,7 +40,7 @@ from crystal.util.db import (
     get_index_names, get_table_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis, EllipsisType
-from crystal.util.filesystem import flush_rename_of_file, flush_renames_in_directory
+from crystal.util.filesystem import rename_and_flush, flush_renames_in_directory
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import create_profiling_context, warn_if_slow
 from crystal.util.progress import DevNullFile
@@ -912,13 +912,9 @@ class Project(ListenableMixin):
         # Move aside old revisions directory and queue it for deletion
         os.rename(revisions_dirpath, tmp_revisions_dirpath)
         
-        # Move new revisions directory to final location
-        os.rename(ip_revisions_dirpath, revisions_dirpath)
-        
-        # Finish commit
-        flush_rename_of_file(
-            revisions_dirpath,
-        )
+        # 1. Move new revisions directory to final location
+        # 2. Finish commit
+        rename_and_flush(ip_revisions_dirpath, revisions_dirpath)
     
     def _repair_incomplete_rollback_of_resource_revision_create(self,
             c: DatabaseCursor,
@@ -4340,19 +4336,16 @@ class ResourceRevision:
             if body_file is not None:
                 try:
                     if body_file_downloaded_ok and row_created_ok:
-                        # Move body file to its final filename
                         # NOTE: May raise ProjectHasTooManyRevisionsError
                         revision_filepath = self._body_filepath
+                        
+                        # 1. Move body file to its final filename
+                        # 2. Ensure rename is flushed to disk
                         try:
-                            os.rename(body_file.name, revision_filepath)
+                            rename_and_flush(body_file.name, revision_filepath)
                         except FileNotFoundError:  # probably missing parent directory
                             os.makedirs(os.path.dirname(revision_filepath), exist_ok=True)
-                            os.rename(body_file.name, revision_filepath)
-                        
-                        # Ensure os.rename() is flushed to disk
-                        flush_rename_of_file(
-                            revision_filepath,
-                        )
+                            rename_and_flush(body_file.name, revision_filepath)
                     else:
                         # Remove body file
                         os.remove(body_file.name)
