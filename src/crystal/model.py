@@ -3786,15 +3786,30 @@ class RootResource:
         * sqlite3.DatabaseError --
             if the delete fully failed due to a database error
         """
-        for rg in self.project.resource_groups:
-            if rg.source == self:
-                rg.source = None
+        groups_with_source_to_clear = [
+            rg
+            for rg in self.project.resource_groups
+            if rg.source == self
+        ]
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
-            c.execute('delete from root_resource where id=?', (self._id,))
-        self.project._db.commit()
+        try:
+            # Apply clear of sources
+            for rg in groups_with_source_to_clear:
+                # NOTE: Use commit=False to merge changes into the following
+                #       committed transaction
+                rg._set_source(None, commit=False)
+            
+            with closing(self.project._db.cursor()) as c:
+                c.execute('delete from root_resource where id=?', (self._id,))
+            self.project._db.commit()
+        except:
+            # Rollback clear of sources
+            for rg in groups_with_source_to_clear:
+                rg._set_source(self, update_database=False)
+            
+            raise
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         del self.project._root_resources[self.resource]
