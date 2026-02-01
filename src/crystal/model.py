@@ -301,13 +301,6 @@ class Project(ListenableMixin):
         
         self._min_fetch_date = None  # type: Optional[datetime.datetime]
         
-        # Windows: Detect whether the filesystem supports journaling
-        if is_windows():
-            self._win_filesystem_known_to_support_journaling = \
-                windows_filesystem.filesystem_supports_journaling(path) or False
-        else:
-            self._win_filesystem_known_to_support_journaling = False
-        
         progress_listener.opening_project()
         
         create = not os.path.exists(path)
@@ -855,8 +848,7 @@ class Project(ListenableMixin):
                 flush_rename_of_file(
                     # NOTE: The revision file itself may not exist,
                     #       but its parent directory should exist
-                    new_revision_filepath,
-                    self._win_filesystem_known_to_support_journaling
+                    new_revision_filepath
                 )
         # TODO: Dump profiling context immediately upon exit of context
         #       rather then waiting for program to exit
@@ -894,8 +886,7 @@ class Project(ListenableMixin):
                     flush_rename_of_file(
                         # NOTE: The revision file itself may not exist,
                         #       but its parent directory should exist
-                        new_revision_filepath,
-                        self._win_filesystem_known_to_support_journaling
+                        new_revision_filepath
                     )
                 
                 self._commit_migrate_v1_to_v2(c, commit)
@@ -932,7 +923,6 @@ class Project(ListenableMixin):
         # Finish commit
         flush_rename_of_file(
             revisions_dirpath,
-            self._win_filesystem_known_to_support_journaling,
         )
     
     def _repair_incomplete_rollback_of_resource_revision_create(self,
@@ -4367,7 +4357,6 @@ class ResourceRevision:
                         # Ensure os.rename() is flushed to disk
                         flush_rename_of_file(
                             revision_filepath,
-                            project._win_filesystem_known_to_support_journaling,
                         )
                     else:
                         # Remove body file
