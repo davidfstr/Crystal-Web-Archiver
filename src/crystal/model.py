@@ -40,7 +40,7 @@ from crystal.util.db import (
     get_index_names, get_table_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis, EllipsisType
-from crystal.util.filesystem import flush_rename_of_file
+from crystal.util.filesystem import flush_rename_of_file, flush_renames_in_directory
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import create_profiling_context, warn_if_slow
 from crystal.util.progress import DevNullFile
@@ -50,7 +50,6 @@ from crystal.util.thread_debug import get_thread_stack
 from crystal.app_preferences import app_prefs
 from crystal.util.urls import is_unrewritable_url, requote_uri
 from crystal.util.windows_attrib import set_windows_file_attrib
-from crystal.util import windows_filesystem
 from crystal.util.xappdirs import user_untitled_projects_dir
 from crystal.util.xbisect import bisect_key_right
 from crystal.util.xcollections.ordereddict import as_ordereddict
@@ -845,10 +844,8 @@ class Project(ListenableMixin):
             if new_revision_filepath.endswith('fff'):
                 # Flush all changes to leaf directory before moving
                 # on to the next leaf directory
-                flush_rename_of_file(
-                    # NOTE: The revision file itself may not exist,
-                    #       but its parent directory should exist
-                    new_revision_filepath
+                flush_renames_in_directory(
+                    os.path.dirname(new_revision_filepath)
                 )
         # TODO: Dump profiling context immediately upon exit of context
         #       rather then waiting for program to exit
@@ -883,10 +880,8 @@ class Project(ListenableMixin):
                 if max_revision_id is not None:
                     (new_revision_filepath, _) = \
                         calculate_new_revision_filepath(max_revision_id)
-                    flush_rename_of_file(
-                        # NOTE: The revision file itself may not exist,
-                        #       but its parent directory should exist
-                        new_revision_filepath
+                    flush_renames_in_directory(
+                        os.path.dirname(new_revision_filepath)
                     )
                 
                 self._commit_migrate_v1_to_v2(c, commit)
