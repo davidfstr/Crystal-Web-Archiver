@@ -1,47 +1,77 @@
+"""
+Index of all tests.
+
+Symbol key:
+- 👑 = Central file for its parent directory
+
+Tests, by hierarchy:
+- crystal/tests
+    - aspects -- Cross-cutting behaviors that affect multiple systems
+        - test_do_not_download_groups.py
+        - test_external_urls.py
+        - test_readonly_mode.py
+        - test_untitled_projects.py
+    - cli -- Command Line Interface tests for the `crystal` command
+        - test_cli.py 👑
+        - test_runner.py
+        - test_shell.py
+    - desktop_integration -- Integration with macOS Finder, Windows Explorer, GNOME Files/Nautilus, KDE Dolphin
+        - test_file_extension_visibility.py
+        - test_icons.py
+        - test_install_to_desktop.py
+    - model -- Model layer tests
+        - test_disk_io_errors.py
+        - test_hibernate.py
+        - test_project_migrate.py
+        - test_url_normalization.py
+    - task -- Task tests, which make changes to a project
+        - test_download_body.py
+        - test_download.py
+        - test_tasks.py 👑
+    - test_parse_html.py -- HTML document parsing (crystal.doc.html)
+    - test_server.py -- ProjectServer
+    - ui -- UI layer tests; Use cases accomplished through the UI
+        - main_window
+            - test_entitytree.py
+            - test_load_urls.py
+            - test_log_drawer.py
+            - test_main_window.py 👑
+            - test_tasktree.py
+        - test_about_box.py
+        - test_callout.py
+        - test_edit_alias.py
+        - test_edit_group.py
+        - test_edit_root_url.py
+        - test_menus.py
+        - test_new_alias.py
+        - test_new_group.py
+        - test_new_root_url.py
+        - test_preferences.py
+        - test_window_modal_titles.py
+    - util_tests -- crystal.util module unit tests
+        - test_bulkheads.py
+        - test_profile.py
+        - test_ssd.py
+        - test_xthreading.py
+    - workflows -- Complete workflows a user may want to accomplish using the Crystal app
+        - test_open_project.py
+        - test_workflows.py 👑
+"""
+
 from collections.abc import Callable
 from crystal.tests import (
-    test_about_box,
-    test_bulkheads,
-    test_callout,
-    test_cli,
-    test_disk_io_errors,
-    test_do_not_download_groups,
-    test_download,
-    test_download_body,
-    test_edit_alias,
-    test_edit_group,
-    test_edit_root_url,
-    test_entitytree,
-    test_external_urls,
-    test_file_extension_visibility,
-    test_hibernate,
-    test_icons,
-    test_install_to_desktop,
-    test_load_urls,
-    test_log_drawer,
-    test_main_window,
-    test_menus,
-    test_new_alias,
-    test_new_group,
-    test_new_root_url,
-    test_open_project,
     test_parse_html,
-    test_preferences,
-    test_profile,
-    test_project_migrate,
-    test_readonly_mode,
-    test_runner,
     test_server,
-    test_shell,
-    test_ssd,
-    test_tasks,
-    test_tasktree,
-    test_untitled_projects,
-    test_url_normalization,
-    test_window_modal_titles,
-    test_workflows,
-    test_xthreading,
 )
+from crystal.tests.aspects import test_do_not_download_groups, test_external_urls, test_readonly_mode, test_untitled_projects
+from crystal.tests.cli import test_cli, test_runner, test_shell
+from crystal.tests.desktop_integration import test_file_extension_visibility, test_icons, test_install_to_desktop
+from crystal.tests.model import test_disk_io_errors, test_hibernate, test_project_migrate, test_url_normalization
+from crystal.tests.task import test_download, test_download_body, test_tasks
+from crystal.tests.ui import test_about_box, test_callout, test_edit_alias, test_edit_group, test_edit_root_url, test_menus, test_new_alias, test_new_group, test_new_root_url, test_preferences, test_window_modal_titles
+from crystal.tests.ui.main_window import test_entitytree, test_load_urls, test_log_drawer, test_main_window, test_tasktree
+from crystal.tests.util_tests import test_bulkheads, test_profile, test_ssd, test_xthreading
+from crystal.tests.workflows import test_open_project, test_workflows
 
 
 # === Index ===

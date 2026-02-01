@@ -30,9 +30,9 @@ def test_can_run_tests_with_test_subcommand() -> None:
     result = run_crystal([
         'test',
         # NOTE: This is a simple, fast test
-        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors',
+        'crystal.tests.ui.main_window.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors',
         # NOTE: This is a skipped test
-        'crystal.tests.test_main_window.test_branding_area_looks_good_in_light_mode_and_dark_mode'
+        'crystal.tests.ui.main_window.test_main_window.test_branding_area_looks_good_in_light_mode_and_dark_mode'
     ])
     assertEqual(0, result.returncode)
     assertIn('Ran 2 tests', result.stdout)
@@ -43,9 +43,9 @@ def test_can_run_tests_with_test_flag() -> None:
     result = run_crystal([
         '--test',
         # NOTE: This is a simple, fast test
-        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors',
+        'crystal.tests.ui.main_window.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors',
         # NOTE: This is a skipped test
-        'crystal.tests.test_main_window.test_branding_area_looks_good_in_light_mode_and_dark_mode'
+        'crystal.tests.ui.main_window.test_main_window.test_branding_area_looks_good_in_light_mode_and_dark_mode'
     ])
     assertEqual(0, result.returncode)
     assertIn('Ran 2 tests', result.stdout)
@@ -75,7 +75,7 @@ def test_can_run_tests_in_interactive_mode() -> None:
         (output, _) = read_until(crystal.stdout, 'test>\n', timeout=2.0)
         
         # Send a test name
-        crystal.stdin.write('crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors\n')
+        crystal.stdin.write('crystal.tests.ui.main_window.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors\n')
         crystal.stdin.flush()
         
         # Wait for the test to complete
@@ -176,7 +176,7 @@ def test_given_interactive_mode_when_test_names_provided_then_prints_error() -> 
     result = run_crystal([
         'test',
         '--interactive',
-        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+        'crystal.tests.ui.main_window.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
     ])
     assert result.returncode != 0
     assertIn('error: test names cannot be specified with --interactive', result.stderr)
@@ -187,11 +187,11 @@ def test_when_ctrl_c_pressed_while_test_running_noninteractively_then_marks_that
         args=[
             'test',
             # Test 0: Fast test that should pass
-            'crystal.tests.test_runner.test_special_a_causing_pass',
+            'crystal.tests.cli.test_runner.test_special_a_causing_pass',
             # Test 1: Special test that simulates Ctrl-C
-            'crystal.tests.test_runner.test_special_b_causing_ctrl_c',
+            'crystal.tests.cli.test_runner.test_special_b_causing_ctrl_c',
             # Test 2: Fast test that should pass, if it wasn't interrupted
-            'crystal.tests.test_runner.test_special_c_causing_pass',
+            'crystal.tests.cli.test_runner.test_special_c_causing_pass',
         ],
         # Enable Ctrl-C simulation in test_special_b_causing_ctrl_c
         env_extra={'CRYSTAL_SIMULATE_CTRL_C_DURING_TEST': '1'},
@@ -218,8 +218,8 @@ def test_when_ctrl_c_pressed_while_test_running_noninteractively_then_marks_that
     assertIn('Rerun interrupted tests with:', stdout_str)
     assertIn(
         'crystal test '
-        'crystal.tests.test_runner.test_special_b_causing_ctrl_c '
-        'crystal.tests.test_runner.test_special_c_causing_pass', stdout_str)
+        'crystal.tests.cli.test_runner.test_special_b_causing_ctrl_c '
+        'crystal.tests.cli.test_runner.test_special_c_causing_pass', stdout_str)
     
     # Verify exit code indicates failure
     assertNotEqual(0, returncode, f'Expected non-zero exit code, got {returncode}')
@@ -238,18 +238,18 @@ def test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_te
         (_, _) = read_until(crystal.stdout, 'test>\n', timeout=2.0)
         
         # Send test 1 (should pass)
-        crystal.stdin.write('crystal.tests.test_runner.test_special_a_causing_pass\n')
+        crystal.stdin.write('crystal.tests.cli.test_runner.test_special_a_causing_pass\n')
         crystal.stdin.flush()
         (early_stdout_str, _) = read_until(crystal.stdout, 'test>\n', timeout=30.0)
         assertIn('OK', early_stdout_str)
         
         # Send test 2 (will trigger Ctrl-C simulation)
-        crystal.stdin.write('crystal.tests.test_runner.test_special_b_causing_ctrl_c\n')
+        crystal.stdin.write('crystal.tests.cli.test_runner.test_special_b_causing_ctrl_c\n')
         crystal.stdin.flush()
         
         # Try to send test 3 (should be ignored after Ctrl-C)
         # Note: We send this immediately, but after Ctrl-C it should be ignored
-        crystal.stdin.write('crystal.tests.test_runner.test_special_c_causing_pass\n')
+        crystal.stdin.write('crystal.tests.cli.test_runner.test_special_c_causing_pass\n')
         crystal.stdin.flush()
         
         # Wait for process to exit
@@ -274,7 +274,7 @@ def test_when_ctrl_c_pressed_while_test_running_interactively_then_marks_that_te
     
     # Verify 'Rerun interrupted tests with:' section exists
     assertIn('Rerun interrupted tests with:', late_stdout_str)
-    assertIn('crystal test crystal.tests.test_runner.test_special_b_causing_ctrl_c', late_stdout_str)
+    assertIn('crystal test crystal.tests.cli.test_runner.test_special_b_causing_ctrl_c', late_stdout_str)
     
     # Verify test_special_c_causing_pass was NOT run (it was on stdin but ignored after Ctrl-C)
     assertNotIn('test_special_c_causing_pass', late_stdout_str)
@@ -319,7 +319,7 @@ def test_can_run_tests_in_parallel() -> None:
         'test',
         '--parallel',
         # NOTE: This is a simple, fast test
-        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+        'crystal.tests.ui.main_window.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
     ])
     assertEqual(0, result.returncode)
     assertIn('OK', result.stdout)
@@ -332,7 +332,7 @@ def test_can_run_tests_in_parallel_with_explicit_job_count() -> None:
         'test',
         '--parallel', '-j', '2',
         # NOTE: This is a simple, fast test
-        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+        'crystal.tests.ui.main_window.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
     ])
     assertEqual(0, result.returncode)
     assertIn('OK', result.stdout)
@@ -355,7 +355,7 @@ def test_when_jobs_flag_used_without_parallel_then_prints_error() -> None:
     result = run_crystal([
         'test',
         '-j', '2',
-        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+        'crystal.tests.ui.main_window.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
     ])
     assert result.returncode != 0
     assertIn('error: -j/--jobs can only be used with -p/--parallel', result.stderr)
@@ -367,7 +367,7 @@ def test_can_run_tests_in_parallel_with_verbose_flag() -> None:
         'test',
         '--parallel', '-v',
         # NOTE: This is a simple, fast test
-        'crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
+        'crystal.tests.ui.main_window.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors'
     ])
     assertEqual(0, result.returncode)
     assertIn('OK', result.stdout)
@@ -403,11 +403,11 @@ def test_when_ctrl_c_pressed_while_test_running_in_parallel_then_marks_that_test
                 '--parallel',
                 '-j', '2',
                 # Test 0: Fast test that should pass
-                'crystal.tests.test_runner.test_special_a_causing_pass',
+                'crystal.tests.cli.test_runner.test_special_a_causing_pass',
                 # Test 1: Special test that simulates Ctrl-C
-                'crystal.tests.test_runner.test_special_b_causing_ctrl_c',
+                'crystal.tests.cli.test_runner.test_special_b_causing_ctrl_c',
                 # Test 2: Fast test that should pass, if it is not interrupted
-                'crystal.tests.test_runner.test_special_c_causing_pass',
+                'crystal.tests.cli.test_runner.test_special_c_causing_pass',
             ],
             env_extra={
                 # Assign tests to workers deterministically
@@ -431,9 +431,9 @@ def test_when_ctrl_c_pressed_while_test_running_in_parallel_then_marks_that_test
                 '--parallel',
                 '-j', '2',
                 # Test 0: Fast test that should pass, if it is not interrupted
-                'crystal.tests.test_runner.test_special_a_causing_pass',
+                'crystal.tests.cli.test_runner.test_special_a_causing_pass',
                 # Test 1: Fast test that should pass, if it is not interrupted
-                'crystal.tests.test_runner.test_special_c_causing_pass',
+                'crystal.tests.cli.test_runner.test_special_c_causing_pass',
             ],
             env_extra={
                 # Assign tests to workers deterministically
@@ -531,30 +531,30 @@ def test_when_ctrl_c_pressed_while_test_running_in_parallel_then_marks_that_test
 def test_output_format_of_running_tests_in_parallel_and_in_serial_are_identical(subtests: SubtestsContext) -> None:
     _3_PASSING_TESTS = [
         # Test 0: Fast test that should pass
-        'crystal.tests.test_runner.test_special_a_causing_pass',
+        'crystal.tests.cli.test_runner.test_special_a_causing_pass',
         # Test 1: Fast test that should pass
-        'crystal.tests.test_runner.test_special_b_causing_ctrl_c',
+        'crystal.tests.cli.test_runner.test_special_b_causing_ctrl_c',
         # Test 2: Fast test that should pass
-        'crystal.tests.test_runner.test_special_c_causing_pass',
+        'crystal.tests.cli.test_runner.test_special_c_causing_pass',
     ]
     
     TEST_0_LINES = [
         '======================================================================',
-        'RUNNING: test_special_a_causing_pass (crystal.tests.test_runner.test_special_a_causing_pass) [$%]',
+        'RUNNING: test_special_a_causing_pass (crystal.tests.cli.test_runner.test_special_a_causing_pass) [$%]',
         '----------------------------------------------------------------------',
         'OK',
         '',
     ]
     TEST_1_LINES = [
         '======================================================================',
-        'RUNNING: test_special_b_causing_ctrl_c (crystal.tests.test_runner.test_special_b_causing_ctrl_c) [$%]',
+        'RUNNING: test_special_b_causing_ctrl_c (crystal.tests.cli.test_runner.test_special_b_causing_ctrl_c) [$%]',
         '----------------------------------------------------------------------',
         'OK',
         '',
     ]
     TEST_2_LINES = [
         '======================================================================',
-        'RUNNING: test_special_c_causing_pass (crystal.tests.test_runner.test_special_c_causing_pass) [$%]',
+        'RUNNING: test_special_c_causing_pass (crystal.tests.cli.test_runner.test_special_c_causing_pass) [$%]',
         '----------------------------------------------------------------------',
         'OK',
         '',

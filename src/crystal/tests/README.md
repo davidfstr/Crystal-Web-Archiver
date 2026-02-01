@@ -4,6 +4,10 @@ Most tests are end-to-end UI tests, which open up a real Crystal project,
 interact with UI controls to perform actions, and verify that the output
 UI or project state is as expected.
 
+## Locating existing tests
+
+Read: src/crystal/tests/index.py
+
 ## Define a test module
 
 If you are not adding tests to an existing module like `test_workflows.py`,

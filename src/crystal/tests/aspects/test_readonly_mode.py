@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import Project, Resource, RootResource
 # TODO: Extract shared utilities to own module
-from crystal.tests.test_untitled_projects import (
+from crystal.tests.aspects.test_untitled_projects import (
     _temporary_directory_on_new_filesystem,
     _untitled_project,
 )

@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from crystal.model import Project, Resource, RootResource
-from crystal.tests.test_open_project import skip_if_not_macos
+from crystal.tests.workflows.test_open_project import skip_if_not_macos
 from crystal.tests.util.cli import (
     create_new_empty_project, crystal_shell, py_eval_await,
 )

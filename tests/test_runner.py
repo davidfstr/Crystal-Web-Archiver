@@ -34,45 +34,45 @@ class TestNormalizeTestNames:
     
     def test_qualified_module_name(self) -> None:
         """Test that qualified module names work correctly."""
-        result = normalize_test_names(['crystal.tests.test_workflows'])
-        assert result == ['crystal.tests.test_workflows']
+        result = normalize_test_names(['crystal.tests.workflows.test_workflows'])
+        assert result == ['crystal.tests.workflows.test_workflows']
     
     def test_qualified_function_name(self) -> None:
         """Test that qualified function names work correctly."""
-        result = normalize_test_names(['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui'])
-        assert result == ['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui']
+        result = normalize_test_names(['crystal.tests.workflows.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui'])
+        assert result == ['crystal.tests.workflows.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui']
     
     def test_unqualified_module_name(self) -> None:
         """Test that unqualified module names are resolved correctly."""
         result = normalize_test_names(['test_workflows'])
-        assert result == ['crystal.tests.test_workflows']
+        assert result == ['crystal.tests.workflows.test_workflows']
     
     def test_file_path_notation(self) -> None:
         """Test that file path notation is converted correctly."""
-        result = normalize_test_names(['src/crystal/tests/test_workflows.py'])
-        assert result == ['crystal.tests.test_workflows']
+        result = normalize_test_names(['src/crystal/tests/workflows/test_workflows.py'])
+        assert result == ['crystal.tests.workflows.test_workflows']
     
     def test_pytest_style_function_notation(self) -> None:
         """Test that pytest-style function notation (::) is converted correctly."""
-        result = normalize_test_names(['crystal.tests.test_workflows::test_can_download_and_serve_a_static_site_using_main_window_ui'])
-        assert result == ['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui']
+        result = normalize_test_names(['crystal.tests.workflows.test_workflows::test_can_download_and_serve_a_static_site_using_main_window_ui'])
+        assert result == ['crystal.tests.workflows.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui']
     
     def test_unqualified_function_name(self) -> None:
         """Test that unqualified function names are resolved correctly."""
         result = normalize_test_names(['test_can_download_and_serve_a_static_site_using_main_window_ui'])
-        assert result == ['crystal.tests.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui']
+        assert result == ['crystal.tests.workflows.test_workflows.test_can_download_and_serve_a_static_site_using_main_window_ui']
     
     def test_multiple_test_names(self) -> None:
         """Test that multiple test names are all normalized correctly."""
         result = normalize_test_names([
             'test_workflows',
-            'crystal.tests.test_bulkheads::test_capture_crashes_to_self_decorator_works',
-            'src/crystal/tests/test_xthreading.py'
+            'crystal.tests.util_tests.test_bulkheads::test_capture_crashes_to_self_decorator_works',
+            'src/crystal/tests/util_tests/test_xthreading.py'
         ])
         expected = [
-            'crystal.tests.test_workflows',
-            'crystal.tests.test_bulkheads.test_capture_crashes_to_self_decorator_works',
-            'crystal.tests.test_xthreading'
+            'crystal.tests.workflows.test_workflows',
+            'crystal.tests.util_tests.test_bulkheads.test_capture_crashes_to_self_decorator_works',
+            'crystal.tests.util_tests.test_xthreading'
         ]
         assert result == expected
     
@@ -108,19 +108,19 @@ class TestNormalizeTestNames:
     
     def test_file_path_without_src_prefix(self) -> None:
         """Test that file paths without 'src/' prefix work correctly."""
-        result = normalize_test_names(['crystal/tests/test_workflows.py'])
-        assert result == ['crystal.tests.test_workflows']
+        result = normalize_test_names(['crystal/tests/workflows/test_workflows.py'])
+        assert result == ['crystal.tests.workflows.test_workflows']
     
     def test_windows_style_file_path(self) -> None:
         """Test that Windows-style file paths work correctly."""
-        result = normalize_test_names(['src\\crystal\\tests\\test_workflows.py'])
-        assert result == ['crystal.tests.test_workflows']
+        result = normalize_test_names(['src\\crystal\\tests\\workflows\\test_workflows.py'])
+        assert result == ['crystal.tests.workflows.test_workflows']
     
     def test_partial_module_match(self) -> None:
         """Test that partial module names are resolved correctly."""
         # This should match any module ending with test_workflows
         result = normalize_test_names(['test_workflows'])
-        assert 'crystal.tests.test_workflows' in result
+        assert 'crystal.tests.workflows.test_workflows' in result
     
     def test_case_sensitivity(self) -> None:
         """Test that function names are case-sensitive."""
