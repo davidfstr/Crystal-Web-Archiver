@@ -385,9 +385,6 @@ def test_when_launched_with_shell_and_no_project_filepath_then_shell_starts_with
         
         result = py_eval_literal(crystal, 'repr(window)')
         assertIn('<unset crystal.browser.MainWindow proxy>', result)
-        
-        # Clean up by closing the open/create dialog
-        close_open_or_create_dialog(crystal)
 
 
 def test_when_launched_with_shell_and_project_filepath_then_shell_starts_with_opened_project() -> None:

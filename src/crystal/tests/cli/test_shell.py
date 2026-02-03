@@ -1275,7 +1275,7 @@ def test_given_shell_running_when_all_windows_closed_then_shell_exits_and_app_ex
                     ocd = await OpenOrCreateDialog.wait_for()
                     ocd.open_or_create_project_dialog.Close()
                 '''
-            ), 'crystal_task', [], stop_suffix=_OK_THREAD_STOP_SUFFIX + ('>>> OK',))
+            ), 'crystal_task', [], stop_suffix='')
             
             wait_for_crystal_to_exit(
                 crystal,
