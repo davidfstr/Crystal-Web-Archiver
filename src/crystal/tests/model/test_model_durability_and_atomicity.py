@@ -17,12 +17,13 @@ Related audit documentation:
 - doc/model_durability_and_atomicity.md
 """
 
-from crystal.model import Project, Resource, ResourceRevision, RootResource, ResourceGroup
+from collections.abc import Iterator
+from crystal.model import Alias, Project, Resource, ResourceRevision, RootResource, ResourceGroup
 from crystal.tests.task.test_download_body import (
     database_cursor_mocked_to_raise_database_io_error_on_write,
     downloads_mocked_to_raise_disk_io_error,
 )
-from crystal.tests.util.asserts import assertEqual
+from crystal.tests.util.asserts import assertEqual, assertNotEqual
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
@@ -30,14 +31,15 @@ from crystal.tests.util.wait import wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.filesystem import flush_renames_in_directory, rename_and_flush
 from crystal.util.xos import is_linux, is_mac_os, is_windows
+from crystal.util.xtyping import not_none
 import crystal.tests.util.xtempfile as xtempfile
-import contextlib
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 import ctypes
 import errno
 import os
 import sqlite3
 import threading
-from typing import assert_never, Callable, Literal, Optional
+from typing import TypeVar, assert_never, Callable, Literal, Optional
 from unittest import skip
 from unittest.mock import ANY, Mock, patch
 
@@ -108,10 +110,20 @@ async def test_given_project_at_major_version_2_with_incomplete_commit_when_open
 
 # === Test: Resource: Create ===
 
-@skip('not yet automated')
 async def test_create_resource_is_atomic_and_durable() -> None:
-    # ...because it is entirely performed within a single database transaction
-    pass
+    """
+    Verify that creating a Resource is atomic and durable because it is
+    entirely performed within a single database transaction.
+    """
+    test_url = 'https://example.com/'
+    await _ensure_action_is_atomic_and_durable(
+        action=lambda project: Resource(project, test_url),
+        verify_action=lambda project: assertNotEqual(None, project.get_resource(test_url)),
+        # Should have 2 queries
+        # - 1 SELECT to check existence
+        # - 1 INSERT to create
+        expected_query_count=2,
+    )
 
 
 # === Test: Resource: Delete ===
@@ -133,10 +145,31 @@ async def test_given_resource_with_multiple_revisions_when_delete_and_all_revisi
 
 # === Test: RootResource: Create ===
 
-@skip('not yet automated')
 async def test_create_root_resource_is_atomic_and_durable() -> None:
-    # ...because it is entirely performed within a single database transaction
-    pass
+    """
+    Verify that creating a RootResource is atomic and durable because it is
+    entirely performed within a single database transaction.
+    """
+    test_url = 'https://example.com/'
+    test_name = 'Home'
+    
+    # Create Resource in setup so its queries aren't counted
+    test_resource = None  # type: Resource | None
+    def setup(project: Project) -> None:
+        nonlocal test_resource
+        test_resource = Resource(project, test_url)
+    
+    await _ensure_action_is_atomic_and_durable(
+        setup=setup,
+        action=lambda project: RootResource(project, test_name, not_none(test_resource)),
+        verify_action=lambda project: assertNotEqual(
+            None,
+            next((rr for rr in project.root_resources if rr.name == test_name), None)
+        ),
+        # Should have 1 query
+        # - 1 INSERT to create
+        expected_query_count=1,
+    )
 
 
 # === Test: RootResource: Delete ===
@@ -480,10 +513,10 @@ async def _test_orphaned_revision_repair(
                     raise sqlite3.OperationalError('disk I/O error')  # SQLITE_IOERR
                 corruption_context = patch.object(
                     ResourceRevision, 'delete', mock_delete_with_error
-                )  # type: contextlib.AbstractContextManager
+                )  # type: AbstractContextManager
             else:
                 # No corruption simulation needed
-                corruption_context = contextlib.nullcontext()
+                corruption_context = nullcontext()
             with corruption_context:
                 with patch('builtins.print', wraps=print) as spy_print:
                     async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
@@ -974,18 +1007,160 @@ async def test_given_resource_group_not_referenced_by_other_groups_when_delete_t
 
 # === Test: Alias: Create ===
 
-@skip('not yet automated')
 async def test_create_alias_is_atomic_and_durable() -> None:
-    # ...because it is entirely performed within a single database transaction
-    pass
+    """
+    Verify that creating an Alias is atomic and durable because it is
+    entirely performed within a single database transaction.
+    """
+    source_prefix = 'https://www.example.com/'
+    target_prefix = 'https://example.com/'
+    
+    await _ensure_action_is_atomic_and_durable(
+        action=lambda project: Alias(project, source_prefix, target_prefix),
+        verify_action=lambda project: assertNotEqual(None, project.get_alias(source_prefix)),
+        # Should have 1 query
+        # - 1 INSERT to create
+        expected_query_count=1,
+    )
 
 
 # === Test: Alias: Delete ===
 
-@skip('not yet automated')
 async def test_delete_alias_is_atomic_and_durable() -> None:
-    # ...because it is entirely performed within a single database transaction
-    pass
+    """
+    Verify that deleting an Alias is atomic and durable because it is
+    entirely performed within a single database transaction.
+    """
+    source_prefix = 'https://www.example.com/'
+    target_prefix = 'https://example.com/'
+    
+    # Create Alias in setup so its queries aren't counted
+    alias = None  # type: Alias | None
+    def setup(project: Project) -> None:
+        nonlocal alias
+        alias = Alias(project, source_prefix, target_prefix)
+    
+    await _ensure_action_is_atomic_and_durable(
+        setup=setup,
+        action=lambda project: not_none(alias).delete(),
+        verify_action=lambda project: assertEqual(None, project.get_alias(source_prefix)),
+        # Should have 1 query
+        # - 1 DELETE
+        expected_query_count=1,
+    )
+
+
+# ------------------------------------------------------------------------------
+# Utility
+
+_T = TypeVar('_T')
+
+async def _ensure_action_is_atomic_and_durable(
+        *, setup: Callable[[Project], None] | None = None,
+        action: Callable[[Project], _T],
+        verify_action: Callable[[Project], None],
+        expected_query_count: int,
+        ) -> None:
+    if setup is None:
+        setup = lambda project: None
+    
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as project_dirpath:
+        # Create project and perform action
+        async with (await OpenOrCreateDialog.wait_for()).create(project_dirpath) as (mw, project):
+            setup(project)
+            
+            # Verify that action uses exactly 1 transaction (and N queries)
+            with database_queries_counted(project) as counter:
+                action(project)
+            assertEqual(expected_query_count, counter.query_count)
+            assertEqual(1, counter.transaction_count)
+            
+            # Verify the action had the intended effect
+            verify_action(project)
+        
+        # Reopen project. Verify the action still had the intended effect.
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+            verify_action(project)
+
+
+@contextmanager
+def database_queries_counted(project: Project) -> 'Iterator[DatabaseQueryCounter]':
+    """
+    Context in which database queries are counted on the specified project.
+    
+    Counts queries and transactions on the given Project's database connection.
+    
+    Arguments:
+    * project -- the Project whose database operations should be counted.
+    
+    Example:
+        with database_queries_counted(project) as counter:
+            # Perform some operations
+            r = Resource(project, 'https://example.com/')
+        print(counter.query_count)  # number of execute() calls
+        print(counter.transaction_count)  # number of commit() calls
+    """
+    
+    counter = DatabaseQueryCounter()
+    
+    # Patch cursor() to count operations
+    real_cursor_func = project._db.cursor
+    def counting_cursor():
+        real_cursor = real_cursor_func()
+        
+        # Patch execute() to count operations
+        real_execute = real_cursor.execute
+        def counting_execute(sql: str, *args, **kwargs):
+            counter._query_count += 1
+            return real_execute(sql, *args, **kwargs)
+        real_cursor.execute = counting_execute
+        
+        # Patch executemany() to count operations
+        real_executemany = real_cursor.executemany
+        def counting_executemany(sql: str, *args, **kwargs):
+            counter._query_count += 1
+            return real_executemany(sql, *args, **kwargs)
+        real_cursor.executemany = counting_executemany
+        
+        return real_cursor
+    project._db.cursor = counting_cursor  # type: ignore[method-assign]
+    
+    # Patch commit() to count operations
+    real_commit_func = project._db.commit
+    def counting_commit(*args, **kwargs):
+        counter._transaction_count += 1
+        return real_commit_func(*args, **kwargs)
+    project._db.commit = counting_commit  # type: ignore[method-assign]
+    
+    try:
+        yield counter
+    finally:
+        # Restore original functions
+        project._db.cursor = real_cursor_func  # type: ignore[method-assign]
+        project._db.commit = real_commit_func  # type: ignore[method-assign]
+
+
+class DatabaseQueryCounter:
+    def __init__(self) -> None:
+        self._query_count = 0
+        self._transaction_count = 0
+    
+    @property
+    def query_count(self) -> int:
+        """
+        The number of Cursor.execute() or Cursor.executemany() calls observed.
+        
+        Each Cursor.executemany() call is counted as 1 call, regardless of how many
+        rows are affected.
+        """
+        return self._query_count
+    
+    @property
+    def transaction_count(self) -> int:
+        """
+        The number of commit() calls observed.
+        """
+        return self._transaction_count
 
 
 # ------------------------------------------------------------------------------
