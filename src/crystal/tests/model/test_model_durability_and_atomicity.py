@@ -23,7 +23,7 @@ from crystal.tests.task.test_download_body import (
     database_cursor_mocked_to_raise_database_io_error_on_write,
     downloads_mocked_to_raise_disk_io_error,
 )
-from crystal.tests.util.asserts import assertEqual, assertNotEqual
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
@@ -33,11 +33,12 @@ from crystal.util.filesystem import flush_renames_in_directory, rename_and_flush
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xtyping import not_none
 import crystal.tests.util.xtempfile as xtempfile
-from contextlib import AbstractContextManager, contextmanager, nullcontext
+from contextlib import AbstractContextManager, closing, contextmanager, nullcontext
 import ctypes
 import errno
 import os
 import sqlite3
+from tempfile import NamedTemporaryFile
 import threading
 from typing import TypeVar, assert_never, Callable, Literal, Optional
 from unittest import skip
@@ -128,6 +129,8 @@ async def test_create_resource_is_atomic_and_durable() -> None:
 
 # === Test: Resource: Delete ===
 
+# TODO: Actually make the delete fully atomic, using the strategy described in
+#       doc/model_durability_and_atomicity.md
 @skip('not yet automated')
 async def test_given_resource_with_multiple_revisions_when_delete_and_first_revision_delete_fails_then_remaining_revisions_are_left_intact() -> None:
     # Verify that if any revision deletion fails, the remaining revisions (especially the most recent)
@@ -265,11 +268,120 @@ async def test_given_root_resource_not_referenced_by_groups_when_delete_then_ful
 #     - create_from_error
 #     - create_from_response
 
-@skip('not yet automated')
 async def test_create_resource_revision_is_durable() -> None:
-    # ...because it is performed within a single database transaction
-    #    plus a filesystem write that is flushed to disk explicitly
-    pass
+    """
+    Verify that creating a ResourceRevision is durable by ensuring:
+    1. Exactly 1 database transaction is used
+    2. Exactly 1 fsync is called on the downloaded file content
+    3. On macOS/Linux, exactly 1 additional fsync is called on the parent directory
+       (via rename_and_flush)
+    """
+    with served_project('testdata_xkcd.crystalproj.zip') as sp:
+        home_url = sp.get_request_url('https://xkcd.com/')
+        
+        async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            # Create a resource to download
+            r = Resource(project, home_url)
+            
+            # Track fsync calls
+            fsync_fds = []  # list of fds that were fsync'ed
+            original_fsync = os.fsync
+            def spy_fsync(fd):
+                fsync_fds.append(fd)
+                return original_fsync(fd)
+            
+            # Track NamedTemporaryFile creation to capture body_file.fileno()
+            body_file_fd = None  # fd of the temporary body file
+            original_named_temp_file = NamedTemporaryFile
+            def spy_named_temp_file(*args, **kwargs):
+                nonlocal body_file_fd
+                temp_file = original_named_temp_file(*args, **kwargs)
+                # Check if this is the body file (by suffix)
+                if kwargs.get('suffix') == '.body':
+                    body_file_fd = temp_file.fileno()
+                return temp_file
+            
+            # Track os.open calls in flush_renames_in_directory
+            opened_paths_and_fds = {}  # dict mapping path -> fd
+            original_os_open = os.open
+            def spy_os_open(path, *args, **kwargs):
+                fd = original_os_open(path, *args, **kwargs)
+                opened_paths_and_fds[path] = fd
+                return fd
+            
+            # Track rename_and_flush calls (only successful ones)
+            successful_rename_and_flush_dst = None  # dst_filepath of the successful call
+            original_rename_and_flush = rename_and_flush
+            def spy_rename_and_flush(src_filepath, dst_filepath):
+                nonlocal successful_rename_and_flush_dst
+                try:
+                    result = original_rename_and_flush(src_filepath, dst_filepath)
+                except:
+                    raise
+                else:
+                    successful_rename_and_flush_dst = dst_filepath
+                    return result
+            
+            # Download the resource and count database operations and fsync calls
+            with database_queries_counted(project) as counter, \
+                    patch('os.fsync', side_effect=spy_fsync), \
+                    patch('crystal.model.NamedTemporaryFile', side_effect=spy_named_temp_file), \
+                    patch('os.open', side_effect=spy_os_open), \
+                    patch('crystal.model.rename_and_flush', side_effect=spy_rename_and_flush):
+                # Internally calls download_resource_revision() on a background thread.
+                revision_future = r.download_body()
+                revision = await wait_for_future(revision_future)
+            
+            # Verify the revision was created successfully with a body
+            assert revision is not None
+            assert revision.has_body, (
+                f'Expected revision to have a body. '
+                f'error={revision.error}, '
+                f'status_code={revision.metadata.get("status_code") if revision.metadata else None}'
+            )
+            
+            # Verify exactly 1 database transaction was used
+            assertEqual(1, counter.transaction_count,
+                'Expected exactly 1 database transaction')
+            
+            # Verify the body file was fsync'ed
+            assert body_file_fd is not None, 'Expected to capture body_file.fileno()'
+            assertIn(body_file_fd, fsync_fds)
+            
+            # Verify rename_and_flush was used to move the body file to its final location
+            assertEqual(revision._body_filepath, successful_rename_and_flush_dst)
+            
+            # Verify fsync was called the expected number of times
+            if is_mac_os() or is_linux():
+                assertEqual(2, len(fsync_fds),
+                    f'Expected exactly 2 fsync calls on macOS/Linux '
+                    f'(1 on file content + 1 on parent directory)'
+                )
+                
+                # Verify the parent directory was opened and fsync'ed
+                # (by rename_and_flush)
+                if True:
+                    revision_body_filepath = revision._body_filepath
+                    parent_dirpath = os.path.dirname(revision_body_filepath)
+                    
+                    # Verify the parent directory was opened
+                    parent_dir_fd = opened_paths_and_fds.get(parent_dirpath)
+                    assert parent_dir_fd is not None, (
+                        f'Expected parent directory {parent_dirpath!r} to be opened, '
+                        f'but opened paths were: {list(opened_paths_and_fds.keys())}'
+                    )
+                    
+                    # Verify the parent directory fd was fsync'ed
+                    assert parent_dir_fd in fsync_fds, (
+                        f'Expected parent directory fd {parent_dir_fd} to be fsync\'ed. '
+                        f'Parent dir fd: {parent_dir_fd}, fsync\'ed fds: {fsync_fds}'
+                    )
+            elif is_windows():
+                # On Windows, rename_and_flush uses MoveFileExW with MOVEFILE_WRITE_THROUGH
+                # instead of fsync on the parent directory, so we expect only 1 fsync
+                assertEqual(1, len(fsync_fds),
+                    f'Expected exactly 1 fsync call on Windows (on file content only)'
+                )
 
 
 async def test_when_create_resource_revision_and_io_error_before_filesystem_flush_then_will_rollback_immediately() -> None:
@@ -908,14 +1020,52 @@ def test_given_windows_when_flush_renames_in_directory_then_does_nothing() -> No
 
 # === Test: ResourceGroup: Create ===
 
-@skip('not yet automated')
 async def test_given_new_resource_group_when_init_and_database_error_occurs_during_source_update_then_no_partial_resource_group_is_created() -> None:
-    # Verify that if database error occurs while setting the source field,
-    # the entire ResourceGroup creation is rolled back atomically,
-    # leaving no partial ResourceGroup in the database
-    pass
+    """
+    Verify that if database error occurs while setting the source field,
+    the entire ResourceGroup creation is rolled back atomically,
+    leaving no partial ResourceGroup in the database.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Create a RootResource to use as the source
+        home_url = 'https://example.com/'
+        home_r = Resource(project, home_url)
+        home_rr = RootResource(project, 'Home', home_r)
+        
+        # Remember initial state
+        initial_group_count = len(list(project.resource_groups))
+        
+        # Allow "insert into resource_group ..." but not "update resource_group set source_type=? ..."
+        def should_raise_on_update_source(command: str) -> bool:
+            # Only raise on the update that sets the source, not on the initial insert
+            return 'update resource_group set source_type=' in command
+        with database_cursor_mocked_to_raise_database_io_error_on_write(
+                project,
+                should_raise=should_raise_on_update_source,
+                ) as is_db_io_error:
+            
+            # Attempt to create a ResourceGroup with a source
+            group_pattern = r'^https://example\.com/group/.*'
+            try:
+                group = ResourceGroup(project, 'Group', group_pattern, source=home_rr)
+            except Exception as e:
+                assert is_db_io_error(e), f'Expected database I/O error, got {type(e).__name__}: {e}'
+            else:
+                raise AssertionError('Expected ResourceGroup creation to raise database error')
+        
+        # Verify atomicity: No partial ResourceGroup should exist
+        assert len(list(project.resource_groups)) == initial_group_count, (
+            'No new ResourceGroup should exist in project after failed creation'
+        )
+        
+        # Verify no ResourceGroup with this pattern exists in the database
+        with closing(project._db.cursor()) as c:
+            c.execute('select count(1) from resource_group where url_pattern=?', (group_pattern,))
+            (count,) = c.fetchone()
+            assert count == 0, 'No ResourceGroup should exist in database with the pattern after failed creation'
 
 
+# NOTE: Covered indirectly by very many other tests that create ResourceGroups with a source in general
 @skip('not yet automated')
 async def test_given_new_resource_group_when_init_completes_successfully_then_both_group_and_source_are_committed_atomically() -> None:
     # Verify that ResourceGroup creation and source setting happen in a single transaction
