@@ -17,7 +17,7 @@ Related audit documentation:
 - doc/model_durability_and_atomicity.md
 """
 
-from crystal.model import Project, Resource, ResourceRevision
+from crystal.model import Project, Resource, ResourceRevision, RootResource, ResourceGroup
 from crystal.tests.task.test_download_body import (
     database_cursor_mocked_to_raise_database_io_error_on_write,
     downloads_mocked_to_raise_disk_io_error,
@@ -141,18 +141,77 @@ async def test_create_root_resource_is_atomic_and_durable() -> None:
 
 # === Test: RootResource: Delete ===
 
-@skip('not yet automated')
 async def test_given_root_resource_referenced_by_groups_when_delete_and_database_error_occurs_then_delete_fully_fails_and_all_sources_remain_intact() -> None:
-    # Verify that when database deletion fails, the entire delete operation fails atomically,
-    # and all other groups that had this group as a source still reference it
-    pass
+    """
+    Verify that when database deletion fails, the entire delete operation fails atomically,
+    and all other groups that had this group as a source still reference it.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Create a RootResource
+        home_url = 'https://example.com/'
+        home_r = Resource(project, home_url)
+        home_rr = RootResource(project, 'Home', home_r)
+        
+        # Create 2 ResourceGroups that use the RootResource as their source
+        group1_pattern = r'^https://example\.com/group1/.*'
+        group2_pattern = r'^https://example\.com/group2/.*'
+        group1 = ResourceGroup(project, 'Group1', group1_pattern, source=home_rr)
+        group2 = ResourceGroup(project, 'Group2', group2_pattern, source=home_rr)
+        assert group1.source == home_rr, 'Group1 source should be home_rr'
+        assert group2.source == home_rr, 'Group2 source should be home_rr'
+        
+        # Allow "update resource_group ..." command but not "delete from root_resource ..."
+        def should_raise_on_delete_from_root_resource(command: str) -> bool:
+            return 'delete from root_resource' in command
+        with database_cursor_mocked_to_raise_database_io_error_on_write(
+                project,
+                should_raise=should_raise_on_delete_from_root_resource,
+                ) as is_db_io_error:
+            
+            # Attempt to delete the RootResource
+            try:
+                home_rr.delete()
+            except Exception as e:
+                assert is_db_io_error(e), f'Expected database I/O error, got {type(e).__name__}: {e}'
+            else:
+                raise AssertionError('Expected delete() to raise database error')
+        
+        # Verify atomicity
+        # 1. Sources should still reference the RootResource
+        assert group1.source == home_rr, 'Group1 source should still be home_rr after failed delete'
+        assert group2.source == home_rr, 'Group2 source should still be home_rr after failed delete'
+        # 2. The RootResource should still exist
+        assert home_rr in project.root_resources, 'RootResource should still exist in project after failed delete'
 
 
-@skip('not yet automated')
 async def test_given_root_resource_referenced_by_groups_when_delete_fully_succeeds_then_all_referencing_groups_have_source_set_to_none() -> None:
-    # Verify that when deletion succeeds, all other groups that had this group as a source
-    # now have source=None
-    pass
+    """
+    Verify that when deletion succeeds, all other groups that had this group as a source
+    now have source=None.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Create a RootResource
+        home_url = 'https://example.com/'
+        home_r = Resource(project, home_url)
+        home_rr = RootResource(project, 'Home', home_r)
+        
+        # Create 2 ResourceGroups that use the RootResource as their source
+        group1_pattern = r'^https://example\.com/group1/.*'
+        group2_pattern = r'^https://example\.com/group2/.*'
+        group1 = ResourceGroup(project, 'Group1', group1_pattern, source=home_rr)
+        group2 = ResourceGroup(project, 'Group2', group2_pattern, source=home_rr)
+        assert group1.source == home_rr, 'Group1 source should be home_rr'
+        assert group2.source == home_rr, 'Group2 source should be home_rr'
+        
+        # Delete the RootResource
+        home_rr.delete()
+        
+        # Verify deleted
+        # 1. Sources should be cleared
+        assert group1.source == None
+        assert group2.source == None
+        # 2. The RootResource should NOT still exist
+        assert home_rr not in project.root_resources
 
 
 @skip('not yet automated')
@@ -341,7 +400,7 @@ async def _test_orphaned_revision_repair(
                             will_raise=disk_will_raise) as is_download_io_error:
                         
                         # Mock database to raise I/O error after disk disconnect
-                        def db_should_raise() -> bool:
+                        def db_should_raise(command: str) -> bool:
                             result = disk_disconnected.is_set()  # capture
                             revision_row_written.set()
                             return result
@@ -832,18 +891,76 @@ async def test_given_new_resource_group_when_init_completes_successfully_then_bo
 
 # === Test: ResourceGroup: Delete ===
 
-@skip('not yet automated')
 async def test_given_resource_group_referenced_by_other_groups_when_delete_and_database_error_occurs_then_delete_fully_fails_and_all_sources_remain_intact() -> None:
-    # Verify that when database deletion fails, the entire delete operation fails atomically,
-    # and all other groups that had this group as a source still reference it
-    pass
+    """
+    Verify that when database deletion fails, the entire delete operation fails atomically,
+    and all other groups that had this group as a source still reference it.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Create a source ResourceGroup
+        source_pattern = r'^https://example\.com/source/.*'
+        source_group = ResourceGroup(project, 'Source', source_pattern, source=None)
+        
+        # Create 2 ResourceGroups that use the source group as their source
+        group1_pattern = r'^https://example\.com/group1/.*'
+        group2_pattern = r'^https://example\.com/group2/.*'
+        group1 = ResourceGroup(project, 'Group1', group1_pattern, source=source_group)
+        group2 = ResourceGroup(project, 'Group2', group2_pattern, source=source_group)
+        assert group1.source == source_group, 'Group1 source should be source_group'
+        assert group2.source == source_group, 'Group2 source should be source_group'
+        
+        # Allow "update resource_group ..." command but not "delete from resource_group ..." for source_group
+        def should_raise_on_delete_from_resource_group(command: str) -> bool:
+            # Only raise on the delete for the source group, not on updates
+            return 'delete from resource_group' in command
+        with database_cursor_mocked_to_raise_database_io_error_on_write(
+                project,
+                should_raise=should_raise_on_delete_from_resource_group,
+                ) as is_db_io_error:
+            
+            # Attempt to delete the source ResourceGroup
+            try:
+                source_group.delete()
+            except Exception as e:
+                assert is_db_io_error(e), f'Expected database I/O error, got {type(e).__name__}: {e}'
+            else:
+                raise AssertionError('Expected delete() to raise database error')
+        
+        # Verify atomicity
+        # 1. Sources should still reference the source group
+        assert group1.source == source_group, 'Group1 source should still be source_group after failed delete'
+        assert group2.source == source_group, 'Group2 source should still be source_group after failed delete'
+        # 2. The source ResourceGroup should still exist
+        assert source_group in project.resource_groups, 'ResourceGroup should still exist in project after failed delete'
 
 
-@skip('not yet automated')
 async def test_given_resource_group_referenced_by_other_groups_when_delete_fully_succeeds_then_all_referencing_groups_have_source_set_to_none() -> None:
-    # Verify that when deletion succeeds, all other groups that had this group as a source
-    # now have source=None
-    pass
+    """
+    Verify that when deletion succeeds, all other groups that had this group as a source
+    now have source=None.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Create a source ResourceGroup
+        source_pattern = r'^https://example\.com/source/.*'
+        source_group = ResourceGroup(project, 'Source', source_pattern, source=None)
+        
+        # Create 2 ResourceGroups that use the source group as their source
+        group1_pattern = r'^https://example\.com/group1/.*'
+        group2_pattern = r'^https://example\.com/group2/.*'
+        group1 = ResourceGroup(project, 'Group1', group1_pattern, source=source_group)
+        group2 = ResourceGroup(project, 'Group2', group2_pattern, source=source_group)
+        assert group1.source == source_group, 'Group1 source should be source_group'
+        assert group2.source == source_group, 'Group2 source should be source_group'
+        
+        # Delete the source ResourceGroup
+        source_group.delete()
+        
+        # Verify deleted
+        # 1. Sources should be cleared
+        assert group1.source == None
+        assert group2.source == None
+        # 2. The source ResourceGroup should NOT still exist
+        assert source_group not in project.resource_groups
 
 
 @skip('not yet automated')

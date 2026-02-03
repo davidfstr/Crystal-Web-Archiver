@@ -432,10 +432,18 @@ def downloads_mocked_to_raise_disk_io_error(
 @contextmanager
 def database_cursor_mocked_to_raise_database_io_error_on_write(
         project: Project,
-        *, should_raise: Callable[[], bool] | None = None
+        *, should_raise: Callable[[str], bool] | None = None
         ) -> Iterator[Callable[[object], bool]]:
+    """
+    Mocks database cursor to raise I/O error on write operations.
+    
+    Arguments:
+    * should_raise -- A callable(command: str) -> bool that determines whether to raise an error.
+        - If None, errors are raised for all write operations (default).
+        - If provided, errors are raised when it returns True for the given SQL command.
+    """
     if should_raise is None:
-        should_raise = lambda: True
+        should_raise = lambda cmd: True
     
     def raise_database_error() -> NoReturn:
         # NOTE: This is the specific error that SQLite raises if you try to query
@@ -452,14 +460,15 @@ def database_cursor_mocked_to_raise_database_io_error_on_write(
         real_cursor = real_cursor_func()
         
         def mock_execute(command: str, *args, **kwargs):
-            # Raise error for any write operation if should_raise() returns True
-            if should_raise() and (
-                    command.startswith('insert ') or 
-                    command.startswith('update ') or 
-                    command.startswith('delete ')):
+            is_write = (
+                command.startswith('insert ') or 
+                command.startswith('update ') or 
+                command.startswith('delete ')
+            )
+            if is_write and should_raise(command):
                 raise_database_error()
-            else:
-                return real_cursor.execute(command, *args, **kwargs)
+            
+            return real_cursor.execute(command, *args, **kwargs)
         
         mock_cursor = Mock(wraps=real_cursor)
         mock_cursor.execute = mock_execute
