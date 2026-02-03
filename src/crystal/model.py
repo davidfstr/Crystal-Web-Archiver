@@ -40,6 +40,7 @@ from crystal.util.db import (
     get_index_names, get_table_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis, EllipsisType
+from crystal.util.filesystem import rename_and_flush, flush_renames_in_directory
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import create_profiling_context, warn_if_slow
 from crystal.util.progress import DevNullFile
@@ -65,6 +66,7 @@ from crystal.util.xthreading import (
 )
 import datetime
 from enum import Enum
+import errno
 import itertools
 import json
 import math
@@ -106,6 +108,9 @@ if TYPE_CHECKING:
     )
 
 
+# ------------------------------------------------------------------------------
+# Constants + Type Utilities
+
 # Whether to collect profiling information about Project._apply_migrations().
 # 
 # When True, a 'migrate_revisions.prof' file is written to the current directory
@@ -118,6 +123,9 @@ _PROFILE_MIGRATE_REVISIONS = False
 _OptionalStr = TypeVar('_OptionalStr', bound=Optional[str])
 _TK = TypeVar('_TK', bound='Task')
 
+
+# ------------------------------------------------------------------------------
+# Project
 
 class _Missing(Enum):
     VALUE = 1
@@ -240,6 +248,7 @@ class Project(ListenableMixin):
         * ProjectTooNewError -- 
             if the project is a version newer than this version of Crystal can open safely
         * CancelOpenProject
+        * sqlite3.DatabaseError, OSError
         """
         super().__init__()
         
@@ -324,6 +333,9 @@ class Project(ListenableMixin):
                         else DummyOpenProjectProgressListener()
                     )
                     self._load(c, self._db, load_progress_listener)
+        
+                    # Apply repairs
+                    self._repair_incomplete_rollback_of_resource_revision_create(c, self._db.commit)
                     
                     # Reset dirty state after loading
                     self._is_dirty = is_dirty
@@ -553,9 +565,13 @@ class Project(ListenableMixin):
         Upgrades this project's directory structure and database schema
         to the latest version.
         
+        The major version 1 -> 2 migration is resumable if cancelled or interrupted.
+        Migration progress is periodically synced to disk (every ~4,096 revisions).
+        
         Raises:
         * ProjectReadOnlyError
         * CancelOpenProject
+        * sqlite3.DatabaseError, OSError
         """
         # Add missing database columns and indexes
         if True:
@@ -701,137 +717,340 @@ class Project(ListenableMixin):
             
             # Upgrade major version 1 -> 2
             if major_version == 1:
-                revisions_dirpath = os.path.join(
-                    self.path, self._REVISIONS_DIRNAME)  # cache
-                ip_revisions_dirpath = os.path.join(
-                    self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
-                tmp_revisions_dirpath = os.path.join(
-                    self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
-                
-                # Ensure old revisions directory exists
-                assert os.path.isdir(revisions_dirpath)
-                
-                # 1. Confirm want to migrate now
-                # 2. Create new revisions directory
-                def will_upgrade_revisions(approx_revision_count: int) -> None:
-                    """
-                    Raises:
-                    * VetoUpgradeProject
-                    * CancelOpenProject
-                    """
-                    migration_was_in_progress = os.path.isdir(ip_revisions_dirpath)  # capture
-                    
-                    if approx_revision_count > Project._MAX_REVISION_ID:
-                        assert not migration_was_in_progress
-                        
-                        # Veto the migration automatically because it would fail
-                        # due to inability to migrate revisions with very high IDs
-                        raise VetoUpgradeProject()
-                    
-                    try:
-                        progress_listener.will_upgrade_revisions(
-                            approx_revision_count,
-                            can_veto=not migration_was_in_progress)
-                    except VetoUpgradeProject:
-                        if migration_was_in_progress:
-                            raise AssertionError('Cannot veto migration that was in progress')
-                        raise
-                    except CancelOpenProject:
-                        raise
-                    
-                    # Create new revisions directory
-                    if not migration_was_in_progress:
-                        os.mkdir(ip_revisions_dirpath)
-                
-                # Move revisions to appropriate locations in new revisions directory
-                os_path_sep = os.path.sep  # cache
-                last_new_revision_parent_relpath = None  # type: Optional[str]
-                def migrate_revision(row: tuple) -> None:
-                    (id,) = row
-                    old_revision_filepath = (
-                        revisions_dirpath + os_path_sep +
-                        str(id)
-                    )
-                    
-                    new_revision_filepath_parts = f'{id:015x}'
-                    if len(new_revision_filepath_parts) != 15:
-                        # NOTE: Raising an AssertionError rather than a
-                        #       ProjectHasTooManyRevisionsError because
-                        #       will_upgrade_revisions() should have detected
-                        #       this case early and not permitted the upgrade
-                        #       to continue
-                        raise AssertionError(
-                            'Revision ID {id} is too high to migrate to the '
-                            'major version 2 project format')
-                    new_revision_parent_relpath = (
-                        new_revision_filepath_parts[0:3] + os_path_sep +
-                        new_revision_filepath_parts[3:6] + os_path_sep +
-                        new_revision_filepath_parts[6:9] + os_path_sep +
-                        new_revision_filepath_parts[9:12]
-                    )
-                    new_revision_filepath = (
-                        ip_revisions_dirpath + os_path_sep + 
-                        new_revision_parent_relpath + os_path_sep +
-                        new_revision_filepath_parts[12:15]
-                    )
-                    
-                    # Create parent directory for new location if needed
-                    # 
-                    # NOTE: Avoids extra calls to os.makedirs() when easy to
-                    #       prove that there's no work to be done
-                    nonlocal last_new_revision_parent_relpath
-                    if new_revision_parent_relpath != last_new_revision_parent_relpath:
-                        new_revision_parent_dirpath = \
-                            ip_revisions_dirpath + os_path_sep + new_revision_parent_relpath
-                        os.makedirs(new_revision_parent_dirpath, exist_ok=True)
-                        last_new_revision_parent_relpath = new_revision_parent_relpath
-                    
-                    # Move revision from old location to new location
-                    try:
-                        os.rename(old_revision_filepath, new_revision_filepath)
-                    except FileNotFoundError:
-                        # Either:
-                        # 1. Revision has already been moved from old location to new location
-                        #    (if this migration is being resumed from an earlier canceled migration)
-                        # 2. Revision was missing in old location before, and will be missing in new location.
-                        pass
-                # TODO: Dump profiling context immediately upon exit of context
-                #       rather then waiting to program to exit
-                with create_profiling_context(
-                        'migrate_revisions.prof', enabled=_PROFILE_MIGRATE_REVISIONS):
-                    try:
-                        self._process_table_rows(
-                            c,
-                            # NOTE: The following query to approximate row count is
-                            #       significantly faster than the exact query
-                            #       ('select count(1) from resource_revision') because it
-                            #       does not require a full table scan.
-                            'select id from resource_revision order by id desc limit 1',
-                            'select id from resource_revision order by id asc',
-                            migrate_revision,
-                            will_upgrade_revisions,
-                            progress_listener.upgrading_revision,
-                            progress_listener.did_upgrade_revisions)
-                    except CancelOpenProject:
-                        raise
-                    except VetoUpgradeProject:
-                        pass
-                    else:
-                        # Move aside old revisions directory and queue it for deletion
-                        os.rename(revisions_dirpath, tmp_revisions_dirpath)
-                        
-                        # Move new revisions directory to final location
-                        os.rename(ip_revisions_dirpath, revisions_dirpath)
-                        
-                        # Commit upgrade
-                        major_version = 2
-                        self._set_major_version(major_version, c, commit)
+                self._migrate_v1_to_v2(c, commit, progress_listener)
             
             # At latest major version 2
             if major_version == 2:
+                # If did not finish commit of "Upgrade major version 1 -> 2",
+                # resume the commit
+                ip_revisions_dirpath = os.path.join(
+                    self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
+                if os.path.exists(ip_revisions_dirpath):
+                    self._commit_migrate_v1_to_v2(c, commit)
+                
                 # Nothing to do
                 pass
             assert self._LATEST_SUPPORTED_MAJOR_VERSION == 2
+    
+    def _migrate_v1_to_v2(self,
+            c: DatabaseCursor,
+            commit: Callable[[], None],
+            progress_listener: OpenProjectProgressListener,
+            ) -> None:
+        """
+        Raises:
+        * sqlite3.DatabaseError, OSError
+        """
+        revisions_dirpath = os.path.join(
+            self.path, self._REVISIONS_DIRNAME)  # cache
+        ip_revisions_dirpath = os.path.join(
+            self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
+        tmp_revisions_dirpath = os.path.join(
+            self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
+        
+        def calculate_new_revision_filepath(id: int) -> tuple[str, str]:
+            new_revision_filepath_parts = f'{id:015x}'
+            if len(new_revision_filepath_parts) != 15:
+                # NOTE: Raising an AssertionError rather than a
+                #       ProjectHasTooManyRevisionsError because
+                #       will_upgrade_revisions() should have detected
+                #       this case early and not permitted the upgrade
+                #       to continue
+                raise AssertionError(
+                    'Revision ID {id} is too high to migrate to the '
+                    'major version 2 project format')
+            new_revision_parent_relpath = (
+                new_revision_filepath_parts[0:3] + os_path_sep +
+                new_revision_filepath_parts[3:6] + os_path_sep +
+                new_revision_filepath_parts[6:9] + os_path_sep +
+                new_revision_filepath_parts[9:12]
+            )
+            new_revision_filepath = (
+                ip_revisions_dirpath + os_path_sep + 
+                new_revision_parent_relpath + os_path_sep +
+                new_revision_filepath_parts[12:15]
+            )
+            return (new_revision_filepath, new_revision_parent_relpath)
+        
+        # Ensure old revisions directory exists
+        assert os.path.isdir(revisions_dirpath)
+        
+        # 1. Confirm want to migrate now
+        # 2. Create new revisions directory
+        def will_upgrade_revisions(approx_revision_count: int) -> None:
+            """
+            Raises:
+            * VetoUpgradeProject
+            * CancelOpenProject
+            """
+            migration_was_in_progress = os.path.isdir(ip_revisions_dirpath)  # capture
+            
+            if approx_revision_count > Project._MAX_REVISION_ID:
+                assert not migration_was_in_progress
+                
+                # Veto the migration automatically because it would fail
+                # due to inability to migrate revisions with very high IDs
+                raise VetoUpgradeProject()
+            
+            try:
+                progress_listener.will_upgrade_revisions(
+                    approx_revision_count,
+                    can_veto=not migration_was_in_progress)
+            except VetoUpgradeProject:
+                if migration_was_in_progress:
+                    raise AssertionError('Cannot veto migration that was in progress')
+                raise
+            except CancelOpenProject:
+                raise
+            
+            # Create new revisions directory
+            if not migration_was_in_progress:
+                os.mkdir(ip_revisions_dirpath)
+        
+        # Move revisions to appropriate locations in new revisions directory
+        os_path_sep = os.path.sep  # cache
+        last_new_revision_parent_relpath = None  # type: Optional[str]
+        def migrate_revision(row: tuple) -> None:
+            (id,) = row
+            old_revision_filepath = (
+                revisions_dirpath + os_path_sep +
+                str(id)
+            )
+            
+            (new_revision_filepath, new_revision_parent_relpath) = \
+                calculate_new_revision_filepath(id)
+            
+            # Create parent directory for new location if needed
+            # 
+            # NOTE: Avoids extra calls to os.makedirs() when easy to
+            #       prove that there's no work to be done
+            nonlocal last_new_revision_parent_relpath
+            if new_revision_parent_relpath != last_new_revision_parent_relpath:
+                new_revision_parent_dirpath = \
+                    ip_revisions_dirpath + os_path_sep + new_revision_parent_relpath
+                os.makedirs(new_revision_parent_dirpath, exist_ok=True)
+                last_new_revision_parent_relpath = new_revision_parent_relpath
+            
+            # Move revision from old location to new location
+            try:
+                os.rename(old_revision_filepath, new_revision_filepath)
+            except FileNotFoundError:
+                # Either:
+                # 1. Revision has already been moved from old location to new location
+                #    (if this migration is being resumed from an earlier canceled migration)
+                # 2. Revision was missing in old location before, and will be missing in new location.
+                pass
+            
+            if new_revision_filepath.endswith('fff'):
+                # Flush all changes to leaf directory before moving
+                # on to the next leaf directory
+                flush_renames_in_directory(
+                    os.path.dirname(new_revision_filepath)
+                )
+        # TODO: Dump profiling context immediately upon exit of context
+        #       rather then waiting for program to exit
+        with create_profiling_context(
+                'migrate_revisions.prof', enabled=_PROFILE_MIGRATE_REVISIONS):
+            try:
+                self._process_table_rows(
+                    c,
+                    # NOTE: The following query to approximate row count is
+                    #       significantly faster than the exact query
+                    #       ('select count(1) from resource_revision') because it
+                    #       does not require a full table scan.
+                    ResourceRevision._MAX_REVISION_ID_QUERY,
+                    'select id from resource_revision order by id asc',
+                    migrate_revision,
+                    will_upgrade_revisions,
+                    progress_listener.upgrading_revision,
+                    progress_listener.did_upgrade_revisions)
+            except CancelOpenProject:
+                raise
+            except VetoUpgradeProject:
+                pass
+            else:
+                # Locate last revision ID.
+                # Flush all changes to its parent directory.
+                rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+                if len(rows) == 1:
+                    [(max_revision_id,)] = rows
+                else:
+                    [] = rows
+                    max_revision_id = None
+                if max_revision_id is not None:
+                    (new_revision_filepath, _) = \
+                        calculate_new_revision_filepath(max_revision_id)
+                    flush_renames_in_directory(
+                        os.path.dirname(new_revision_filepath)
+                    )
+                
+                self._commit_migrate_v1_to_v2(c, commit)
+    
+    def _commit_migrate_v1_to_v2(self,
+            c: DatabaseCursor,
+            commit: Callable[[], None],
+            ) -> None:
+        """
+        Raises:
+        * sqlite3.DatabaseError, OSError
+        """
+        assert self._get_major_version(c) in [1, 2]
+        
+        revisions_dirpath = os.path.join(
+            self.path, self._REVISIONS_DIRNAME)  # cache
+        ip_revisions_dirpath = os.path.join(
+            self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
+        tmp_revisions_dirpath = os.path.join(
+            self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
+        
+        # Start commit
+        major_version = 2
+        self._set_major_version(major_version, c, commit)
+        # (If crash happens between here and "Finish commit",
+        #  reopening the project will resume the commit)
+        
+        # Move aside old revisions directory and queue it for deletion
+        os.rename(revisions_dirpath, tmp_revisions_dirpath)
+        
+        # 1. Move new revisions directory to final location
+        # 2. Finish commit
+        rename_and_flush(ip_revisions_dirpath, revisions_dirpath)
+    
+    def _repair_incomplete_rollback_of_resource_revision_create(self,
+            c: DatabaseCursor,
+            commit: Callable[[], None],
+            ) -> None:
+        """
+        If the last revision was likely intended to be deleted by a
+        failed rollback in ResourceRevision._create_from_stream,
+        then delete it.
+        
+        Rationale for checking only the last revision:
+        - Revisions are written with sequential IDs from the database.
+        - A rollback which failed due to a permanent I/O failure (that prevented
+          any further I/O operations on the project the last time it was opened)
+          would have occurred during the most recent write operation
+          (the revision with the highest ID).
+            - Disk disconnection - especially for network filesystems - is a
+              common case of a permanent I/O failure
+        - Older revisions completed successfully or failed and were
+          rolled back fully.
+        
+        Raises:
+        * sqlite3.DatabaseError
+        """
+        
+        # Locate last revision
+        rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+        if len(rows) == 1:
+            [(max_revision_id,)] = rows
+        else:
+            [] = rows
+            max_revision_id = None
+        if max_revision_id is None:
+            # No max revision exists to repair rollback for
+            return
+        try:
+            last_revision = ResourceRevision.load(self, max_revision_id)
+        except Exception as e:
+            # Database potentially corrupt?
+            # Abort further repair attempts.
+            return
+        assert last_revision is not None
+        
+        # Check whether last revision's body is missing,
+        # which could be the result of a failed rollback
+        try:
+            with last_revision.open() as f:
+                # Body exists. No rollback was attempted.
+                return
+        except RevisionBodyMissingError:
+            # Body is missing
+            pass  # keep going
+        except NoRevisionBodyError:
+            # No body expected. No rollback could have been attempted.
+            return
+        except (OSError, IOError):
+            # Database or filesystem potentially corrupt?
+            # Abort further repair attempts.
+            return
+        
+        # Check whether at least 3 other revisions have readable bodies.
+        # If so then the last revision's body being missing is likely to
+        # be legitimately orphaned by a failed rollback.
+        rows = list(c.execute(
+            'select id from resource_revision '
+                # NOTE: error == "null" filters out revisions where
+                #       no body is expected (i.e. has_body == False)
+                'where error == "null" and id < ? '
+                'order by id desc '
+                'limit 3',
+            (max_revision_id,)
+        ))
+        if len(rows) < 3:
+            # Not enough revisions to make a determination RE whether a rollback failed.
+            # Be conservative and don't try to continue the rollback.
+            return
+        try:
+            other_revisions = [ResourceRevision.load(self, id) for (id,) in rows]
+        except Exception as e:
+            # Database potentially corrupt?
+            # Abort further repair attempts.
+            return
+        unreadable_body_count = 0
+        for rev in other_revisions:
+            assert rev is not None, 'Revision not found yet already verified to exist'
+            assert rev.has_body, 'Revision not expecting a body should have been filtered out'
+            try:
+                with rev.open() as f:
+                    # Body exists and is readable enough to successfully open
+                    pass
+            except RevisionBodyMissingError:
+                # Body is missing
+                unreadable_body_count += 1
+            except NoRevisionBodyError:
+                # No body expected
+                raise AssertionError(
+                    'Revision not expecting a body should have been filtered out')
+            except (OSError, IOError):
+                # Body is corrupted or inaccessible
+                unreadable_body_count += 1
+        if unreadable_body_count != 0:
+            # Multiple revision bodies are unreadable
+            # (the last one and at least one other) which suggests something
+            # strange is going on, separate from a rollback failure.
+            # Abort further repair attempts.
+            # 
+            # Likely causes:
+            # - Revisions directory is on a temporarily-unmounted filesystem.
+            #   All revision bodies are unreadable.
+            # - Revisions directory is on a filesystem with intermittent
+            #   availability (packet loss, flaky connection).
+            #   Revision bodies are unreadable at random times.
+            # - Multiple revisions have filesystem corruption.
+            return
+        else:
+            # At least 3 other revision bodies are readable,
+            # which is strong evidence that:
+            # 1. The filesystem is mounted and accessible
+            # 2. The filesystem does not have intermittent availability issues
+            # 3. The last revision's missing body is unusual and likely
+            #    related to a failed rollback when writing the most recent
+            #    revision during the previous project session
+            pass
+        
+        # Resume failed rollback of the last revision, by deleting it
+        print(
+            f'*** Cleaning up likely-orphaned revision {last_revision._id}. '
+            'Missing body file. Probable rollback failure.',
+            file=sys.stderr,
+        )
+        # Delete database row. Ignore the missing body file.
+        try:
+            last_revision.delete()
+        except Exception as e:
+            # Repair failed. Continue opening the project anyway.
+            return
     
     @staticmethod
     def _get_major_version(c: DatabaseCursor | sqlite3.Cursor) -> int:
@@ -877,6 +1096,10 @@ class Project(ListenableMixin):
             c: DatabaseCursor,
             db: DatabaseConnection,
             progress_listener: OpenProjectProgressListener) -> None:
+        """
+        Raises:
+        * sqlite3.DatabaseError, OSError
+        """
         
         # Upgrade database schema to latest version (unless is readonly)
         if not self.readonly:
@@ -965,7 +1188,7 @@ class Project(ListenableMixin):
         if len(rows) == 1:
             [(approx_row_count,)] = rows
         else:
-            assert len(rows) == 0
+            [] = rows
             approx_row_count = 0
         report_approx_row_count_func(approx_row_count)  # may raise
         
@@ -2638,6 +2861,9 @@ class ProjectClosedError(Exception):
     pass
 
 
+# ------------------------------------------------------------------------------
+# Resource
+
 class _WeakTaskRef(Generic[_TK]):
     """
     Holds a reference to a Task until that task completes.
@@ -2735,6 +2961,10 @@ class Resource:
         Arguments:
         * project -- associated `Project`.
         * url -- absolute URL to this resource (ex: http), or a URI (ex: mailto).
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of the new Resource.
         """
         # Private API:
         # * _id --
@@ -2924,6 +3154,10 @@ class Resource:
         * project -- associated `Project`.
         * urls -- absolute URLs.
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the lookup/creation of any Resources.
         """
         # Private API:
         # * _external_ok --
@@ -2967,6 +3201,10 @@ class Resource:
         * project -- associated `Project`.
         * urls -- absolute URLs.
         * origin_url -- origin URL from which `urls` were obtained. Used for debugging.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the lookup/creation of any Resources.
         """
         (_, created) = cls._bulk_get_or_create(
             project, urls, origin_url,
@@ -2986,6 +3224,11 @@ class Resource:
             origin_url: str,
             *, _external_ok: bool=False,
             ) -> tuple[list[Resource], list[Resource]]:
+        """
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the lookup/creation of any Resources.
+        """
         # Private API:
         # * _external_ok --
         #     - whether the caller is prepared for the possibility
@@ -3046,6 +3289,11 @@ class Resource:
             normalized_urls: list[str],
             origin_url: str | None,
             ) -> list[int]:
+        """
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of any ids.
+        """
         from crystal.task import PROFILE_RECORD_LINKS
         
         # Create many Resource rows in database with a single bulk INSERT,
@@ -3613,9 +3861,13 @@ class Resource:
     # NOTE: Only used from a Python REPL at the moment
     def delete(self) -> None:
         """
+        Deletes this resource, including any related revisions.
+        
         Raises:
         * ProjectReadOnlyError
         * ValueError -- if this resource is referenced by a RootResource
+        * sqlite3.DatabaseError, OSError --
+            if the delete partially/fully failed, leaving behind zero or more revisions
         """
         project = self.project
         
@@ -3633,6 +3885,10 @@ class Resource:
             raise ValueError(f'Cannot delete {self!r} referenced by RootResource {root_resource_ids!r}')
         
         # Delete ResourceRevision children
+        # NOTE: If any revision fails to delete, the remaining revisions will be
+        #       left intact. In particular the most-recently downloaded revisions,
+        #       including the default_revision(), will be left intact, which
+        #       is what most users of Resource care about.
         for rev in list(self.revisions()):
             rev.delete()
         
@@ -3649,6 +3905,13 @@ class Resource:
     def __repr__(self):
         return 'Resource({})'.format(repr(self.url))
 
+
+class _TaskNotFoundException(Exception):
+    pass
+
+
+# ------------------------------------------------------------------------------
+# RootResource
 
 class RootResource:
     """
@@ -3679,6 +3942,8 @@ class RootResource:
         * CrossProjectReferenceError -- if `resource` belongs to a different project.
         * RootResource.AlreadyExists -- 
             if there is already a `RootResource` associated with the specified resource.
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of the new RootResource.
         """
         project = _resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
@@ -3723,16 +3988,35 @@ class RootResource:
         """
         Deletes this root resource.
         If it is referenced as a source, it will be replaced with None.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if the delete fully failed due to a database error
         """
-        for rg in self.project.resource_groups:
-            if rg.source == self:
-                rg.source = None
+        groups_with_source_to_clear = [
+            rg
+            for rg in self.project.resource_groups
+            if rg.source == self
+        ]
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
-            c.execute('delete from root_resource where id=?', (self._id,))
-        self.project._db.commit()
+        try:
+            # Apply clear of sources
+            for rg in groups_with_source_to_clear:
+                # NOTE: Use commit=False to merge changes into the following
+                #       committed transaction
+                rg._set_source(None, commit=False)
+            
+            with closing(self.project._db.cursor()) as c:
+                c.execute('delete from root_resource where id=?', (self._id,))
+            self.project._db.commit()
+        except:
+            # Rollback clear of sources
+            for rg in groups_with_source_to_clear:
+                rg._set_source(self, update_database=False)
+            
+            raise
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         del self.project._root_resources[self.resource]
@@ -3742,7 +4026,12 @@ class RootResource:
     # === Properties ===
     
     def _get_name(self) -> str:
-        """Name of this root resource. Possibly ''."""
+        """
+        Name of this root resource. Possibly ''.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
+        """
         return self._name
     @fg_affinity
     def _set_name(self, name: str) -> None:
@@ -3807,6 +4096,9 @@ class RootResource:
         pass
 
 
+# ------------------------------------------------------------------------------
+# ResourceRevision
+
 class ResourceRevision:
     """
     A downloaded revision of a `Resource`. Immutable.
@@ -3818,6 +4110,8 @@ class ResourceRevision:
     metadata: ResourceRevisionMetadata | None
     _id: int | None  # None if deleted
     has_body: bool
+    
+    _MAX_REVISION_ID_QUERY = 'select id from resource_revision order by id desc limit 1'
     
     # === Init ===
     
@@ -3835,7 +4129,16 @@ class ResourceRevision:
         Raises:
         * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
-        * Exception -- if could not write revision to disk
+        * sqlite3.DatabaseError, OSError -- 
+            if could not read old revision from disk or write new revision to disk.
+            
+            If the error is related to disk disconnection, disk full, or other
+            disk-wide permanent I/O error then it is possible that a
+            ResourceRevision was partially saved to the database but not
+            rolled back, left pointing to a missing revision body file.
+            Attempting to read that revision's body later will result in
+            a RevisionBodyMissingError, which callers are expected to handle
+            gracefully.
         """
         if revision.error is not None:
             return ResourceRevision.create_from_error(resource, revision.error)
@@ -3859,7 +4162,8 @@ class ResourceRevision:
         Raises:
         * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
-        * Exception -- if could not write revision to disk
+        * sqlite3.DatabaseError -- 
+            if could not write revision to disk.
         """
         return ResourceRevision._create_from_stream(
             resource,
@@ -3887,7 +4191,16 @@ class ResourceRevision:
         Raises:
         * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
-        * Exception -- if could not read revision from stream or write to disk
+        * sqlite3.DatabaseError, OSError -- 
+            if could not read from stream or write revision to disk.
+            
+            If the error is related to disk disconnection, disk full, or other
+            disk-wide permanent I/O error then it is possible that a
+            ResourceRevision was partially saved to the database but not
+            rolled back, left pointing to a missing revision body file.
+            Attempting to read that revision's body later will result in
+            a RevisionBodyMissingError, which callers are expected to handle
+            gracefully.
         """
         try:
             # If no HTTP Date header was returned by the origin server,
@@ -3934,7 +4247,22 @@ class ResourceRevision:
         Raises:
         * ProjectReadOnlyError
         * ProjectHasTooManyRevisionsError
-        * Exception -- if could not read revision from stream or write to disk
+        * sqlite3.DatabaseError, OSError -- 
+            if could not read from stream or write revision to disk.
+            
+            If the error is related to disk disconnection, disk full, or other
+            disk-wide permanent I/O error then it is possible that a
+            ResourceRevision was partially saved to the database but not
+            rolled back, left pointing to a missing revision body file.
+            
+            When the project is next reopened as writable, any such
+            incomplete rollback is automatically repaired by detecting and
+            deleting the last revision if its body file is missing and
+            the filesystem is confirmed accessible.
+            
+            Attempting to read this revision's body later will result in
+            a RevisionBodyMissingError, which callers are expected to handle
+            gracefully.
         """
         self = ResourceRevision()
         self.resource = resource
@@ -3993,6 +4321,10 @@ class ResourceRevision:
                         dir=os.path.join(project.path, Project._TEMPORARY_DIRNAME),
                         delete=False) as body_file:
                     xshutil.copyfileobj_readinto(body_stream, body_file)
+                    
+                    # Ensure data is flushed to stable storage
+                    body_file.flush()
+                    os.fsync(body_file.fileno())
                 body_file_downloaded_ok = True
             else:
                 body_file = None
@@ -4004,14 +4336,16 @@ class ResourceRevision:
             if body_file is not None:
                 try:
                     if body_file_downloaded_ok and row_created_ok:
-                        # Move body file to its final filename
                         # NOTE: May raise ProjectHasTooManyRevisionsError
                         revision_filepath = self._body_filepath
+                        
+                        # 1. Move body file to its final filename
+                        # 2. Ensure rename is flushed to disk
                         try:
-                            os.rename(body_file.name, revision_filepath)
+                            rename_and_flush(body_file.name, revision_filepath)
                         except FileNotFoundError:  # probably missing parent directory
                             os.makedirs(os.path.dirname(revision_filepath), exist_ok=True)
-                            os.rename(body_file.name, revision_filepath)
+                            rename_and_flush(body_file.name, revision_filepath)
                     else:
                         # Remove body file
                         os.remove(body_file.name)
@@ -4087,6 +4421,10 @@ class ResourceRevision:
         """
         Loads the existing revision with the specified ID,
         or returns None if no such revision exists.
+        
+        Raises:
+        * sqlite3.DatabaseError -- 
+            if could not read revision metadata from disk.
         """
         # Fetch the revision's resource URL
         with closing(project._db.cursor()) as c:
@@ -4098,7 +4436,7 @@ class ResourceRevision:
             ))
         if len(rows) == 0:
             return None
-        [(resource_id)] = rows
+        [(resource_id,)] = rows
         
         # Get the resource by URL from memory
         r = project._get_resource_with_id(resource_id)
@@ -4483,6 +4821,8 @@ class ResourceRevision:
         Raises:
         * NoRevisionBodyError
         * RevisionBodyMissingError
+        * OSError --
+            if I/O error while reading revision body
         """
         self._ensure_has_body()
         try:
@@ -4497,6 +4837,8 @@ class ResourceRevision:
         Raises:
         * NoRevisionBodyError
         * RevisionBodyMissingError
+        * OSError --
+            if I/O error while opening revision body
         """
         self._ensure_has_body()
         try:
@@ -4619,6 +4961,15 @@ class ResourceRevision:
             new_metadata: ResourceRevisionMetadata,
             *, ignore_readonly: bool=False
             ) -> None:
+        """
+        Changes the metadata of this revision in place.
+        
+        ONLY FOR USE BY AUTOMATED TESTS.
+        
+        Raises:
+        * sqlite3.DatabaseError -- 
+            if could not write revision metadata to disk.
+        """
         project = self.project
         
         # Alter ResourceRevision's metadata in memory
@@ -4677,25 +5028,41 @@ class ResourceRevision:
         return ResourceRevision._create_unsaved_from_revision_and_new_metadata(
             target_revision, new_metadata)
     
-    def delete(self):
+    def delete(self) -> None:
+        """
+        Deletes this revision.
+        
+        Raises:
+        * ProjectReadOnlyError
+        * sqlite3.DatabaseError --
+            if the delete fully failed due to a database error
+        * OSError -- 
+            if the delete partially failed, leaving behind a revision body file
+        """
         project = self.project
+        body_filepath = self._body_filepath  # capture
         
         if project.readonly:
             raise ProjectReadOnlyError()
         
-        body_filepath = self._body_filepath  # cache
-        try:
-            os.remove(body_filepath)
-        except FileNotFoundError:
-            # OK. The revision may have already been partially deleted outside of Crystal.
-            pass
-        
+        # Delete revision's database row
+        # NOTE: If crash occurs after database commit but before revision body
+        #       is deleted, a dangling revision's body file will be left behind.
+        #       That dangling file will occupy some disk space unnecessarily
+        #       but shouldn't interfere with any future project operations.
         with closing(project._db.cursor()) as c:
             c.execute('delete from resource_revision where id=?', (self._id,))
         project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.resource.already_downloaded_this_session = False
+        
+        # Delete revision's body file
+        try:
+            os.remove(body_filepath)
+        except FileNotFoundError:
+            # OK. The revision may have already been partially deleted outside of Crystal.
+            pass
     
     def __repr__(self) -> str:
         return "<ResourceRevision {} for '{}'>".format(self._id, self.resource.url)
@@ -4752,6 +5119,9 @@ class _PersistedError(Exception):
         self.type = type
 
 
+# ------------------------------------------------------------------------------
+# Alias
+
 class Alias:
     """
     An Alias causes URLs with a particular Source URL Prefix to be considered
@@ -4795,6 +5165,8 @@ class Alias:
             if there is already an `Alias` with specified `source_url_prefix`.
         * ValueError --
             if `source_url_prefix` or `target_url_prefix` do not end in slash (/).
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of the new Alias.
         """
         project = _resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
@@ -4850,6 +5222,8 @@ class Alias:
         
         Raises:
         * ProjectReadOnlyError
+        * sqlite3.DatabaseError --
+            if the delete fully failed due to a database error
         """
         if self.project.readonly:
             raise ProjectReadOnlyError()
@@ -4870,7 +5244,12 @@ class Alias:
         return self._source_url_prefix
     
     def _get_target_url_prefix(self) -> str:
-        """Target URL prefix. Always ends in '/'."""
+        """
+        Target URL prefix. Always ends in '/'.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
+        """
         return self._target_url_prefix
     @fg_affinity
     def _set_target_url_prefix(self, target_url_prefix: str) -> None:
@@ -4968,6 +5347,9 @@ class Alias:
         pass
 
 
+# ------------------------------------------------------------------------------
+# ResourceGroup
+
 ResourceGroupSource: TypeAlias = Union['RootResource', 'ResourceGroup', None]
 
 class ResourceGroup(ListenableMixin):
@@ -4994,6 +5376,10 @@ class ResourceGroup(ListenableMixin):
         * name -- name of this group. Possibly ''.
         * url_pattern -- url pattern matched by this group.
         * source -- source of this group, or Ellipsis if init_source() will be called later.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if a database error occurred, preventing the creation of the new ResourceGroup.
         """
         super().__init__()
         
@@ -5027,16 +5413,21 @@ class ResourceGroup(ListenableMixin):
         else:
             if project.readonly:
                 raise ProjectReadOnlyError()
+            
+            # Queue: Create ResourceGroup in database
             with closing(project._db.cursor()) as c:
                 c.execute('insert into resource_group (name, url_pattern, do_not_download) values (?, ?, ?)', (name, url_pattern, do_not_download))
-                project._db.commit()
+                # (Defer commit until after source is set)
                 self._id = c.lastrowid
             
+            # Queue: Set source of ResourceGroup in database
             if source is Ellipsis:
                 raise ValueError()
-            # NOTE: Performs 1 database query to update above database row
-            self.source = source
+            self._set_source(source, commit=False)
             assert self._source == source
+            
+            # Apply database changes
+            project._db.commit()
         project._resource_groups.append(self)
         
         if not project._loading:
@@ -5057,16 +5448,35 @@ class ResourceGroup(ListenableMixin):
         """
         Deletes this resource group.
         If it is referenced as a source, it will be replaced with None.
+        
+        Raises:
+        * sqlite3.DatabaseError --
+            if the delete fully failed due to a database error.
         """
-        for rg in self.project.resource_groups:
-            if rg.source == self:
-                rg.source = None
+        groups_with_source_to_clear = [
+            rg
+            for rg in self.project.resource_groups
+            if rg.source == self
+        ]
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
-            c.execute('delete from resource_group where id=?', (self._id,))
-        self.project._db.commit()
+        try:
+            # Apply clear of sources
+            for rg in groups_with_source_to_clear:
+                # NOTE: Use commit=False to merge changes into the following
+                #       committed transaction
+                rg._set_source(None, commit=False)
+            
+            with closing(self.project._db.cursor()) as c:
+                c.execute('delete from resource_group where id=?', (self._id,))
+            self.project._db.commit()
+        except:
+            # Rollback clear of sources
+            for rg in groups_with_source_to_clear:
+                rg._set_source(self, update_database=False)
+            
+            raise
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.project._resource_groups.remove(self)
@@ -5076,7 +5486,12 @@ class ResourceGroup(ListenableMixin):
     # === Properties ===
     
     def _get_name(self) -> str:
-        """Name of this resource group. Possibly ''."""
+        """
+        Name of this resource group. Possibly ''.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
+        """
         return self._name
     def _set_name(self, name: str) -> None:
         if self._name == name:
@@ -5105,11 +5520,18 @@ class ResourceGroup(ListenableMixin):
         If the source of a resource group is set, the user asserts that downloading
         the source will reveal all of the members of this group. Thus a group's source
         acts as the source of its members.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
         """
         if isinstance(self._source, EllipsisType):
             raise ValueError('Expected ResourceGroup.init_source() to have been already called')
         return self._source
-    def _set_source(self, value: ResourceGroupSource) -> None:
+    def _set_source(self,
+            value: ResourceGroupSource,
+            *, update_database: bool=True,
+            commit: bool=True,
+            ) -> None:
         if value == self._source:
             return
         
@@ -5127,14 +5549,28 @@ class ResourceGroup(ListenableMixin):
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
-            c.execute('update resource_group set source_type=?, source_id=? where id=?', (source_type, source_id, self._id))
-        self.project._db.commit()
+        if update_database:
+            with closing(self.project._db.cursor()) as c:
+                c.execute('update resource_group set source_type=?, source_id=? where id=?', (source_type, source_id, self._id))
+            if commit:
+                self.project._db.commit()
         
         self._source = value
     source = cast(ResourceGroupSource, property(_get_source, _set_source))
     
     def _get_do_not_download(self) -> bool:
+        """
+        Whether members of this group should not be automatically downloaded
+        in circumstances where otherwise they would be. Useful to explicitly
+        exclude ads and other unwanted resources from the project.
+        
+        For example if members of a do-not-download group are embedded in
+        an HTML resource those members will NOT be automatically downloaded
+        when the HTML resource is downloaded.
+        
+        Setter Raises:
+        * sqlite3.DatabaseError
+        """
         return self._do_not_download
     def _set_do_not_download(self, value: bool) -> None:
         if self._do_not_download == value:
@@ -5299,6 +5735,9 @@ class ResourceGroup(ListenableMixin):
         return 'ResourceGroup({},{})'.format(repr(self.name), repr(self.url_pattern))
 
 
+# ------------------------------------------------------------------------------
+# Utility
+
 def _resolve_proxy(maybe_proxy: object) -> object:
     from crystal.shell import _Proxy
     if isinstance(maybe_proxy, _Proxy):
@@ -5317,5 +5756,4 @@ def _is_ascii(s: str) -> bool:
         return True
 
 
-class _TaskNotFoundException(Exception):
-    pass
+# ------------------------------------------------------------------------------

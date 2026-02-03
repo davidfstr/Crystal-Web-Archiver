@@ -189,8 +189,8 @@ async def test_when_database_error_then_tries_to_delete_partial_body_file_and_ra
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
-                r = Resource(project, home_url)
+            r = Resource(project, home_url)
+            with database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
                 revision_future = r.download_body()
                 
                 # Ensure a database error is reported as a raised exception
@@ -214,9 +214,9 @@ async def test_when_network_io_error_and_database_error_then_tries_to_delete_par
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+            r = Resource(project, home_url)
             with _downloads_mocked_to_raise_network_io_error() as is_connection_reset:
-                with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
-                    r = Resource(project, home_url)
+                with database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
                     revision_future = r.download_body()
                     
                     # Ensure a database error is reported as a raised exception
@@ -270,7 +270,7 @@ async def test_given_downloading_revision_when_writing_to_disk_raises_io_error_t
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with _downloads_mocked_to_raise_disk_io_error() as is_io_error:
+            with downloads_mocked_to_raise_disk_io_error() as is_io_error:
                 r = Resource(project, home_url)
                 revision_future = r.download_body()
                 revision = await wait_for_future(revision_future)  # type: ResourceRevision
@@ -291,9 +291,9 @@ async def test_given_downloading_revision_when_writing_to_disk_raises_io_error_a
         home_url = sp.get_request_url('https://xkcd.com/')
         
         async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
-            with _downloads_mocked_to_raise_disk_io_error() as is_io_error:
-                with _database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
-                    r = Resource(project, home_url)
+            r = Resource(project, home_url)
+            with downloads_mocked_to_raise_disk_io_error() as is_io_error:
+                with database_cursor_mocked_to_raise_database_io_error_on_write(project) as is_database_error:
                     revision_future = r.download_body()
                     
                     # Ensure a database error is reported as a raised exception
@@ -398,9 +398,16 @@ def _downloads_mocked_to_raise_network_io_error() -> Iterator:
 
 
 @contextmanager
-def _downloads_mocked_to_raise_disk_io_error() -> Iterator[Callable[[object], bool]]:
-    def fake_write(b: bytes) -> None:
+def downloads_mocked_to_raise_disk_io_error(
+        *, will_raise: Callable[[], None] | None = None,
+        ) -> Iterator[Callable[[object], bool]]:
+    if will_raise is None:
+        will_raise = lambda: None
+    
+    def raise_io_error() -> NoReturn:
         # Simulate faulty disk
+        # NOTE: This is the specific error that macOS raises if you try to flush
+        #       to a file on a locally-attached disk that is physically disconnected.
         raise OSError(errno.EIO, 'Input/output error')
     def is_io_error(e: object) -> bool:
         return (
@@ -408,9 +415,13 @@ def _downloads_mocked_to_raise_disk_io_error() -> Iterator[Callable[[object], bo
             e.errno == errno.EIO
         )
     
+    real_NamedTemporaryFile = tempfile.NamedTemporaryFile  # capture
     def FakeNamedTemporaryFile(*args, **kwargs) -> BinaryIO:
-        f = tempfile.NamedTemporaryFile(*args, **kwargs)
+        f = real_NamedTemporaryFile(*args, **kwargs)
         if kwargs.get('suffix', '').endswith('.body'):
+            def fake_write(b: bytes) -> int:
+                will_raise()
+                raise_io_error()
             f.write = fake_write  # type: ignore[assignment]
         return cast(BinaryIO, f)
     
@@ -419,15 +430,21 @@ def _downloads_mocked_to_raise_disk_io_error() -> Iterator[Callable[[object], bo
 
 
 @contextmanager
-def _database_cursor_mocked_to_raise_database_io_error_on_write(
-        project: Project
+def database_cursor_mocked_to_raise_database_io_error_on_write(
+        project: Project,
+        *, should_raise: Callable[[], bool] | None = None
         ) -> Iterator[Callable[[object], bool]]:
+    if should_raise is None:
+        should_raise = lambda: True
+    
     def raise_database_error() -> NoReturn:
-        raise sqlite3.OperationalError('database is locked')
+        # NOTE: This is the specific error that SQLite raises if you try to query
+        #       a database file on a locally-attached disk that is physically disconnected.
+        raise sqlite3.OperationalError('disk I/O error')  # SQLITE_IOERR
     def is_database_error(e: object) -> bool:
         return (
             isinstance(e, sqlite3.OperationalError) and
-            str(e) == 'database is locked'
+            str(e) == 'disk I/O error'
         )
     
     real_cursor_func = project._db.cursor  # capture
@@ -435,7 +452,11 @@ def _database_cursor_mocked_to_raise_database_io_error_on_write(
         real_cursor = real_cursor_func()
         
         def mock_execute(command: str, *args, **kwargs):
-            if command.startswith('insert into resource_revision '):
+            # Raise error for any write operation if should_raise() returns True
+            if should_raise() and (
+                    command.startswith('insert ') or 
+                    command.startswith('update ') or 
+                    command.startswith('delete ')):
                 raise_database_error()
             else:
                 return real_cursor.execute(command, *args, **kwargs)

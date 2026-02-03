@@ -10,6 +10,11 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
+### main
+
+* Documentation improvements
+    * Project format documented at: <doc/crystalproj_project_format.md>
+
 ### v2.2.0 (January 27, 2026)
 
 Many developer-facing improvements are in this release:
