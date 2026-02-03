@@ -173,7 +173,9 @@ CREATE TABLE resource_revision (   -- since v1.0.0a
     resource_id integer not null,  -- since v1.0.0a
     request_cookie text,           -- since v1.3.0b
     error text not null,           -- since v1.0.0a
-    metadata text not null         -- since v1.0.0a
+    metadata text not null,        -- since v1.0.0a
+    -- NOTE: Accidentally omits the following FK constraint:
+    --foreign key (resource_id) references resource(id)
 );
 CREATE TABLE alias (                               -- since v2.2.0
     id integer primary key,                        -- since v2.2.0

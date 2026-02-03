@@ -1076,8 +1076,16 @@ class Project(ListenableMixin):
     def _create(self, c: DatabaseCursor, db: DatabaseConnection) -> None:
         c.execute('create table project_property (name text unique not null, value text)')
         c.execute('create table resource (id integer primary key, url text unique not null)')
+        # NOTE: Defines an FK constraint, but FK constraints aren't enforced in SQLite by default,
+        #       and currently Crystal does not change the default.
         c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
         c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
+        # NOTE: Accidentally omits the FK constraint `foreign key (resource_id) references resource(id)`.
+        #       - An FK constraint can't be added by an ALTER TABLE in SQLite -
+        #         a (manual) complete table copy is required - which makes it
+        #         difficult to migrate old projects to retroactively add one.
+        #       - FK constraints aren't enforced in SQLite by default,
+        #         and currently Crystal does not change the default.
         c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
         c.execute('create table alias (id integer primary key, source_url_prefix text unique not null, target_url_prefix text not null, target_is_external integer not null default 0)')
         c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
