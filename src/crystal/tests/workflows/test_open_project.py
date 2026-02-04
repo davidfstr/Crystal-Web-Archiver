@@ -430,11 +430,10 @@ async def test_given_project_is_corrupt_when_open_project_then_displays_error_di
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             group = list(project.resource_groups)[0]  # arbitrary
             
-            with closing(project._db.cursor()) as c:
+            with project._db, closing(project._db.cursor()) as c:
                 c.execute(
                     'update resource_group set source_type = ? where id = ?',
                     ('bogus', group._id))
-            project._db.commit()
         
         # Try to open that project
         if True:

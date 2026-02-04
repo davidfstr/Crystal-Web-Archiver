@@ -711,7 +711,7 @@ def _close_project_abruptly(project: Project) -> None:
     # 
     # A real unmount of a disk on macOS causes subsequent SQLite operations to fail with:
     #     sqlite3.DatabaseError('database disk image is malformed')
-    project._db._db.close()
+    project._db._raw_db.close()
 
 
 def _project_has_resume_data(project: Project) -> bool:

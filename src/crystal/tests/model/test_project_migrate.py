@@ -280,14 +280,14 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
             # Create many revisions
             if True:
                 # Create revision rows in database
-                with closing(project._db.cursor()) as c:
-                    encoded_null_error = RR._encode_error(None)
-                    encoded_404_error = RR._encode_metadata(ResourceRevisionMetadata(
-                        http_version=10,
-                        status_code=404,
-                        reason_phrase='Not Found',
-                        headers=[],
-                    ))
+                encoded_null_error = RR._encode_error(None)
+                encoded_404_error = RR._encode_metadata(ResourceRevisionMetadata(
+                    http_version=10,
+                    status_code=404,
+                    reason_phrase='Not Found',
+                    headers=[],
+                ))
+                with project._db, closing(project._db.cursor()) as c:
                     c.executemany(
                         'insert into resource_revision '
                             '(id, resource_id, request_cookie, error, metadata) values (?, ?, ?, ?, ?)', 
@@ -295,10 +295,9 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
                             (r._id, r._id, None, encoded_null_error, encoded_404_error)
                             for r in resources
                         ])
-                project._db.commit()
-                
-                # Create revision files in filesystem
-                for id in [r._id for r in resources]:
+            
+            # Create revision files in filesystem
+            for id in [r._id for r in resources]:
                     with open(os.path.join(project.path, Project._REVISIONS_DIRNAME, str(id)), 'w') as tf:
                         tf.write(str(id))  # arbitrary content
         

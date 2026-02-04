@@ -425,7 +425,7 @@ class Project(ListenableMixin):
                 else ''
             )
         )
-        db_raw = sqlite3.connect(
+        raw_db = sqlite3.connect(
             'file:' + url_quote(db_filepath) + db_connect_query,
             uri=True)
         
@@ -443,7 +443,7 @@ class Project(ListenableMixin):
             database_is_on_ssd = False  # conservative
         
         readonly_actual = readonly_requested or not can_write_db
-        db = DatabaseConnection(db_raw, readonly_actual, mark_dirty_func)
+        db = DatabaseConnection(raw_db, readonly_actual, mark_dirty_func)
         try:
             # Enable use of REGEXP operator and regexp() function
             db.create_function('regexp', 2, lambda x, y: re.search(x, y) is not None)
@@ -1337,9 +1337,8 @@ class Project(ListenableMixin):
                 return
             if self.readonly:
                 raise ProjectReadOnlyError()
-            with closing(self._db.cursor()) as c:
+            with self._db, closing(self._db.cursor()) as c:
                 c.execute('insert or replace into project_property (name, value) values (?, ?)', (name, value))
-            self._db.commit()
         self._properties[name] = value
     def _delete_property(self, name: str) -> None:
         if not self._loading:
@@ -1347,9 +1346,8 @@ class Project(ListenableMixin):
                 return
             if self.readonly:
                 raise ProjectReadOnlyError()
-            with closing(self._db.cursor()) as c:
+            with self._db, closing(self._db.cursor()) as c:
                 c.execute('delete from project_property where name=?', (name,))
-            self._db.commit()
         del self._properties[name]
     
     @property
@@ -3047,11 +3045,10 @@ class Resource:
             if project.readonly:
                 _id = Resource._UNSAVED_ID
             else:
-                with closing(project._db.cursor()) as c:
+                with project._db, closing(project._db.cursor()) as c:
                     c.execute('insert into resource (url) values (?)', (normalized_url,))
-                    project._db.commit()
                     assert c.lastrowid is not None
-                    _id = c.lastrowid
+                    _id = c.lastrowid  # capture
             
             # Can't have revisions because it was just created this session
             self._definitely_has_no_revisions = True
@@ -3310,15 +3307,16 @@ class Resource:
             message = lambda: f'{len(normalized_urls)} links'
         else:
             message = lambda: f'{len(normalized_urls)} links from {origin_url!r}'
-        with warn_if_slow('Inserting links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
-            with closing(project._db.cursor()) as c:
-                placeholders = ','.join(['(?)'] * len(normalized_urls))
-                rows = list(c.execute(
-                    f'insert into resource (url) values {placeholders} returning id',
-                    normalized_urls)
-                )  # type: List[Tuple[int]]
-        with warn_if_slow('Committing links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS):
-            project._db.commit()  # end transaction
+        insert_context = warn_if_slow('Inserting links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS)
+        commit_context = warn_if_slow('Committing links', max_duration=1.0, message=message, enabled=PROFILE_RECORD_LINKS)
+        with project._db(commit_context=commit_context):
+            with insert_context:
+                with closing(project._db.cursor()) as c:
+                    placeholders = ','.join(['(?)'] * len(normalized_urls))
+                    rows = list(c.execute(
+                        f'insert into resource (url) values {placeholders} returning id',
+                        normalized_urls)
+                    )  # type: List[Tuple[int]]
         return [id for (id,) in rows]
     
     # === Properties ===
@@ -3855,9 +3853,8 @@ class Resource:
         
         if project.readonly:
             raise ProjectReadOnlyError()
-        with closing(project._db.cursor()) as c:
+        with project._db, closing(project._db.cursor()) as c:
             c.execute('update resource set url=? where id=?', (new_url, self._id,))
-        project._db.commit()
         
         old_url = self._url  # capture
         self._url = new_url
@@ -3903,9 +3900,8 @@ class Resource:
         project._resource_will_delete(self)
         
         # Delete Resource itself
-        with closing(project._db.cursor()) as c:
+        with project._db, closing(project._db.cursor()) as c:
             c.execute('delete from resource where id=?', (self._id,))
-        project._db.commit()
         self._id = Resource._DELETED_ID
     
     # === Utility ===
@@ -3978,10 +3974,11 @@ class RootResource:
             else:
                 if project.readonly:
                     raise ProjectReadOnlyError()
-                with closing(project._db.cursor()) as c:
+                with project._db, closing(project._db.cursor()) as c:
                     c.execute('insert into root_resource (name, resource_id) values (?, ?)', (name, resource._id))
-                    project._db.commit()
-                    self._id = c.lastrowid
+                    assert c.lastrowid is not None
+                    _id = c.lastrowid  # capture
+                self._id = _id
             project._root_resources[resource] = self
             
             if not project._loading:
@@ -4010,17 +4007,17 @@ class RootResource:
         if self.project.readonly:
             raise ProjectReadOnlyError()
         try:
-            # Apply clear of sources
-            for rg in groups_with_source_to_clear:
-                # NOTE: Use commit=False to merge changes into the following
-                #       committed transaction
-                rg._set_source(None, commit=False)
-            
-            with closing(self.project._db.cursor()) as c:
-                c.execute('delete from root_resource where id=?', (self._id,))
-            self.project._db.commit()
+            with self.project._db:
+                # Apply clear of sources
+                for rg in groups_with_source_to_clear:
+                    # NOTE: Use commit=False to merge changes into the following
+                    #       committed transaction
+                    rg._set_source(None, commit=False)
+                
+                with closing(self.project._db.cursor()) as c:
+                    c.execute('delete from root_resource where id=?', (self._id,))
         except:
-            # Rollback clear of sources
+            # Rollback clear of sources in memory
             for rg in groups_with_source_to_clear:
                 rg._set_source(self, update_database=False)
             
@@ -4048,11 +4045,10 @@ class RootResource:
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
+        with self.project._db, closing(self.project._db.cursor()) as c:
             c.execute('update root_resource set name=? where id=?', (
                 name,
                 self._id,))
-        self.project._db.commit()
         
         self._name = name
     name = cast(str, property(_get_name, _set_name))
@@ -4295,7 +4291,7 @@ class ResourceRevision:
         callable_exc_info = None
         
         # Asynchronously:
-        # 1. Create the ResourceRevision row in the database
+        # 1. Create/commit the ResourceRevision row in the database
         # 2. Get the database ID
         @capture_crashes_to_stderr
         def fg_task() -> None:
@@ -4305,13 +4301,14 @@ class ResourceRevision:
                 
                 if project.readonly:
                     raise ProjectReadOnlyError()
-                with closing(project._db.cursor()) as c:
+                with project._db, closing(project._db.cursor()) as c:
                     c.execute(
                         'insert into resource_revision '
                             '(resource_id, request_cookie, error, metadata) values (?, ?, ?, ?)', 
                         (resource._id, request_cookie, RR._encode_error(error), RR._encode_metadata(metadata)))
-                    project._db.commit()
-                    self._id = c.lastrowid
+                    assert c.lastrowid is not None
+                    id = c.lastrowid  # capture
+                self._id = id
             except BaseException as e:
                 callable_exc_info = sys.exc_info()
             finally:
@@ -4366,9 +4363,8 @@ class ResourceRevision:
                         def fg_task() -> None:
                             if project.readonly:
                                 raise ProjectReadOnlyError()
-                            with closing(project._db.cursor()) as c:
+                            with project._db, closing(project._db.cursor()) as c:
                                 c.execute('delete from resource_revision where id=?', (self._id,))
-                            project._db.commit()
                         # NOTE: Use profile=False because no obvious further optimizations exist
                         fg_call_and_wait(fg_task, profile=False)
             
@@ -4984,12 +4980,11 @@ class ResourceRevision:
         self.metadata = new_metadata
         
         # Alter ResourceRevision's metadata in database
-        with closing(project._db.cursor()) as c:
+        with project._db, closing(project._db.cursor()) as c:
             c.execute(
                 'update resource_revision set metadata = ? where id = ?',
                 (json.dumps(new_metadata), self._id),  # type: ignore[attr-defined]
                 ignore_readonly=ignore_readonly)
-        project._db.commit()
     
     @property
     def is_http_304(self) -> bool:
@@ -5058,9 +5053,8 @@ class ResourceRevision:
         #       is deleted, a dangling revision's body file will be left behind.
         #       That dangling file will occupy some disk space unnecessarily
         #       but shouldn't interfere with any future project operations.
-        with closing(project._db.cursor()) as c:
+        with project._db, closing(project._db.cursor()) as c:
             c.execute('delete from resource_revision where id=?', (self._id,))
-        project._db.commit()
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.resource.already_downloaded_this_session = False
@@ -5209,11 +5203,10 @@ class Alias:
         else:
             if project.readonly:
                 raise ProjectReadOnlyError()
-            with closing(project._db.cursor()) as c:
+            with project._db, closing(project._db.cursor()) as c:
                 c.execute(
                     'insert into alias (source_url_prefix, target_url_prefix, target_is_external) values (?, ?, ?)',
                     (source_url_prefix, target_url_prefix, int(target_is_external)))
-                project._db.commit()
                 self._id = c.lastrowid
         project._aliases.append(self)
         
@@ -5235,9 +5228,8 @@ class Alias:
         """
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
+        with self.project._db, closing(self.project._db.cursor()) as c:
             c.execute('delete from alias where id=?', (self._id,))
-        self.project._db.commit()
         self._id = None
         
         self.project._aliases.remove(self)
@@ -5268,11 +5260,10 @@ class Alias:
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
+        with self.project._db, closing(self.project._db.cursor()) as c:
             c.execute('update alias set target_url_prefix=? where id=?', (
                 target_url_prefix,
                 self._id,))
-        self.project._db.commit()
         
         self._target_url_prefix = target_url_prefix
         
@@ -5291,11 +5282,10 @@ class Alias:
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
+        with self.project._db, closing(self.project._db.cursor()) as c:
             c.execute('update alias set target_is_external=? where id=?', (
                 int(target_is_external),
                 self._id,))
-        self.project._db.commit()
         
         self._target_is_external = target_is_external
         
@@ -5422,20 +5412,18 @@ class ResourceGroup(ListenableMixin):
             if project.readonly:
                 raise ProjectReadOnlyError()
             
-            # Queue: Create ResourceGroup in database
-            with closing(project._db.cursor()) as c:
-                c.execute('insert into resource_group (name, url_pattern, do_not_download) values (?, ?, ?)', (name, url_pattern, do_not_download))
-                # (Defer commit until after source is set)
-                self._id = c.lastrowid
-            
-            # Queue: Set source of ResourceGroup in database
-            if source is Ellipsis:
-                raise ValueError()
-            self._set_source(source, commit=False)
-            assert self._source == source
-            
-            # Apply database changes
-            project._db.commit()
+            with project._db:
+                # Queue: Create ResourceGroup in database
+                with closing(project._db.cursor()) as c:
+                    c.execute('insert into resource_group (name, url_pattern, do_not_download) values (?, ?, ?)', (name, url_pattern, do_not_download))
+                    # (Defer commit until after source is set)
+                    self._id = c.lastrowid
+                
+                # Queue: Set source of ResourceGroup in database
+                if source is Ellipsis:
+                    raise ValueError()
+                self._set_source(source, commit=False)
+                assert self._source == source
         project._resource_groups.append(self)
         
         if not project._loading:
@@ -5470,17 +5458,17 @@ class ResourceGroup(ListenableMixin):
         if self.project.readonly:
             raise ProjectReadOnlyError()
         try:
-            # Apply clear of sources
-            for rg in groups_with_source_to_clear:
-                # NOTE: Use commit=False to merge changes into the following
-                #       committed transaction
-                rg._set_source(None, commit=False)
-            
-            with closing(self.project._db.cursor()) as c:
-                c.execute('delete from resource_group where id=?', (self._id,))
-            self.project._db.commit()
+            with self.project._db:
+                # Apply clear of sources
+                for rg in groups_with_source_to_clear:
+                    # NOTE: Use commit=False to merge changes into the following
+                    #       committed transaction
+                    rg._set_source(None, commit=False)
+                
+                with closing(self.project._db.cursor()) as c:
+                    c.execute('delete from resource_group where id=?', (self._id,))
         except:
-            # Rollback clear of sources
+            # Rollback clear of sources in memory
             for rg in groups_with_source_to_clear:
                 rg._set_source(self, update_database=False)
             
@@ -5507,11 +5495,10 @@ class ResourceGroup(ListenableMixin):
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
+        with self.project._db, closing(self.project._db.cursor()) as c:
             c.execute('update resource_group set name=? where id=?', (
                 name,
                 self._id,))
-        self.project._db.commit()
         
         self._name = name
     name = cast(str, property(_get_name, _set_name))
@@ -5558,10 +5545,8 @@ class ResourceGroup(ListenableMixin):
         if self.project.readonly:
             raise ProjectReadOnlyError()
         if update_database:
-            with closing(self.project._db.cursor()) as c:
+            with self.project._db(commit=commit), closing(self.project._db.cursor()) as c:
                 c.execute('update resource_group set source_type=?, source_id=? where id=?', (source_type, source_id, self._id))
-            if commit:
-                self.project._db.commit()
         
         self._source = value
     source = cast(ResourceGroupSource, property(_get_source, _set_source))
@@ -5586,9 +5571,8 @@ class ResourceGroup(ListenableMixin):
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
-        with closing(self.project._db.cursor()) as c:
+        with self.project._db, closing(self.project._db.cursor()) as c:
             c.execute('update resource_group set do_not_download=? where id=?', (value, self._id))
-        self.project._db.commit()
         
         self._do_not_download = value
         

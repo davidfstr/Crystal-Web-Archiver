@@ -18,6 +18,7 @@ Release Notes ⋮
       sudden process termination when downloading files or editing a project.
         * All project operations are now fully atomic and durable unless documented
           otherwise. See <doc/model_durability_and_atomicity.md> for details.
+        * Failed transactions are now explicitly rolled back correctly.
 
 * Documentation improvements
     * Project format documented at: <doc/crystalproj_project_format.md>
