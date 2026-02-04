@@ -707,6 +707,54 @@ class TestNoDoubleQuotedStringFixer:
         assert test_file.read_text() == "a = 'test1'\nb = 'test2'\nc = 'test3'\n"
 
 
+# === C9014: no-direct-database-commit ===
+
+class TestNoDirectDatabaseCommitInMemory:
+    """In-memory tests for the no-direct-database-commit rule (C9014)."""
+    
+    def test_commit_call_is_flagged(self) -> None:
+        code = dedent(
+            '''\
+            db = None  # Assume database instance
+            db.commit()
+            '''
+        )
+        _assert_message_emitted(code, 'no-direct-database-commit')
+    
+    def test_other_method_is_allowed(self) -> None:
+        code = dedent(
+            '''\
+            db = None
+            db.execute('SELECT 1')
+            '''
+        )
+        _assert_no_message_emitted(code, 'no-direct-database-commit')
+
+
+# === C9015: no-direct-database-rollback ===
+
+class TestNoDirectDatabaseRollbackInMemory:
+    """In-memory tests for the no-direct-database-rollback rule (C9015)."""
+    
+    def test_rollback_call_is_flagged(self) -> None:
+        code = dedent(
+            '''\
+            db = None  # Assume database instance
+            db.rollback()
+            '''
+        )
+        _assert_message_emitted(code, 'no-direct-database-rollback')
+    
+    def test_other_method_is_allowed(self) -> None:
+        code = dedent(
+            '''\
+            db = None
+            db.execute('SELECT 1')
+            '''
+        )
+        _assert_no_message_emitted(code, 'no-direct-database-rollback')
+
+
 # === Utilities ===
 
 # Counter for generating unique fake filenames

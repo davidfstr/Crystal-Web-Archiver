@@ -94,6 +94,16 @@ class CrystalLintRules(BaseChecker):
             'no-double-quoted-string',
             'String literals should use single quotes rather than double quotes.',
         ),
+        'C9014': (
+            "Don't call project._db.commit() directly; use `with project._db()` to manage transactions instead",
+            'no-direct-database-commit',
+            'Direct commit() call on database is not allowed. Use `with project._db()` to manage transactions instead.',
+        ),
+        'C9015': (
+            "Don't call project._db.rollback() directly; use `with project._db()` to manage transactions instead",
+            'no-direct-database-rollback',
+            'Direct rollback() call on database is not allowed. Use `with project._db()` to manage transactions instead.',
+        ),
     }
     
     # === Visit Call ===
@@ -136,6 +146,14 @@ class CrystalLintRules(BaseChecker):
         # time.time(...)
         if self._is_time_time_call(node):
             self.add_message('monotonic-durations', node=node)
+        
+        # something.commit(...)
+        if self._is_database_commit_call(node):
+            self.add_message('no-direct-database-commit', node=node)
+        
+        # something.rollback(...)
+        if self._is_database_rollback_call(node):
+            self.add_message('no-direct-database-rollback', node=node)
     
     def _is_thread_call(self, node: nodes.Call) -> bool:
         # Thread(...)
@@ -232,6 +250,22 @@ class CrystalLintRules(BaseChecker):
         # time() - assumed to be imported directly from the "time" module
         if isinstance(node.func, nodes.Name) and node.func.name == 'time':
             return True
+        
+        return False
+    
+    def _is_database_commit_call(self, node: nodes.Call) -> bool:
+        # something.commit(...)
+        if isinstance(node.func, nodes.Attribute):
+            if node.func.attrname == 'commit':
+                return True
+        
+        return False
+    
+    def _is_database_rollback_call(self, node: nodes.Call) -> bool:
+        # something.rollback(...)
+        if isinstance(node.func, nodes.Attribute):
+            if node.func.attrname == 'rollback':
+                return True
         
         return False
     
