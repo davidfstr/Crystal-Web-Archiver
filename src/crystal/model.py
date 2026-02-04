@@ -320,11 +320,10 @@ class Project(ListenableMixin):
             try:
                 # NOTE: May raise ProjectReadOnlyError if the database cannot be opened as writable
                 with cls._open_database_but_close_if_raises(path, readonly_requested, self._mark_dirty_if_untitled, expect_writable=create) as (
-                            self._db, self._readonly, self._database_is_on_ssd), \
-                        closing(self._db.cursor()) as c:
+                            self._db, self._readonly, self._database_is_on_ssd):
                     # Create new project content, if missing
                     if create:
-                        self._create(c, self._db)
+                        self._create()
                     
                     # Load from existing project
                     # NOTE: Don't provide detailed feedback when creating a project initially
@@ -332,10 +331,10 @@ class Project(ListenableMixin):
                         progress_listener if not create
                         else DummyOpenProjectProgressListener()
                     )
-                    self._load(c, self._db, load_progress_listener)
+                    self._load(load_progress_listener)
         
                     # Apply repairs
-                    self._repair_incomplete_rollback_of_resource_revision_create(c, self._db.commit)
+                    self._repair_incomplete_rollback_of_resource_revision_create()
                     
                     # Reset dirty state after loading
                     self._is_dirty = is_dirty
@@ -558,8 +557,6 @@ class Project(ListenableMixin):
     # --- Load: Migrations ---
     
     def _apply_migrations(self,
-            c: DatabaseCursor,
-            commit: Callable[[], None],
             progress_listener: OpenProjectProgressListener) -> None:
         """
         Upgrades this project's directory structure and database schema
@@ -574,7 +571,7 @@ class Project(ListenableMixin):
         * sqlite3.DatabaseError, OSError
         """
         # Add missing database columns and indexes
-        if True:
+        with self._db, closing(self._db.cursor()) as c:
             index_names = get_index_names(c)  # cache
             table_names = get_table_names(c)  # cache
             
@@ -616,8 +613,6 @@ class Project(ListenableMixin):
             if 'alias' not in table_names:
                 progress_listener.upgrading_project('Adding aliases table...')
                 c.execute('create table alias (id integer primary key, source_url_prefix text unique not null, target_url_prefix text not null, target_is_external integer not null default 0)')
-            
-            commit()
         
         # Add missing directory structures
         if True:
@@ -713,11 +708,12 @@ class Project(ListenableMixin):
         # Apply major version migrations
         if True:
             # Get the project's major version
-            major_version = self._get_major_version(c)
+            with self._db, closing(self._db.cursor()) as c:
+                major_version = self._get_major_version(c)
             
             # Upgrade major version 1 -> 2
             if major_version == 1:
-                self._migrate_v1_to_v2(c, commit, progress_listener)
+                self._migrate_v1_to_v2(progress_listener)
             
             # At latest major version 2
             if major_version == 2:
@@ -726,15 +722,13 @@ class Project(ListenableMixin):
                 ip_revisions_dirpath = os.path.join(
                     self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
                 if os.path.exists(ip_revisions_dirpath):
-                    self._commit_migrate_v1_to_v2(c, commit)
+                    self._commit_migrate_v1_to_v2()
                 
                 # Nothing to do
                 pass
             assert self._LATEST_SUPPORTED_MAJOR_VERSION == 2
     
     def _migrate_v1_to_v2(self,
-            c: DatabaseCursor,
-            commit: Callable[[], None],
             progress_listener: OpenProjectProgressListener,
             ) -> None:
         """
@@ -852,18 +846,19 @@ class Project(ListenableMixin):
         with create_profiling_context(
                 'migrate_revisions.prof', enabled=_PROFILE_MIGRATE_REVISIONS):
             try:
-                self._process_table_rows(
-                    c,
-                    # NOTE: The following query to approximate row count is
-                    #       significantly faster than the exact query
-                    #       ('select count(1) from resource_revision') because it
-                    #       does not require a full table scan.
-                    ResourceRevision._MAX_REVISION_ID_QUERY,
-                    'select id from resource_revision order by id asc',
-                    migrate_revision,
-                    will_upgrade_revisions,
-                    progress_listener.upgrading_revision,
-                    progress_listener.did_upgrade_revisions)
+                with self._db, closing(self._db.cursor()) as c:
+                    self._process_table_rows(
+                        c,
+                        # NOTE: The following query to approximate row count is
+                        #       significantly faster than the exact query
+                        #       ('select count(1) from resource_revision') because it
+                        #       does not require a full table scan.
+                        ResourceRevision._MAX_REVISION_ID_QUERY,
+                        'select id from resource_revision order by id asc',
+                        migrate_revision,
+                        will_upgrade_revisions,
+                        progress_listener.upgrading_revision,
+                        progress_listener.did_upgrade_revisions)
             except CancelOpenProject:
                 raise
             except VetoUpgradeProject:
@@ -871,7 +866,8 @@ class Project(ListenableMixin):
             else:
                 # Locate last revision ID.
                 # Flush all changes to its parent directory.
-                rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+                with self._db, closing(self._db.cursor()) as c:
+                    rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
                 if len(rows) == 1:
                     [(max_revision_id,)] = rows
                 else:
@@ -884,17 +880,15 @@ class Project(ListenableMixin):
                         os.path.dirname(new_revision_filepath)
                     )
                 
-                self._commit_migrate_v1_to_v2(c, commit)
+                self._commit_migrate_v1_to_v2()
     
-    def _commit_migrate_v1_to_v2(self,
-            c: DatabaseCursor,
-            commit: Callable[[], None],
-            ) -> None:
+    def _commit_migrate_v1_to_v2(self) -> None:
         """
         Raises:
         * sqlite3.DatabaseError, OSError
         """
-        assert self._get_major_version(c) in [1, 2]
+        with self._db, closing(self._db.cursor()) as c:
+            assert self._get_major_version(c) in [1, 2]
         
         revisions_dirpath = os.path.join(
             self.path, self._REVISIONS_DIRNAME)  # cache
@@ -905,7 +899,7 @@ class Project(ListenableMixin):
         
         # Start commit
         major_version = 2
-        self._set_major_version(major_version, c, commit)
+        self._set_major_version(major_version, self._db)
         # (If crash happens between here and "Finish commit",
         #  reopening the project will resume the commit)
         
@@ -916,10 +910,7 @@ class Project(ListenableMixin):
         # 2. Finish commit
         rename_and_flush(ip_revisions_dirpath, revisions_dirpath)
     
-    def _repair_incomplete_rollback_of_resource_revision_create(self,
-            c: DatabaseCursor,
-            commit: Callable[[], None],
-            ) -> None:
+    def _repair_incomplete_rollback_of_resource_revision_create(self) -> None:
         """
         If the last revision was likely intended to be deleted by a
         failed rollback in ResourceRevision._create_from_stream,
@@ -941,7 +932,8 @@ class Project(ListenableMixin):
         """
         
         # Locate last revision
-        rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+        with self._db, closing(self._db.cursor()) as c:
+            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
         if len(rows) == 1:
             [(max_revision_id,)] = rows
         else:
@@ -978,15 +970,16 @@ class Project(ListenableMixin):
         # Check whether at least 3 other revisions have readable bodies.
         # If so then the last revision's body being missing is likely to
         # be legitimately orphaned by a failed rollback.
-        rows = list(c.execute(
-            'select id from resource_revision '
-                # NOTE: error == "null" filters out revisions where
-                #       no body is expected (i.e. has_body == False)
-                'where error == "null" and id < ? '
-                'order by id desc '
-                'limit 3',
-            (max_revision_id,)
-        ))
+        with self._db, closing(self._db.cursor()) as c:
+            rows = list(c.execute(
+                'select id from resource_revision '
+                    # NOTE: error == "null" filters out revisions where
+                    #       no body is expected (i.e. has_body == False)
+                    'where error == "null" and id < ? '
+                    'order by id desc '
+                    'limit 3',
+                (max_revision_id,)
+            ))
         if len(rows) < 3:
             # Not enough revisions to make a determination RE whether a rollback failed.
             # Be conservative and don't try to continue the rollback.
@@ -1052,6 +1045,7 @@ class Project(ListenableMixin):
             # Repair failed. Continue opening the project anyway.
             return
     
+    # TODO: Consider accepting `db: DatabaseConnection` rather than `c: DatabaseCursor`
     @staticmethod
     def _get_major_version(c: DatabaseCursor | sqlite3.Cursor) -> int:
         rows = list(c.execute(
@@ -1065,44 +1059,43 @@ class Project(ListenableMixin):
         return major_version
     
     @staticmethod
-    def _set_major_version(major_version: int, c: DatabaseCursor, commit: Callable[[], None]) -> None:
-        c.execute(
-            'insert or replace into project_property (name, value) values (?, ?)',
-            ('major_version', major_version))
-        commit()
+    def _set_major_version(major_version: int, db: DatabaseConnection) -> None:
+        with db, closing(db.cursor()) as c:
+            c.execute(
+                'insert or replace into project_property (name, value) values (?, ?)',
+                ('major_version', major_version))
     
     # --- Load: Create & Load ---
     
-    def _create(self, c: DatabaseCursor, db: DatabaseConnection) -> None:
-        c.execute('create table project_property (name text unique not null, value text)')
-        c.execute('create table resource (id integer primary key, url text unique not null)')
-        # NOTE: Defines an FK constraint, but FK constraints aren't enforced in SQLite by default,
-        #       and currently Crystal does not change the default.
-        c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
-        c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
-        # NOTE: Accidentally omits the FK constraint `foreign key (resource_id) references resource(id)`.
-        #       - An FK constraint can't be added by an ALTER TABLE in SQLite -
-        #         a (manual) complete table copy is required - which makes it
-        #         difficult to migrate old projects to retroactively add one.
-        #       - FK constraints aren't enforced in SQLite by default,
-        #         and currently Crystal does not change the default.
-        c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
-        c.execute('create table alias (id integer primary key, source_url_prefix text unique not null, target_url_prefix text not null, target_is_external integer not null default 0)')
-        c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
+    def _create(self) -> None:
+        with self._db, closing(self._db.cursor()) as c:
+            c.execute('create table project_property (name text unique not null, value text)')
+            c.execute('create table resource (id integer primary key, url text unique not null)')
+            # NOTE: Defines an FK constraint, but FK constraints aren't enforced in SQLite by default,
+            #       and currently Crystal does not change the default.
+            c.execute('create table root_resource (id integer primary key, name text not null, resource_id integer unique not null, foreign key (resource_id) references resource(id))')
+            c.execute('create table resource_group (id integer primary key, name text not null, url_pattern text not null, source_type text, source_id integer)')
+            # NOTE: Accidentally omits the FK constraint `foreign key (resource_id) references resource(id)`.
+            #       - An FK constraint can't be added by an ALTER TABLE in SQLite -
+            #         a (manual) complete table copy is required - which makes it
+            #         difficult to migrate old projects to retroactively add one.
+            #       - FK constraints aren't enforced in SQLite by default,
+            #         and currently Crystal does not change the default.
+            c.execute('create table resource_revision (id integer primary key, resource_id integer not null, request_cookie text, error text not null, metadata text not null)')
+            c.execute('create table alias (id integer primary key, source_url_prefix text unique not null, target_url_prefix text not null, target_is_external integer not null default 0)')
+            c.execute('create index resource_revision__resource_id on resource_revision (resource_id)')
         
         # (Define indexes later in _apply_migrations())
         
         # Set property values
         if True:
             # Define major version for new projects, for Crystal >1.6.0
-            self._set_major_version(2, c, db.commit)
+            self._set_major_version(2, self._db)
             
             # Define default HTML parser for new projects, for Crystal >1.5.0
             self._set_html_parser_type('lxml', _change_while_loading=True)
     
     def _load(self,
-            c: DatabaseCursor,
-            db: DatabaseConnection,
             progress_listener: OpenProjectProgressListener) -> None:
         """
         Raises:
@@ -1111,10 +1104,11 @@ class Project(ListenableMixin):
         
         # Upgrade database schema to latest version (unless is readonly)
         if not self.readonly:
-            self._apply_migrations(c, db.commit, progress_listener)
+            self._apply_migrations(progress_listener)
         
         # Ensure major version is recognized
-        major_version = self._get_major_version(c)
+        with self._db, closing(self._db.cursor()) as c:
+            major_version = self._get_major_version(c)
         if major_version > self._LATEST_SUPPORTED_MAJOR_VERSION:
             raise ProjectTooNewError(
                 f'Project has major version {major_version} but this '
@@ -1133,50 +1127,51 @@ class Project(ListenableMixin):
                     else:
                         shutil.rmtree(tmp_filepath)
         
-        # Load project properties
-        for (name, value) in c.execute('select name, value from project_property'):
-            self._set_property(name, value)
-        
-        # Load RootResources
-        [(root_resource_count,)] = c.execute('select count(1) from root_resource')
-        progress_listener.loading_root_resources(root_resource_count)
-        for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
-            resource = self._get_resource_with_id(resource_id)
-            if resource is None:
-                raise ProjectFormatError(f'RootResource {id} references Resource {resource_id} which does not exist')
-            RootResource(self, name, resource, _id=id)
-        
-        # Load ResourceGroups
-        [(resource_group_count,)] = c.execute('select count(1) from resource_group')
-        progress_listener.loading_resource_groups(resource_group_count)
-        group_2_source = {}
-        do_not_download_column = (
-            'do_not_download' if 'do_not_download' in get_column_names_of_table(c, 'resource_group')
-            else '0'  # default value for do_not_download column
-        )
-        for (index, (name, url_pattern, source_type, source_id, do_not_download, id)) in enumerate(c.execute(
-                f'select name, url_pattern, source_type, source_id, {do_not_download_column}, id from resource_group')):
-            group = ResourceGroup(self, name, url_pattern, source=Ellipsis, do_not_download=do_not_download, _id=id)
-            group_2_source[group] = (source_type, source_id)
-        for (group, (source_type, source_id)) in group_2_source.items():
-            if source_type is None:
-                source_obj = None  # type: ResourceGroupSource
-            elif source_type == 'root_resource':
-                source_obj = self._get_root_resource_with_id(source_id)
-            elif source_type == 'resource_group':
-                source_obj = self._get_resource_group_with_id(source_id)
-            else:
-                raise ProjectFormatError('Resource group {} has invalid source type "{}".'.format(group._id, source_type))
-            group.init_source(source_obj)
-        
-        # Load Aliases
-        table_names = get_table_names(c)
-        if 'alias' in table_names:
-            for (source_url_prefix, target_url_prefix, target_is_external, id) in c.execute(
-                    'select source_url_prefix, target_url_prefix, target_is_external, id from alias order by id'):
-                Alias(self, source_url_prefix, target_url_prefix, target_is_external=bool(target_is_external), _id=id)
-        
-        # (ResourceRevisions are loaded on demand)
+        with self._db, closing(self._db.cursor()) as c:
+            # Load project properties
+            for (name, value) in c.execute('select name, value from project_property'):
+                self._set_property(name, value)
+            
+            # Load RootResources
+            [(root_resource_count,)] = c.execute('select count(1) from root_resource')
+            progress_listener.loading_root_resources(root_resource_count)
+            for (name, resource_id, id) in c.execute('select name, resource_id, id from root_resource'):
+                resource = self._get_resource_with_id(resource_id)
+                if resource is None:
+                    raise ProjectFormatError(f'RootResource {id} references Resource {resource_id} which does not exist')
+                RootResource(self, name, resource, _id=id)
+            
+            # Load ResourceGroups
+            [(resource_group_count,)] = c.execute('select count(1) from resource_group')
+            progress_listener.loading_resource_groups(resource_group_count)
+            group_2_source = {}
+            do_not_download_column = (
+                'do_not_download' if 'do_not_download' in get_column_names_of_table(c, 'resource_group')
+                else '0'  # default value for do_not_download column
+            )
+            for (index, (name, url_pattern, source_type, source_id, do_not_download, id)) in enumerate(c.execute(
+                    f'select name, url_pattern, source_type, source_id, {do_not_download_column}, id from resource_group')):
+                group = ResourceGroup(self, name, url_pattern, source=Ellipsis, do_not_download=do_not_download, _id=id)
+                group_2_source[group] = (source_type, source_id)
+            for (group, (source_type, source_id)) in group_2_source.items():
+                if source_type is None:
+                    source_obj = None  # type: ResourceGroupSource
+                elif source_type == 'root_resource':
+                    source_obj = self._get_root_resource_with_id(source_id)
+                elif source_type == 'resource_group':
+                    source_obj = self._get_resource_group_with_id(source_id)
+                else:
+                    raise ProjectFormatError('Resource group {} has invalid source type "{}".'.format(group._id, source_type))
+                group.init_source(source_obj)
+            
+            # Load Aliases
+            table_names = get_table_names(c)
+            if 'alias' in table_names:
+                for (source_url_prefix, target_url_prefix, target_is_external, id) in c.execute(
+                        'select source_url_prefix, target_url_prefix, target_is_external, id from alias order by id'):
+                    Alias(self, source_url_prefix, target_url_prefix, target_is_external=bool(target_is_external), _id=id)
+            
+            # (ResourceRevisions are loaded on demand)
     
     # --- Load: Utility ---
     
