@@ -381,7 +381,7 @@ def test_when_launched_with_shell_and_no_project_filepath_then_shell_starts_with
     with crystal_shell() as (crystal, banner):
         # Verify project and window variables are unset proxies (not real objects)
         result = py_eval_literal(crystal, 'repr(project)')
-        assertIn('<unset crystal.model.Project proxy>', result)
+        assertIn('<unset crystal.model.project.Project proxy>', result)
         
         result = py_eval_literal(crystal, 'repr(window)')
         assertIn('<unset crystal.browser.MainWindow proxy>', result)
@@ -401,7 +401,7 @@ def test_when_launched_with_shell_and_project_filepath_then_shell_starts_with_op
             
             # Verify project variable is set to a real Project object
             result = py_eval_literal(crystal, 'repr(project)')
-            assertIn('<crystal.model.Project object at 0x', result)
+            assertIn('<crystal.model.project.Project object at 0x', result)
             
             # Verify window variable is set to a real MainWindow object
             result = py_eval_literal(crystal, 'repr(window)')
@@ -499,7 +499,7 @@ def test_when_headless_shell_with_project_then_starts_shell_without_gui() -> Non
             args=['--headless', '--shell', project_path],
             expects=['version', 'help', 'variables', 'exit', 'prompt']
         ) as (crystal, banner_metadata):
-            assertIn('<crystal.model.Project object at 0x', py_eval_literal(crystal, 'repr(project)'))
+            assertIn('<crystal.model.project.Project object at 0x', py_eval_literal(crystal, 'repr(project)'))
             assertEqual(project_path, py_eval_literal(crystal, 'project.path'))
             assertIn('<unset crystal.browser.MainWindow proxy>', py_eval_literal(crystal, 'repr(window)'))
             
@@ -520,7 +520,7 @@ def test_when_headless_shell_without_project_then_starts_shell_without_gui() -> 
             'version', 'help', 'variables', 'exit', 'prompt'
         ]
     ) as (crystal, banner_metadata):
-        assertIn('<unset crystal.model.Project proxy>', py_eval_literal(crystal, 'repr(project)'))
+        assertIn('<unset crystal.model.project.Project proxy>', py_eval_literal(crystal, 'repr(project)'))
         assertIn('<unset crystal.browser.MainWindow proxy>', py_eval_literal(crystal, 'repr(window)'))
 
 
@@ -533,7 +533,7 @@ def test_when_headless_serve_shell_with_project_then_starts_both_server_and_shel
                 'server_started', 'ctrl_c',
             ]
         ) as (crystal, banner_metadata):
-            assertIn('<crystal.model.Project object at 0x', py_eval_literal(crystal, 'repr(project)'))
+            assertIn('<crystal.model.project.Project object at 0x', py_eval_literal(crystal, 'repr(project)'))
             assertEqual(project_path, py_eval_literal(crystal, 'project.path'))
             assertIn('<unset crystal.browser.MainWindow proxy>', py_eval_literal(crystal, 'repr(window)'))
             

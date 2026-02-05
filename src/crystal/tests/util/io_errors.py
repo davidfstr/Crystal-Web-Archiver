@@ -90,7 +90,7 @@ def downloads_mocked_to_raise_disk_io_error(
             f.write = fake_write  # type: ignore[assignment]
         return cast(BinaryIO, f)
     
-    with patch('crystal.model.NamedTemporaryFile', FakeNamedTemporaryFile):
+    with patch('crystal.model.resource_revision.NamedTemporaryFile', FakeNamedTemporaryFile):
         yield is_io_error
 
 

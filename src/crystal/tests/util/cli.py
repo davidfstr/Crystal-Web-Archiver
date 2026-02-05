@@ -23,7 +23,7 @@ from typing import TypeAlias
 from unittest import SkipTest
 
 
-PROJECT_PROXY_REPR_STR = '<unset crystal.model.Project proxy>\n'
+PROJECT_PROXY_REPR_STR = '<unset crystal.model.project.Project proxy>\n'
 WINDOW_PROXY_REPR_STR = '<unset crystal.browser.MainWindow proxy>\n'
 
 
