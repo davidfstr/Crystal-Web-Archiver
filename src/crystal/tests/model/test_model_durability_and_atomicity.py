@@ -325,9 +325,9 @@ async def test_create_resource_revision_is_durable() -> None:
             # Download the resource and count database operations and fsync calls
             with database_queries_counted(project) as counter, \
                     patch('os.fsync', side_effect=spy_fsync), \
-                    patch('crystal.model.NamedTemporaryFile', side_effect=spy_named_temp_file), \
+                    patch('crystal.model.resource_revision.NamedTemporaryFile', side_effect=spy_named_temp_file), \
                     patch('os.open', side_effect=spy_os_open), \
-                    patch('crystal.model.rename_and_flush', side_effect=spy_rename_and_flush):
+                    patch('crystal.model.resource_revision.rename_and_flush', side_effect=spy_rename_and_flush):
                 # Internally calls download_resource_revision() on a background thread.
                 revision_future = r.download_body()
                 revision = await wait_for_future(revision_future)

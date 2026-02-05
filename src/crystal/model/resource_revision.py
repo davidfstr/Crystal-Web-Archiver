@@ -20,7 +20,6 @@ import datetime
 import json
 import mimetypes
 import os
-from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
 import sys
 from tempfile import NamedTemporaryFile
 import threading

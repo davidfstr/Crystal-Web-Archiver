@@ -21,7 +21,6 @@ from crystal.util.xthreading import (
     fg_affinity, is_foreground_thread,
 )
 import itertools
-from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
 from typing import (
     Any, Dict, Generic, Iterable, List, Literal, Optional, Tuple, TYPE_CHECKING, TypeVar, Union,
 )

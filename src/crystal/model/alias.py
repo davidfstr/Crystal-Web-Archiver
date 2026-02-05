@@ -5,7 +5,6 @@ from crystal.model.util import resolve_proxy
 from crystal.util.xthreading import (
     fg_affinity,
 )
-from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
 from typing import (
     cast, TYPE_CHECKING,
 )

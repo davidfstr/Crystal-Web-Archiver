@@ -12,7 +12,6 @@ from crystal.util.xthreading import (
 import math
 import re
 from re import Pattern
-from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
 from typing import (
     cast, List, Optional, TYPE_CHECKING, TypeAlias, Union,
 )

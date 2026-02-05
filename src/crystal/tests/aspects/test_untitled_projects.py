@@ -473,7 +473,7 @@ async def test_when_close_untitled_prompt_and_user_does_not_save_then_project_mo
         assert project.is_untitled
         old_project_dirpath = project.path  # capture
 
-        with patch('crystal.model.send2trash', wraps=send2trash.send2trash) as send2trash_spy, \
+        with patch('crystal.model.project.send2trash', wraps=send2trash.send2trash) as send2trash_spy, \
                 patch(
                     'crystal.browser.ShowModal',
                     mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
@@ -715,7 +715,7 @@ async def test_when_save_as_large_project_then_progress_updates_incrementally() 
         
         # Patch COPY_BUFSIZE to a small value to force many progress updates
         # even for our relatively small test project
-        with patch('crystal.model.COPY_BUFSIZE', 5000), \
+        with patch('crystal.model.project.COPY_BUFSIZE', 5000), \
                 patch('time.monotonic', side_effect=time_generator()):
             
             # Save to different filesystem (using UI)
@@ -770,7 +770,7 @@ async def test_when_save_as_project_and_user_cancels_then_operation_stops_and_cl
         
         save_path = os.path.join(save_dir, 'CanceledProject.crystalproj')
         with _assert_project_not_copied(project, save_path), \
-                _rmtree_fallback_for_send2trash('crystal.model.send2trash'):
+                _rmtree_fallback_for_send2trash('crystal.model.project.send2trash'):
             # Run the save operation
             with patch.object(SaveAsProgressDialog, 'copying', side_effect=CancelSaveAs) as mock_copying:
                 await save_as_with_ui(rmw, save_path)
@@ -835,7 +835,7 @@ async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_clea
             _untitled_project() as project, \
             RealMainWindow(project) as rmw, \
             _temporary_directory_on_new_filesystem() as save_dir, \
-            _rmtree_fallback_for_send2trash('crystal.model.send2trash'):
+            _rmtree_fallback_for_send2trash('crystal.model.project.send2trash'):
         
         atom_feed_url = sp.get_request_url('https://xkcd.com/atom.xml')
         
@@ -883,7 +883,7 @@ async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpect
     with scheduler_disabled(), \
             served_project('testdata_xkcd.crystalproj.zip') as sp, \
             _temporary_directory_on_new_filesystem() as save_dir, \
-            _rmtree_fallback_for_send2trash('crystal.model.send2trash'):
+            _rmtree_fallback_for_send2trash('crystal.model.project.send2trash'):
         for error in fs_gone_errors:
             with subtests.test(error=error), \
                     _untitled_project() as project, \
