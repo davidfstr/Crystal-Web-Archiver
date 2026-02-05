@@ -12,7 +12,7 @@ from crystal.doc.html import parse_html_and_links
 from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.doc.json import parse_json_and_links
 from crystal.doc.xml import parse_xml_and_links
-from crystal.model.util import _resolve_proxy
+from crystal.model.util import resolve_proxy
 from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.plugins import phpbb as plugins_phpbb
 from crystal.plugins import substack as plugins_substack
@@ -152,7 +152,7 @@ class Alias:
         """
         from crystal.model.project import Project, ProjectReadOnlyError
         
-        project = _resolve_proxy(project)  # type: ignore[assignment]
+        project = resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
             raise TypeError()
         if not isinstance(source_url_prefix, str):
