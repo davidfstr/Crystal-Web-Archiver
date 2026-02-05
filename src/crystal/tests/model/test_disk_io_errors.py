@@ -8,10 +8,9 @@
 #   whose body file is missing from the revisions directory.
 
 from contextlib import redirect_stderr
-from crystal.model import Project, Resource
-from crystal.tests.util.runner import bg_sleep
+from crystal.model import Resource
 from crystal.tests.util.server import served_project
-from crystal.tests.util.wait import DEFAULT_WAIT_PERIOD, wait_for_future
+from crystal.tests.util.wait import wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 import io
 import os

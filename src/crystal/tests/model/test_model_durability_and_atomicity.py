@@ -19,11 +19,11 @@ Related audit documentation:
 
 from collections.abc import Iterator
 from crystal.model import Alias, Project, Resource, ResourceRevision, RootResource, ResourceGroup
-from crystal.tests.task.test_download_body import (
+from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual
+from crystal.tests.util.io_errors import (
     database_cursor_mocked_to_raise_database_io_error_on_write,
     downloads_mocked_to_raise_disk_io_error,
 )
-from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual
 from crystal.tests.util.server import served_project
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
