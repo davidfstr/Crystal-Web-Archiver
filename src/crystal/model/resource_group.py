@@ -1,105 +1,28 @@
 from __future__ import annotations
 
-from collections import OrderedDict
-from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
-from concurrent.futures import Future
-from contextlib import closing, contextmanager
-import copy
-from crystal import resources as resources_
-from crystal.doc.css import parse_css_and_links
-from crystal.doc.generic import create_external_link
-from crystal.doc.html import parse_html_and_links
-from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
-from crystal.doc.json import parse_json_and_links
-from crystal.doc.xml import parse_xml_and_links
+from collections.abc import Sequence
+from contextlib import closing
 from crystal.model.util import resolve_proxy
-from crystal.plugins import minimalist_baker as plugins_minbaker
-from crystal.plugins import phpbb as plugins_phpbb
-from crystal.plugins import substack as plugins_substack
-from crystal.plugins import wordpress as plugins_wordpress
-from crystal.progress import (
-    CancelLoadUrls, CancelOpenProject, CancelSaveAs, DummyLoadUrlsProgressListener,
-    DummyOpenProjectProgressListener, LoadUrlsProgressListener,
-    OpenProjectProgressListener, SaveAsProgressListener, VetoUpgradeProject,
-)
-from crystal.util import gio, http_date, xcgi, xshutil
-from crystal.util.bulkheads import (
-    capture_crashes_to_bulkhead_arg as capture_crashes_to_task_arg,
-)
-from crystal.util.bulkheads import capture_crashes_to_stderr, run_bulkhead_call
-from crystal.util.db import (
-    DatabaseConnection, DatabaseCursor, get_column_names_of_table,
-    get_index_names, get_table_names, is_no_such_column_error_for,
-)
+from crystal.util.bulkheads import run_bulkhead_call
 from crystal.util.ellipsis import Ellipsis, EllipsisType
-from crystal.util.filesystem import rename_and_flush, flush_renames_in_directory
 from crystal.util.listenable import ListenableMixin
-from crystal.util.profile import create_profiling_context, warn_if_slow
-from crystal.util.progress import DevNullFile
-from crystal.util.ssd import is_ssd
-from crystal.util.test_mode import tests_are_running
-from crystal.util.thread_debug import get_thread_stack
-from crystal.app_preferences import app_prefs
-from crystal.util.urls import is_unrewritable_url, requote_uri
-from crystal.util.windows_attrib import set_windows_file_attrib
-from crystal.util.xappdirs import user_untitled_projects_dir
-from crystal.util.xbisect import bisect_key_right
-from crystal.util.xcollections.ordereddict import as_ordereddict
-from crystal.util.xcollections.sortedlist import BLACK_HOLE_SORTED_LIST
-from crystal.util.xdatetime import datetime_is_aware
-from crystal.util.xshutil import walkzip
-from crystal.util.xsqlite3 import random_choices_from_table_ids
-from crystal.util.xgc import gc_disabled
-from crystal.util.xos import is_linux, is_mac_os, is_windows
-from crystal.util.xsqlite3 import is_database_read_only_error, sqlite_has_json_support
 from crystal.util.xthreading import (
-    SwitchToThread, bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later, fg_wait_for,
-    is_foreground_thread, start_thread_switching_coroutine,
+    is_foreground_thread,
 )
-import datetime
-from enum import Enum
-import errno
-import itertools
-import json
 import math
-import mimetypes
-import os
-import pathlib
 import re
 from re import Pattern
-from send2trash import send2trash, TrashPermissionError
-import shutil
 from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
-from sortedcontainers import SortedList
-import sqlite3
-import sys
-import tempfile
-from tempfile import mkdtemp, NamedTemporaryFile
-from textwrap import dedent
-import threading
-import time
-from tqdm import tqdm
-import traceback
 from typing import (
-    Any, BinaryIO, cast, Dict, Generic, IO, List, Literal, Optional, Self, Tuple,
-    TYPE_CHECKING, TypedDict, TypeAlias, TypeVar, Union,
+    cast, List, Optional, TYPE_CHECKING, TypeAlias, Union,
 )
-from typing_extensions import deprecated, override
-from urllib.parse import quote as url_quote
-from urllib.parse import urlparse, urlunparse
-import uuid
-import warnings
-from weakref import WeakValueDictionary
 
 if TYPE_CHECKING:
-    from crystal.doc.generic import Document, Link
-    from crystal.doc.html import HtmlParserType
     from crystal.model.project import Project
     from crystal.model.resource import Resource
     from crystal.model.root_resource import RootResource
     from crystal.task import (
-        DownloadResourceBodyTask, DownloadResourceGroupTask,
-        DownloadResourceTask, RootTask, Task,
+        DownloadResourceGroupTask,
     )
 
 
