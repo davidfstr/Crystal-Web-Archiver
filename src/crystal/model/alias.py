@@ -12,6 +12,7 @@ from crystal.doc.html import parse_html_and_links
 from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.doc.json import parse_json_and_links
 from crystal.doc.xml import parse_xml_and_links
+from crystal.model.util import _resolve_proxy
 from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.plugins import phpbb as plugins_phpbb
 from crystal.plugins import substack as plugins_substack
@@ -93,6 +94,7 @@ from weakref import WeakValueDictionary
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
     from crystal.doc.html import HtmlParserType
+    from crystal.model.project import Project
     from crystal.task import (
         DownloadResourceBodyTask, DownloadResourceGroupTask,
         DownloadResourceTask, RootTask, Task,
@@ -148,6 +150,8 @@ class Alias:
         * sqlite3.DatabaseError --
             if a database error occurred, preventing the creation of the new Alias.
         """
+        from crystal.model.project import Project, ProjectReadOnlyError
+        
         project = _resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
             raise TypeError()
@@ -204,6 +208,8 @@ class Alias:
         * sqlite3.DatabaseError --
             if the delete fully failed due to a database error
         """
+        from crystal.model.project import ProjectReadOnlyError
+        
         if self.project.readonly:
             raise ProjectReadOnlyError()
         with self.project._db, closing(self.project._db.cursor()) as c:
@@ -231,6 +237,8 @@ class Alias:
         return self._target_url_prefix
     @fg_affinity
     def _set_target_url_prefix(self, target_url_prefix: str) -> None:
+        from crystal.model.project import ProjectReadOnlyError
+        
         if not target_url_prefix.endswith('/'):
             raise ValueError('target_url_prefix must end in slash (/)')
         if self._target_url_prefix == target_url_prefix:
@@ -253,6 +261,8 @@ class Alias:
         return self._target_is_external
     @fg_affinity
     def _set_target_is_external(self, target_is_external: bool) -> None:
+        from crystal.model.project import ProjectReadOnlyError
+        
         if not isinstance(target_is_external, bool):
             raise TypeError()
         if self._target_is_external == target_is_external:

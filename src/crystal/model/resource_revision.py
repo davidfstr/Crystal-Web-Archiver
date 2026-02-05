@@ -93,6 +93,8 @@ from weakref import WeakValueDictionary
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
     from crystal.doc.html import HtmlParserType
+    from crystal.model.project import Project
+    from crystal.model.resource import Resource
     from crystal.task import (
         DownloadResourceBodyTask, DownloadResourceGroupTask,
         DownloadResourceTask, RootTask, Task,
@@ -267,6 +269,8 @@ class ResourceRevision:
             a RevisionBodyMissingError, which callers are expected to handle
             gracefully.
         """
+        from crystal.model.project import Project, ProjectReadOnlyError
+        
         self = ResourceRevision()
         self.resource = resource
         self.request_cookie = request_cookie
@@ -540,6 +544,8 @@ class ResourceRevision:
             if this revision's in-memory ID is higher than what the 
             project format supports on disk
         """
+        from crystal.model.project import Project
+        
         if major_version >= 2:
             os_path_sep = os.path.sep  # cache
             
@@ -827,6 +833,8 @@ class ResourceRevision:
         * OSError --
             if I/O error while reading revision body
         """
+        from crystal.model.project import RevisionBodyMissingError
+        
         self._ensure_has_body()
         try:
             return os.path.getsize(self._body_filepath)
@@ -843,6 +851,8 @@ class ResourceRevision:
         * OSError --
             if I/O error while opening revision body
         """
+        from crystal.model.project import RevisionBodyMissingError
+        
         self._ensure_has_body()
         try:
             return open(self._body_filepath, 'rb')
@@ -1041,6 +1051,8 @@ class ResourceRevision:
         * OSError -- 
             if the delete partially failed, leaving behind a revision body file
         """
+        from crystal.model.project import ProjectReadOnlyError
+        
         project = self.project
         body_filepath = self._body_filepath  # capture
         
@@ -1092,13 +1104,6 @@ class NoRevisionBodyError(ValueError):
     """
     def __init__(self, revision: ResourceRevision) -> None:
         super().__init__(f'{revision!s} has no body')
-
-
-class RevisionBodyMissingError(ProjectFormatError):
-    def __init__(self, revision: ResourceRevision) -> None:
-        super().__init__(
-            f'{revision!s} is missing its body on disk. '
-            f'Recommend delete and redownload it.')
 
 
 class ResourceRevisionMetadata(TypedDict):

@@ -12,6 +12,7 @@ from crystal.doc.html import parse_html_and_links
 from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.doc.json import parse_json_and_links
 from crystal.doc.xml import parse_xml_and_links
+from crystal.model.util import _resolve_proxy
 from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.plugins import phpbb as plugins_phpbb
 from crystal.plugins import substack as plugins_substack
@@ -93,6 +94,9 @@ from weakref import WeakValueDictionary
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
     from crystal.doc.html import HtmlParserType
+    from crystal.model.project import Project
+    from crystal.model.resource import Resource
+    from crystal.model.root_resource import RootResource
     from crystal.task import (
         DownloadResourceBodyTask, DownloadResourceGroupTask,
         DownloadResourceTask, RootTask, Task,
@@ -133,6 +137,8 @@ class ResourceGroup(ListenableMixin):
         * sqlite3.DatabaseError --
             if a database error occurred, preventing the creation of the new ResourceGroup.
         """
+        from crystal.model.project import Project, ProjectReadOnlyError
+        
         super().__init__()
         
         project = _resolve_proxy(project)  # type: ignore[assignment]
@@ -203,6 +209,8 @@ class ResourceGroup(ListenableMixin):
         * sqlite3.DatabaseError --
             if the delete fully failed due to a database error.
         """
+        from crystal.model.project import ProjectReadOnlyError
+        
         groups_with_source_to_clear = [
             rg
             for rg in self.project.resource_groups
@@ -244,6 +252,8 @@ class ResourceGroup(ListenableMixin):
         """
         return self._name
     def _set_name(self, name: str) -> None:
+        from crystal.model.project import ProjectReadOnlyError
+        
         if self._name == name:
             return
         
@@ -281,6 +291,9 @@ class ResourceGroup(ListenableMixin):
             *, update_database: bool=True,
             commit: bool=True,
             ) -> None:
+        from crystal.model.project import ProjectReadOnlyError
+        from crystal.model.root_resource import RootResource
+        
         if value == self._source:
             return
         
@@ -320,6 +333,8 @@ class ResourceGroup(ListenableMixin):
         """
         return self._do_not_download
     def _set_do_not_download(self, value: bool) -> None:
+        from crystal.model.project import ProjectReadOnlyError
+        
         if self._do_not_download == value:
             return
         

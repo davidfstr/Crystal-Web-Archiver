@@ -12,6 +12,7 @@ from crystal.doc.html import parse_html_and_links
 from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.doc.json import parse_json_and_links
 from crystal.doc.xml import parse_xml_and_links
+from crystal.model.util import _resolve_proxy
 from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.plugins import phpbb as plugins_phpbb
 from crystal.plugins import substack as plugins_substack
@@ -97,6 +98,9 @@ if TYPE_CHECKING:
         DownloadResourceBodyTask, DownloadResourceGroupTask,
         DownloadResourceTask, RootTask, Task,
     )
+    from crystal.model.project import Project
+    from crystal.model.resource import Resource
+    from crystal.model.resource_revision import ResourceRevision
 
 
 # ------------------------------------------------------------------------------
@@ -134,6 +138,9 @@ class RootResource:
         * sqlite3.DatabaseError --
             if a database error occurred, preventing the creation of the new RootResource.
         """
+        from crystal.model.project import CrossProjectReferenceError, Project, ProjectReadOnlyError
+        from crystal.model.resource import Resource
+        
         project = _resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
             raise TypeError()
@@ -183,6 +190,8 @@ class RootResource:
         * sqlite3.DatabaseError --
             if the delete fully failed due to a database error
         """
+        from crystal.model.project import ProjectReadOnlyError
+        
         groups_with_source_to_clear = [
             rg
             for rg in self.project.resource_groups
@@ -225,6 +234,8 @@ class RootResource:
         return self._name
     @fg_affinity
     def _set_name(self, name: str) -> None:
+        from crystal.model.project import ProjectReadOnlyError
+        
         if self._name == name:
             return
         

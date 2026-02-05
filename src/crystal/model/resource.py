@@ -12,6 +12,7 @@ from crystal.doc.html import parse_html_and_links
 from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.doc.json import parse_json_and_links
 from crystal.doc.xml import parse_xml_and_links
+from crystal.model.util import _resolve_proxy
 from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.plugins import phpbb as plugins_phpbb
 from crystal.plugins import substack as plugins_substack
@@ -97,6 +98,8 @@ if TYPE_CHECKING:
         DownloadResourceBodyTask, DownloadResourceGroupTask,
         DownloadResourceTask, RootTask, Task,
     )
+    from crystal.model.project import Project
+    from crystal.model.resource_revision import ResourceRevision
 
 # ------------------------------------------------------------------------------
 # Constants + Type Utilities
@@ -209,6 +212,8 @@ class Resource:
         * sqlite3.DatabaseError --
             if a database error occurred, preventing the creation of the new Resource.
         """
+        from crystal.model.alias import Alias
+        
         # Private API:
         # * _id --
         #     - If _id is None then any existing resource in the database
@@ -578,6 +583,8 @@ class Resource:
         For more information, see the covering test module:
         - test_url_normalization.py
         """
+        from crystal.model.alias import Alias
+        
         alternatives = []
         
         # Always yield original URL first
@@ -690,6 +697,8 @@ class Resource:
         If this Resource points to live URL on the internet external to the project,
         returns what that external URL is. Otherwise returns None.
         """
+        from crystal.model.alias import Alias
+        
         if self._id != Resource._EXTERNAL_ID:
             return None
         external_url = Alias.parse_external_url(self._url)
@@ -1004,6 +1013,8 @@ class Resource:
         Revisions will be returned in the order they were downloaded,
         from least-recent to most-recent.
         """
+        from crystal.model.resource_revision import ResourceRevision
+        
         if self._definitely_has_no_revisions:
             return
         
@@ -1083,6 +1094,8 @@ class Resource:
         Raises:
         * ProjectReadOnlyError
         """
+        from crystal.model.project import ProjectReadOnlyError
+        
         project = self.project  # cache
         
         if project.get_resource(new_url) is not None:
@@ -1111,6 +1124,8 @@ class Resource:
         * sqlite3.DatabaseError, OSError --
             if the delete partially/fully failed, leaving behind zero or more revisions
         """
+        from crystal.model.project import ProjectReadOnlyError
+        
         project = self.project
         
         if project.readonly:

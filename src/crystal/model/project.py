@@ -6,6 +6,13 @@ from concurrent.futures import Future
 from contextlib import closing, contextmanager
 import copy
 from crystal import resources as resources_
+from crystal.model.alias import Alias
+from crystal.model.resource import Resource
+from crystal.model.resource_group import ResourceGroup, ResourceGroupSource
+from crystal.model.resource_revision import (
+    NoRevisionBodyError, ResourceRevision,
+)
+from crystal.model.root_resource import RootResource
 from crystal.doc.css import parse_css_and_links
 from crystal.doc.generic import create_external_link
 from crystal.doc.html import parse_html_and_links
@@ -2835,6 +2842,13 @@ class CrossProjectReferenceError(Exception):
 
 class ProjectFormatError(Exception):
     """The on-disk format of a Project is corrupted in some way."""
+
+
+class RevisionBodyMissingError(ProjectFormatError):
+    def __init__(self, revision: ResourceRevision) -> None:
+        super().__init__(
+            f'{revision!s} is missing its body on disk. '
+            f'Recommend delete and redownload it.')
 
 
 class ProjectTooNewError(Exception):
