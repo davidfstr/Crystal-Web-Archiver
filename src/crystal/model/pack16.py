@@ -9,6 +9,7 @@ large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
 from crystal.util.filesystem import rename_and_flush
 import os
 import tempfile
+from typing import IO, Self
 from zipfile import ZipFile, ZIP_STORED
 
 
@@ -69,3 +70,68 @@ def create_pack_file(
             except FileNotFoundError:
                 pass
         raise
+
+
+def open_pack_entry(pack_path: str, entry_name: str) -> 'ZipEntryReader':
+    """
+    Opens a specific entry from a pack zip file, returning a file-like object.
+
+    The returned file-like object keeps the ZipFile open until the stream is closed.
+
+    Arguments:
+    * pack_path -- path to the pack zip file
+    * entry_name -- name of the entry to read (e.g., '01a')
+
+    Returns:
+    * A file-like object for reading the entry
+
+    Raises:
+    * ZipEntryNotFoundError -- if entry is not found in the pack file
+    * OSError -- if could not read pack file
+    """
+    zip_file = ZipFile(pack_path, 'r')
+    try:
+        try:
+            entry_file = zip_file.open(entry_name, 'r')
+        except KeyError:
+            raise ZipEntryNotFoundError(
+                f'There is no item named {entry_name!r} in the archive'
+            ) from None
+        return ZipEntryReader(zip_file, entry_file)
+    except:
+        zip_file.close()
+        raise
+
+
+class ZipEntryNotFoundError(Exception):
+    pass
+
+
+class ZipEntryReader:
+    """
+    A zip entry file-like object. Keeps its containing ZipFile open.
+    """
+    def __init__(self, zip_file: ZipFile, entry_file: IO[bytes]) -> None:
+        self._zip_file = zip_file
+        self._entry_file = entry_file
+
+    def read(self, size: int = -1) -> bytes:
+        return self._entry_file.read(size)
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self._entry_file.seek(offset, whence)
+
+    def tell(self) -> int:
+        return self._entry_file.tell()
+
+    def close(self) -> None:
+        try:
+            self._entry_file.close()
+        finally:
+            self._zip_file.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_) -> None:
+        self.close()

@@ -2,12 +2,11 @@
 Tests for Pack16 revision storage format (major_version == 3).
 
 All tests below implicitly include the condition:
-* given_project_opened_as_writable
+* given_project_in_pack16_format
 """
-
-from crystal.model import Resource
-from crystal.model import ResourceRevision as RR
-from crystal.tests.util.asserts import assertEqual
+from unittest import skip
+from crystal.model import Resource, ResourceRevision as RR, RevisionBodyMissingError
+from crystal.tests.util.asserts import assertEqual, assertRaises
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.windows import OpenOrCreateDialog
 from io import BytesIO
@@ -18,7 +17,7 @@ import zipfile
 # === Create ===
 
 @awith_subtests
-async def test_given_project_in_pack16_format_when_create_multiple_of_16_resource_revisions_then_creates_pack_file_if_at_least_one_revision_body_exists(subtests: SubtestsContext) -> None:
+async def test_given_when_create_multiple_of_16_resource_revisions_then_creates_pack_file_if_at_least_one_revision_body_exists(subtests: SubtestsContext) -> None:
     # Case 1: 15th + 31st revision has a body; verify 2 packs created
     # (Packing triggers when IDs 15 and 31 are created)
     with subtests.test(case='15th_and_31st_have_bodies'):
@@ -26,15 +25,17 @@ async def test_given_project_in_pack16_format_when_create_multiple_of_16_resourc
             project._set_major_version_for_test(3)
 
             # Create 32 revisions, only IDs 15 and 31 have bodies
+            revisions_with_bodies = []
             for i in range(1, 33):
                 resource = Resource(project, f'http://example.com/case1/{i}')
                 if i == 15 or i == 31:
                     # Create revision with body
-                    RR.create_from_response(
+                    revision = RR.create_from_response(
                         resource,
                         metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
                         body_stream=BytesIO(b'test body'),
                     )
+                    revisions_with_bodies.append(revision)
                 else:
                     # Create error-only revision (no body)
                     RR.create_from_error(
@@ -54,6 +55,13 @@ async def test_given_project_in_pack16_format_when_create_multiple_of_16_resourc
                 assertEqual(['00f'], zf.namelist())
             with zipfile.ZipFile(pack_01_path, 'r') as zf:
                 assertEqual(['01f'], zf.namelist())
+
+            # Verify revisions can be read back from pack files
+            assertEqual(2, len(revisions_with_bodies))
+            for revision in revisions_with_bodies:
+                with revision.open() as f:
+                    assertEqual(b'test body', f.read())
+                assertEqual(len(b'test body'), revision.size())
 
     # Case 2: 15th + 31st revision has no body, rest have bodies; verify 2 packs
     with subtests.test(case='15th_and_31st_have_no_bodies'):
@@ -147,20 +155,22 @@ async def test_given_project_in_pack16_format_when_create_multiple_of_16_resourc
             assertEqual(1, len(pack_files))
 
 
-async def test_given_project_in_pack16_format_when_create_non_multiple_of_16_resource_revisions_then_creates_individual_files() -> None:
+async def test_given_project_when_create_non_multiple_of_16_resource_revisions_then_creates_individual_files() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         # Set project to major version 3 (Pack16 format)
         project._set_major_version_for_test(3)
         assertEqual(3, project.major_version)
 
         # Create 18 resources with bodies
+        revisions = []
         for i in range(1, 19):
             resource = Resource(project, f'http://example.com/{i}')
-            RR.create_from_response(
+            revision = RR.create_from_response(
                 resource,
                 metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
                 body_stream=BytesIO(b'test body'),
             )
+            revisions.append(revision)
 
         # Verify pack file exists for first 16 revisions
         pack_00_path = os.path.join(
@@ -179,3 +189,91 @@ async def test_given_project_in_pack16_format_when_create_non_multiple_of_16_res
         pack_01_path = os.path.join(
             project.path, 'revisions', '000', '000', '000', '000', '01_.zip')
         assert not os.path.exists(pack_01_path)
+
+        # Verify all revisions can be read back.
+        # First 16 should be read from pack, last 2 from individual files.
+        for revision in revisions:
+            with revision.open() as f:
+                assertEqual(b'test body', f.read())
+            assertEqual(len(b'test body'), revision.size())
+
+
+# === Read ===
+
+@skip('covered by: test_given_when_create_multiple_of_16_resource_revisions_then_creates_pack_file_if_at_least_one_revision_body_exists')
+async def test_given_resource_revision_in_pack_file_then_can_read_resource_revision() -> None:
+    pass
+
+
+@skip('covered by: test_given_project_when_create_non_multiple_of_16_resource_revisions_then_creates_individual_files')
+async def test_given_resource_revision_in_individual_file_then_can_read_resource_revision() -> None:
+    pass
+
+
+async def test_given_given_pack_file_missing_when_read_resource_revision_then_falls_back_to_hierarchical_file() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        project._set_major_version_for_test(3)
+
+        # Create 16 revisions with bodies (creates pack 00_)
+        revisions = []
+        for i in range(1, 17):
+            resource = Resource(project, f'http://example.com/{i}')
+            revision = RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(b'test body'),
+            )
+            revisions.append(revision)
+
+        # Verify pack file exists
+        pack_00_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '00_.zip')
+        assert os.path.exists(pack_00_path)
+
+        # Extract pack file contents to restore individual hierarchical files
+        with zipfile.ZipFile(pack_00_path, 'r') as zf:
+            zf.extractall(os.path.dirname(pack_00_path))
+        os.remove(pack_00_path)
+
+        # Verify open() still works by reading hierarchical files
+        for revision in revisions:
+            with revision.open() as f:
+                assertEqual(b'test body', f.read())
+            assertEqual(len(b'test body'), revision.size())
+
+
+async def test_given_both_pack_and_hierarchical_missing_when_read_resource_revision_then_raises_revision_body_missing_error() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        # Set project to major version 3 (Pack16 format)
+        project._set_major_version_for_test(3)
+
+        # Create a revision with body
+        resource = Resource(project, 'http://example.com/test')
+        revision = RR.create_from_response(
+            resource,
+            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+            body_stream=BytesIO(b'test body'),
+        )
+
+        # Verify revision file exists (as individual file, not in pack yet)
+        revision_001_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '001')
+        assert os.path.exists(revision_001_path)
+
+        # Delete the hierarchical file
+        os.remove(revision_001_path)
+        assert not os.path.exists(revision_001_path)
+
+        # Verify pack file doesn't exist
+        pack_00_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '00_.zip')
+        assert not os.path.exists(pack_00_path)
+
+        # Verify open() raises RevisionBodyMissingError
+        with assertRaises(RevisionBodyMissingError):
+            with revision.open() as f:
+                f.read()
+
+        # Verify size() also raises RevisionBodyMissingError
+        with assertRaises(RevisionBodyMissingError):
+            revision.size()

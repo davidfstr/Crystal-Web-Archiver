@@ -24,7 +24,7 @@ import sys
 from tempfile import NamedTemporaryFile
 import threading
 from typing import (
-    BinaryIO, IO, Optional, TYPE_CHECKING, TypedDict,
+    BinaryIO, IO, Optional, TYPE_CHECKING, TypedDict, cast,
 )
 from urllib.parse import urlparse
 
@@ -377,9 +377,7 @@ class ResourceRevision:
             return
 
         # Create the pack file
-        pack_filepath = cls._body_pack_filepath_with(
-            project.path,
-            revision_id)
+        pack_filepath = cls._body_pack_filepath_with(project.path, revision_id)
         tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
         create_pack_file(revision_files, pack_filepath, tmp_dir)
 
@@ -853,7 +851,7 @@ class ResourceRevision:
     def size(self) -> int:
         """
         Returns the size of this resource's body.
-        
+
         Raises:
         * NoRevisionBodyError
         * RevisionBodyMissingError
@@ -861,8 +859,25 @@ class ResourceRevision:
             if I/O error while reading revision body
         """
         from crystal.model.project import RevisionBodyMissingError
-        
+        from zipfile import ZipFile
+
         self._ensure_has_body()
+
+        # For Pack16 format (major_version >= 3), try pack file first
+        if self.project.major_version >= 3:
+            assert self._id is not None  # ensured by _ensure_has_body()
+            pack_filepath = self._body_pack_filepath_with(self.project.path, self._id)
+            entry_name = self._entry_name_for_revision_id(self._id)
+            try:
+                with ZipFile(pack_filepath, 'r') as zf:
+                    info = zf.getinfo(entry_name)
+                    return info.file_size
+            except (FileNotFoundError, KeyError):
+                # Pack file doesn't exist or entry not in it.
+                # Fallback to Hierarchical file.
+                pass
+
+        # Try Hierarchical file
         try:
             return os.path.getsize(self._body_filepath)
         except FileNotFoundError:
@@ -871,7 +886,7 @@ class ResourceRevision:
     def open(self) -> BinaryIO:
         """
         Opens the body of this resource for reading, returning a file-like object.
-        
+
         Raises:
         * NoRevisionBodyError
         * RevisionBodyMissingError
@@ -879,8 +894,24 @@ class ResourceRevision:
             if I/O error while opening revision body
         """
         from crystal.model.project import RevisionBodyMissingError
-        
+
         self._ensure_has_body()
+
+        # For Pack16 format (major_version >= 3), try pack file first
+        if self.project.major_version >= 3:
+            from crystal.model.pack16 import open_pack_entry, ZipEntryNotFoundError
+
+            assert self._id is not None  # ensured by _ensure_has_body()
+            pack_filepath = self._body_pack_filepath_with(self.project.path, self._id)
+            entry_name = self._entry_name_for_revision_id(self._id)
+            try:
+                return cast(BinaryIO, open_pack_entry(pack_filepath, entry_name))
+            except (FileNotFoundError, ZipEntryNotFoundError):
+                # Pack file doesn't exist or entry not in it.
+                # Fallback to Hierarchical file.
+                pass
+
+        # Try Hierarchical file
         try:
             return open(self._body_filepath, 'rb')
         except FileNotFoundError:
