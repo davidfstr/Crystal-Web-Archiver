@@ -28,6 +28,7 @@ from crystal.util.xsqlite3 import is_database_closed_error
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_call_later,
     fg_waiting_calling_thread, is_foreground_thread, NoForegroundThreadError,
+    scheduler_affinity
 )
 from functools import wraps
 import os
@@ -58,31 +59,6 @@ _PROFILE_SCHEDULER = False
 
 _P = ParamSpec('_P')
 _R = TypeVar('_R')
-
-
-# ------------------------------------------------------------------------------
-# Scheduler (Early)
-
-def scheduler_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
-    """
-    Marks the decorated function as needing to be called from either the
-    scheduler thread or a task that is synced with the scheduler thread.
-    
-    Calling the decorated function from an inappropriate context will immediately
-    raise an AssertionError.
-    
-    The following kinds of manipulations need to happen on the scheduler thread:
-    - read/writes to Task.children,
-      except for the RootTask (which only requires accesses to be on the foreground thread)
-    """
-    if __debug__:  # no -O passed on command line?
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            assert is_synced_with_scheduler_thread()
-            return func(*args, **kwargs)  # cr-traceback: ignore
-        return wrapper
-    else:
-        return func
 
 
 # ------------------------------------------------------------------------------
