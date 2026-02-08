@@ -306,7 +306,10 @@ class Project(ListenableMixin):
                     self._load(load_progress_listener)
         
                     # Apply repairs
-                    self._repair_incomplete_rollback_of_resource_revision_create()
+                    if not self.readonly:
+                        self._repair_incomplete_rollback_of_resource_revision_create()
+                        if self.major_version >= 3:
+                            self._repair_missing_pack_of_resource_revision_create()
                     
                     # Reset dirty state after loading
                     self._is_dirty = is_dirty
@@ -915,10 +918,7 @@ class Project(ListenableMixin):
         if len(rows) == 1:
             [(max_revision_id,)] = rows
         else:
-            [] = rows
-            max_revision_id = None
-        if max_revision_id is None:
-            # No max revision exists to repair rollback for
+            # No max revision exists to repair
             return
         try:
             last_revision = ResourceRevision.load(self, max_revision_id)
@@ -1022,6 +1022,49 @@ class Project(ListenableMixin):
         except Exception as e:
             # Repair failed. Continue opening the project anyway.
             return
+    
+    def _repair_missing_pack_of_resource_revision_create(self) -> None:
+        """
+        Detects and completes any incomplete pack files on project open.
+
+        This is a recovery mechanism for Pack16 format projects that may have
+        had incomplete packs due to disk-full errors or crashes during previous sessions.
+
+        Only applies to the highest-numbered pack that should exist based on the
+        highest revision ID in the database.
+        """
+        # Locate last revision and related pack boundaries
+        with self._db, closing(self._db.cursor()) as c:
+            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+        if len(rows) == 1:
+            [(max_revision_id,)] = rows
+        else:
+            # No max revision exists to repair
+            return
+        if (max_revision_id % 16) != 15:
+            # No pack operation to repair
+            return
+        pack_base_id = max_revision_id - 15
+        pack_end_id = max_revision_id
+        
+        # Check whether pack file is missing
+        pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, max_revision_id)
+        if os.path.exists(pack_filepath):
+            return
+        
+        # Check if there are any individual revision files that should be in the pack
+        has_any_revision_files = False
+        for rid in range(pack_base_id, pack_end_id + 1):
+            hierarchical_body_filepath = ResourceRevision._body_filepath_with(self.path, 2, rid)
+            if os.path.exists(hierarchical_body_filepath):
+                has_any_revision_files = True
+                break
+        if not has_any_revision_files:
+            # No individual files exist. Nothing to pack.
+            return
+        
+        # Create the pack file from the individual revision files
+        ResourceRevision._pack_revisions_for_id(self, pack_end_id)
     
     # TODO: Consider accepting `db: DatabaseConnection` rather than `c: DatabaseCursor`
     @staticmethod
