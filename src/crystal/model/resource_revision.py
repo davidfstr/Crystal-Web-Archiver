@@ -51,7 +51,7 @@ class ResourceRevision:
     
     _MAX_REVISION_ID_QUERY = 'select id from resource_revision order by id desc limit 1'
     
-    # === Init ===
+    # === Init: Create ===
     
     # NOTE: This method is not used by the UI at this time.
     #       It is intended only to be used by shell programs.
@@ -309,10 +309,16 @@ class ResourceRevision:
                 exc_info = callable_exc_info
                 assert exc_info[1] is not None
                 raise exc_info[1].with_traceback(exc_info[2])
-        
+                        
+        # If using Pack16 format and this revision completes a pack of 16,
+        # move the individual revisions into a pack file
+        # NOTE: This logic applies even if this particular revision has no body
+        if project.major_version >= 3 and self._id is not None and (self._id % 16) == 15:
+            ResourceRevision._pack_revisions_for_id(project, self._id)
+
         if not project._loading:
             project._resource_revision_did_instantiate(self)
-        
+
         return self
     
     @staticmethod
@@ -332,6 +338,56 @@ class ResourceRevision:
         self._id = revision._id
         self.has_body = (self.error is None)
         return self
+    
+    @classmethod
+    def _pack_revisions_for_id(cls, project: Project, revision_id: int) -> None:
+        """
+        Packs a group of 16 revisions into a zip file, given the ID of the last revision in the group.
+
+        This should be called when revision_id % 16 == 15.
+
+        Arguments:
+        * project -- the project containing the revisions
+        * revision_id -- the ID of the last revision in the group (must satisfy revision_id % 16 == 15)
+
+        Raises:
+        * OSError -- if could not write pack file or delete individual files
+        """
+        from crystal.model.pack16 import create_pack_file
+        from crystal.model.project import Project
+
+        # Calculate the pack boundaries
+        assert (revision_id % 16) == 15
+        pack_base_id = revision_id - 15
+        pack_end_id = revision_id
+
+        # Collect revision files that exist on disk
+        revision_files = {}  # type: dict[str, str]
+        for rid in range(pack_base_id, pack_end_id + 1):
+            body_filepath = cls._body_filepath_with(
+                project.path,
+                project.major_version,
+                rid)
+            if os.path.exists(body_filepath):
+                entry_name = cls._entry_name_for_revision_id(rid)
+                revision_files[entry_name] = body_filepath
+
+        # Skip packing if no revision files exist
+        if not revision_files:
+            return
+
+        # Create the pack file
+        pack_filepath = cls._body_pack_filepath_with(
+            project.path,
+            revision_id)
+        tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
+        create_pack_file(revision_files, pack_filepath, tmp_dir)
+
+        # Delete the individual revision files
+        for body_filepath in revision_files.values():
+            os.remove(body_filepath)
+    
+    # === Init: Load ===
     
     @staticmethod
     def _load_from_data(
@@ -390,6 +446,8 @@ class ResourceRevision:
             if rr._id == id:
                 return rr
         raise AssertionError()
+    
+    # === Init: Encode/Decode ===
     
     @classmethod
     def _encode_error(cls, error: Exception | None) -> str:
@@ -502,6 +560,42 @@ class ResourceRevision:
         
         return os.path.join(
             project_path, Project._REVISIONS_DIRNAME, revision_relpath)
+
+    @classmethod
+    def _body_pack_filepath_with(cls,
+            project_path: str,
+            revision_id: int,
+            ) -> str:
+        """
+        Computes the pack zip file path for a given revision ID in Pack16 format.
+
+        For example, revision 0x01a (26) would be in pack file:
+            revisions/000/000/000/001/01_.zip
+
+        Arguments:
+        * project_path -- path to the project directory
+        * revision_id -- the revision ID
+
+        Returns:
+        * The full path to the pack file that should contain this revision
+        """
+        hierarchical_path = cls._body_filepath_with(project_path, 2, revision_id)
+        return hierarchical_path[:-1] + '_.zip'
+
+    @staticmethod
+    def _entry_name_for_revision_id(revision_id: int) -> str:
+        """
+        Computes the entry name within a pack zip for a given revision ID.
+
+        For example, revision 0x01a (26) would have entry name '01a'.
+
+        Arguments:
+        * revision_id -- the revision ID
+
+        Returns:
+        * The entry name (last 3 hex digits of the revision ID)
+        """
+        return f'{revision_id % 4096:03x}'
     
     # === Metadata ===
     

@@ -117,7 +117,7 @@ class Project(ListenableMixin):
     
     # Project structure constants
     _DB_FILENAME = 'database.sqlite'
-    _LATEST_SUPPORTED_MAJOR_VERSION = 2
+    _LATEST_SUPPORTED_MAJOR_VERSION = 3
     _REVISIONS_DIRNAME = 'revisions'
     _IN_PROGRESS_REVISIONS_DIRNAME = 'revisions.inprogress'
     _TEMPORARY_DIRNAME = 'tmp'
@@ -687,7 +687,7 @@ class Project(ListenableMixin):
             if major_version == 1:
                 self._migrate_v1_to_v2(progress_listener)
             
-            # At latest major version 2
+            # At major version 2
             if major_version == 2:
                 # If did not finish commit of "Upgrade major version 1 -> 2",
                 # resume the commit
@@ -695,9 +695,16 @@ class Project(ListenableMixin):
                     self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
                 if os.path.exists(ip_revisions_dirpath):
                     self._commit_migrate_v1_to_v2()
-                
+
                 # Nothing to do
-            assert self._LATEST_SUPPORTED_MAJOR_VERSION == 2
+                pass
+            
+            # At major version 3
+            if major_version == 3:
+                # Nothing to do
+                pass
+            
+            assert self._LATEST_SUPPORTED_MAJOR_VERSION == 3
     
     def _migrate_v1_to_v2(self,
             progress_listener: OpenProjectProgressListener,
