@@ -260,6 +260,7 @@ class Project(ListenableMixin):
         self._readonly = True  # will reinitialize after database is located
         self._is_untitled = is_untitled
         self._is_dirty = is_dirty
+        self._properties_loaded = False
         self._properties = dict()               # type: Dict[str, Optional[str]]
         self._resource_for_url = WeakValueDictionary()  # type: Union[WeakValueDictionary[str, Resource], OrderedDict[str, Resource]]
         self._resource_for_id = WeakValueDictionary()   # type: Union[WeakValueDictionary[int, Resource], OrderedDict[int, Resource]]
@@ -1018,6 +1019,7 @@ class Project(ListenableMixin):
     # TODO: Consider accepting `db: DatabaseConnection` rather than `c: DatabaseCursor`
     @staticmethod
     def _get_major_version(c: DatabaseCursor | sqlite3.Cursor) -> int:
+        """Gets the major version of a project, before the project's properties are loaded."""
         rows = list(c.execute(
             'select value from project_property where name = ?',
             ('major_version',)))
@@ -1030,6 +1032,7 @@ class Project(ListenableMixin):
     
     @staticmethod
     def _set_major_version(major_version: int, db: DatabaseConnection) -> None:
+        """Sets the major version of a project, before the project's properties are loaded."""
         with db, closing(db.cursor()) as c:
             c.execute(
                 'insert or replace into project_property (name, value) values (?, ?)',
@@ -1101,6 +1104,7 @@ class Project(ListenableMixin):
             # Load project properties
             for (name, value) in c.execute('select name, value from project_property'):
                 self._set_property(name, value)
+            self._properties_loaded = True
             
             # Load RootResources
             [(root_resource_count,)] = c.execute('select count(1) from root_resource')
@@ -1295,6 +1299,12 @@ class Project(ListenableMixin):
                     run_bulkhead_call(lis.project_is_dirty_did_change)
     
     def _get_property(self, name: str, default: _OptionalStr) -> str | _OptionalStr:
+        if not self._properties_loaded:
+            if name == 'major_version':
+                hint = ' Did you mean _get_major_version()?'
+            else:
+                hint = ''
+            raise ValueError('Project properties are not yet loaded.' + hint)
         return self._properties.get(name) or default
     def _set_property(self, name: str, value: str | None, *, _change_while_loading: bool = False) -> None:
         if not self._loading or _change_while_loading:
@@ -1327,9 +1337,22 @@ class Project(ListenableMixin):
         older than the latest supported major version, even without upgrading
         the project's version, because the project may be stored on a read-only
         volume such as a DVD, CD, or BluRay disc.
+        
+        See also:
+        * _get_major_version -- Reads the major version before project properties are loaded
+        * _set_major_version -- Writes the major version before project properties are loaded
+        * _set_major_version_for_test -- Writes the major version, for tests
         """
         return int(self._get_property('major_version', '1'))
-    
+
+    def _set_major_version_for_test(self, version: int) -> None:
+        """
+        Sets the major version of this project.
+
+        For testing purposes only.
+        """
+        self._set_property('major_version', str(version))
+
     def _get_default_url_prefix(self) -> str | None:
         """
         URL prefix for the majority of this project's resource URLs.
