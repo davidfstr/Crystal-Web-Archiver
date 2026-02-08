@@ -134,6 +134,12 @@ written but wasn't (e.g., due to disk-full during a previous session).
 
 **Goal:** `ResourceRevision.delete()` works correctly when the revision is inside a pack.
 
+**Prerequisite Work:**
+- Create `DeleteResourceRevisionTask` — a new leaf Task type that performs `ResourceRevision` deletion
+  on the scheduler thread, to avoid concurrent access to pack files during writes.
+- Change the public `delete()` API to return a `Future` so callers can await completion.
+  Update all existing callers of `delete()` to handle the new async API.
+
 **Work:**
 - Add utility function to `pack16.py`:
   - `rewrite_pack_without_entry(pack_path: str, entry_name: str, tmp_dir: str)`:
@@ -142,10 +148,6 @@ written but wasn't (e.g., due to disk-full during a previous session).
 - Modify `delete()`: for `major_version >= 3`, check if the revision is in a pack file.
   If so, rewrite the pack without that entry (via `rewrite_pack_without_entry`).
   If not, fall back to deleting the hierarchical file.
-- Create `DeleteResourceRevisionTask` — a new leaf Task type that performs the deletion
-  on the scheduler thread, to avoid concurrent access to pack files during writes.
-- Change the public `delete()` API to return a `Future` so callers can await completion.
-  Update all existing callers of `delete()` to handle the new async API.
 
 **Tests:**
 - E2E: `test_given_nonlast_resource_revision_in_pack_file_when_deleted_then_pack_file_rewritten_without_it`
