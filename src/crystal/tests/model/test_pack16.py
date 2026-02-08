@@ -9,6 +9,7 @@ from crystal.model import Resource, ResourceRevision as RR, RevisionBodyMissingE
 from crystal.tests.util.asserts import assertEqual, assertRaises
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.util.xtyping import not_none
 from io import BytesIO
 import os
 import zipfile
@@ -88,9 +89,9 @@ async def test_given_when_create_multiple_of_16_resource_revisions_then_creates_
             revisions_dir = os.path.join(project.path, 'revisions')
             pack_files = []
             for (root, dirs, files) in os.walk(revisions_dir):
-                for f in files:
-                    if f.endswith('_.zip'):
-                        pack_files.append(os.path.join(root, f))
+                for cur_file in files:
+                    if cur_file.endswith('_.zip'):
+                        pack_files.append(os.path.join(root, cur_file))
             assertEqual(2, len(pack_files))
 
     # Case 3: first 16 revisions have no body, next 16 have body; verify 1 pack (second group)
@@ -118,9 +119,9 @@ async def test_given_when_create_multiple_of_16_resource_revisions_then_creates_
             revisions_dir = os.path.join(project.path, 'revisions')
             pack_files = []
             for (root, dirs, files) in os.walk(revisions_dir):
-                for f in files:
-                    if f.endswith('_.zip'):
-                        pack_files.append(os.path.join(root, f))
+                for cur_file in files:
+                    if cur_file.endswith('_.zip'):
+                        pack_files.append(os.path.join(root, cur_file))
             assertEqual(1, len(pack_files))
 
     # Case 4: first 15 revisions have body, next 17 have no body; verify 1 pack (first group)
@@ -149,9 +150,9 @@ async def test_given_when_create_multiple_of_16_resource_revisions_then_creates_
             revisions_dir = os.path.join(project.path, 'revisions')
             pack_files = []
             for (root, dirs, files) in os.walk(revisions_dir):
-                for f in files:
-                    if f.endswith('_.zip'):
-                        pack_files.append(os.path.join(root, f))
+                for cur_file in files:
+                    if cur_file.endswith('_.zip'):
+                        pack_files.append(os.path.join(root, cur_file))
             assertEqual(1, len(pack_files))
 
 
@@ -277,3 +278,124 @@ async def test_given_both_pack_and_hierarchical_missing_when_read_resource_revis
         # Verify size() also raises RevisionBodyMissingError
         with assertRaises(RevisionBodyMissingError):
             revision.size()
+
+
+# === Recovery ===
+
+async def test_given_individual_files_exist_for_last_missing_complete_pack_file_when_project_opened_then_pack_file_created_and_individual_files_deleted() -> None:
+    """
+    Test recovery mechanism: If a complete pack (16 revisions) was never created
+    due to crash/disk-full, it should be created when the project is reopened.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        project._set_major_version_for_test(3)
+
+        # Create 31 revisions with bodies (should create packs 00_ and 01_)
+        # Pack 00_ contains IDs 1-15 (0x001-0x00f), created when ID 15 is written
+        # Pack 01_ contains IDs 16-31 (0x010-0x01f), created when ID 31 is written
+        # NOTE: Stop at 31, not 32, because creating revision 32 would imply
+        #       that pack 01_ was successfully and durably written. A crash during
+        #       pack creation would occur before revision 32 could be created.
+        for i in range(1, 32):
+            resource = Resource(project, f'http://example.com/{i}')
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(b'test body'),
+            )
+
+        # Verify both pack files were created
+        pack_00_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '00_.zip')
+        pack_01_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '01_.zip')
+        assert os.path.exists(pack_00_path)
+        assert os.path.exists(pack_01_path)
+
+    # Simulate a crash before the pack was created, by undoing the pack operation
+    with zipfile.ZipFile(pack_01_path, 'r') as zf:
+        zf.extractall(os.path.dirname(pack_01_path))
+    os.remove(pack_01_path)
+    for hex_id in ['010', '011', '012', '013', '014', '015', '016', '017',
+                   '018', '019', '01a', '01b', '01c', '01d', '01e', '01f']:
+        individual_path = os.path.join(
+            project_dirpath, 'revisions', '000', '000', '000', '000', hex_id)
+        assert os.path.exists(individual_path), f'Expected {hex_id} to exist'
+
+    # Reopen project. Recovery should detect missing pack and recreate it.
+    async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+        # Verify pack 01_.zip was recreated
+        pack_01_path_reopened = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '01_.zip')
+        assert os.path.exists(pack_01_path_reopened), \
+            f'Pack file should be recreated on project open. Checked: {pack_01_path_reopened}'
+
+        # Verify individual files 010-01f were deleted
+        for hex_id in ['010', '011', '012', '013', '014', '015', '016', '017',
+                       '018', '019', '01a', '01b', '01c', '01d', '01e', '01f']:
+            individual_path = os.path.join(
+                project.path, 'revisions', '000', '000', '000', '000', hex_id)
+            assert not os.path.exists(individual_path), f'Expected {hex_id} to be deleted'
+
+        # Verify all revisions can still be read
+        for i in range(1, 32):
+            resource = not_none(project.get_resource(url=f'http://example.com/{i}'))
+            revision = resource.default_revision()
+            assert revision is not None
+            with revision.open() as f:
+                assertEqual(b'test body', f.read())
+
+
+async def test_given_individual_files_exist_for_last_missing_incomplete_pack_file_when_project_opened_then_pack_file_not_created_and_individual_files_retained() -> None:
+    """
+    Test recovery mechanism: If the last pack is incomplete (fewer than 16 revisions),
+    no pack should be created and individual files should remain.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        project._set_major_version_for_test(3)
+
+        # Create 18 revisions with bodies (pack 00_, then files 010-011)
+        for i in range(1, 19):
+            resource = Resource(project, f'http://example.com/{i}')
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(b'test body'),
+            )
+
+        # Verify pack file exists for first 16 revisions
+        pack_00_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '00_.zip')
+        assert os.path.exists(pack_00_path)
+
+        # Verify individual files remain for revisions 17-18 (IDs 0x010-0x011)
+        revision_010_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '010')
+        revision_011_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '011')
+        assert os.path.exists(revision_010_path)
+        assert os.path.exists(revision_011_path)
+
+        # Verify no pack file exists for second group
+        pack_01_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '01_.zip')
+        assert not os.path.exists(pack_01_path)
+
+    # Reopen project. Recovery should NOT create a pack for incomplete group.
+    async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+        # Verify pack file still doesn't exist for incomplete group
+        assert not os.path.exists(pack_01_path), 'Incomplete pack should not be created'
+
+        # Verify individual files 010-011 remain as individual files
+        assert os.path.exists(revision_010_path), 'Individual file 010 should remain'
+        assert os.path.exists(revision_011_path), 'Individual file 011 should remain'
+
+        # Verify all revisions can still be read
+        for i in range(1, 19):
+            resource = not_none(project.get_resource(url=f'http://example.com/{i}'))
+            revision = resource.default_revision()
+            assert revision is not None
+            with revision.open() as f:
+                assertEqual(b'test body', f.read())
