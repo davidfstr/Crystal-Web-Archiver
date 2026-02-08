@@ -96,7 +96,7 @@ async def test_refuses_to_open_project_with_unknown_high_major_version() -> None
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Create project with unknown high major version
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
-            project._set_property('major_version', str(UNKNOWN_HIGH_MAJOR_VERSION))
+            project._set_major_version_for_test(UNKNOWN_HIGH_MAJOR_VERSION)
             assert UNKNOWN_HIGH_MAJOR_VERSION == project.major_version
         
         # Try to open that project
