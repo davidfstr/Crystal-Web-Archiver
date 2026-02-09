@@ -8,6 +8,7 @@ large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
 
 from crystal.util.filesystem import rename_and_flush
 import os
+import shutil
 import tempfile
 from typing import IO, Self
 from zipfile import ZipFile, ZIP_STORED
@@ -131,3 +132,70 @@ class ZipEntryReader:
 
     def __exit__(self, *_) -> None:
         self.close()
+
+
+def rewrite_pack_without_entry(
+        pack_filepath: str,
+        entry_name: str,
+        tmp_dirpath: str) -> None:
+    """
+    Rewrites a pack zip file with one entry removed, atomically.
+    
+    If the pack does not contain the named entry then no action will be taken.
+
+    If the pack becomes empty after removal, the pack file is deleted entirely.
+
+    Arguments:
+    * pack_filepath -- path to the pack zip file to rewrite
+    * entry_name -- name of the entry to remove (e.g., '01a')
+    * tmp_dirpath -- temporary directory to write the new pack file before moving it
+
+    Raises:
+    * OSError -- if could not read or write pack file
+    """
+    # Rewrite the pack file without the deleted entry.
+    # - Stream-copy entries directly without buffering to memory
+    # - Count entries as we go to determine if pack becomes empty
+    tmp_filepath = None
+    try:
+        with tempfile.NamedTemporaryFile(
+                mode='wb',
+                suffix='.zip',
+                dir=tmp_dirpath,
+                delete=False,
+                ) as tmp_file:
+            tmp_filepath = tmp_file.name
+
+            # Stream-copy each entry (except the deleted one)
+            # from source zip to destination zip
+            entry_count = 0
+            with ZipFile(pack_filepath, 'r') as source_zf, \
+                    ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as dest_zf:
+                for name in source_zf.namelist():
+                    if name == entry_name:
+                        continue
+                    with source_zf.open(name, mode='r') as source_entry, \
+                            dest_zf.open(name, mode='w') as dest_entry:
+                        shutil.copyfileobj(source_entry, dest_entry)
+                    entry_count += 1
+
+            # Ensure data is flushed to stable storage
+            # (if it will actually be used as the new pack file later)
+            if entry_count != 0:
+                os.fsync(tmp_file.fileno())
+
+        if entry_count == 0:
+            # Delete the old pack file instead of replacing it
+            os.remove(tmp_filepath)
+            os.remove(pack_filepath)
+        else:
+            # Move new pack file to final location, replacing old pack file
+            rename_and_flush(tmp_filepath, pack_filepath)
+    except:
+        # Clean up temp file if operation failed
+        if tmp_filepath is not None:
+            try:
+                os.remove(tmp_filepath)
+            except FileNotFoundError:
+                pass
+        raise
