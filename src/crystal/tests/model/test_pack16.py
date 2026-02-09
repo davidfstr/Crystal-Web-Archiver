@@ -470,6 +470,95 @@ async def test_given_resource_with_revisions_when_deleted_then_resource_and_all_
         assert not os.path.exists(body_filepath2)
 
 
+# === Delete (major_version == 3) ===
+
+async def test_given_nonlast_resource_revision_in_pack_file_when_deleted_then_pack_file_rewritten_without_it() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        project._set_major_version_for_test(3)
+
+        # Create 15 revisions to trigger pack file creation
+        # (Revisions 1-15 go into pack 00_.zip)
+        revisions = []
+        for i in range(1, 16):
+            resource = Resource(project, f'http://example.com/pack-delete/{i}')
+            revision = RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(f'body {i}'.encode()),
+            )
+            revisions.append(revision)
+
+        # Verify pack file exists
+        pack_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '00_.zip')
+        assert os.path.exists(pack_path), 'Pack file should exist after 15 revisions'
+
+        # Verify all 15 revisions are in the pack
+        with zipfile.ZipFile(pack_path, 'r') as zf:
+            initial_entries = set(zf.namelist())
+            assert len(initial_entries) == 15, f'Expected 15 entries, got {len(initial_entries)}: {initial_entries}'
+
+        # Delete a middle revision (revision 8, which is ID 8)
+        deleted_revision = revisions[7]
+        deleted_entry_name = f'{8:03x}'
+        assert deleted_entry_name == '008'
+        await wait_for_future(deleted_revision.delete())
+
+        # Verify pack file still exists
+        assert os.path.exists(pack_path), 'Pack file should still exist after deleting one entry'
+
+        # Verify pack now has 14 entries (one removed)
+        with zipfile.ZipFile(pack_path, 'r') as zf:
+            remaining_entries = set(zf.namelist())
+            assert len(remaining_entries) == 14
+            assert deleted_entry_name not in remaining_entries
+
+        # Verify other revisions in the pack are still readable
+        for (i, revision) in enumerate(revisions, start=1):
+            if i != 8:  # Skip the deleted revision
+                with revision.open() as f:
+                    content = f.read()
+                    assert content == f'body {i}'.encode(), f'Revision {i} content should be readable'
+
+
+async def test_given_last_resource_revision_in_pack_file_when_deleted_then_pack_file_deleted() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        project._set_major_version_for_test(3)
+
+        # Create 15 revisions to trigger pack file creation
+        # (Revisions 1-15 go into pack 00_.zip)
+        revisions = []
+        for i in range(1, 16):
+            resource = Resource(project, f'http://example.com/pack-delete-last/{i}')
+            revision = RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(f'body {i}'.encode()),
+            )
+            revisions.append(revision)
+
+        # Verify pack file exists
+        pack_path = os.path.join(
+            project.path, 'revisions', '000', '000', '000', '000', '00_.zip')
+        assert os.path.exists(pack_path), 'Pack file should exist after 15 revisions'
+
+        # Delete all revisions except the last one
+        for i in range(0, 14):
+            await wait_for_future(revisions[i].delete())
+
+        # Pack should still exist with 1 entry
+        assert os.path.exists(pack_path)
+        with zipfile.ZipFile(pack_path, 'r') as zf:
+            entries = set(zf.namelist())
+            assert len(entries) == 1
+
+        # Delete the last revision
+        await wait_for_future(revisions[14].delete())
+
+        # Pack file should now be deleted (empty pack is not stored)
+        assert not os.path.exists(pack_path), 'Pack file should be deleted when it becomes empty'
+
+
 # === Delete Backward Compatibility ===
 
 async def test_when_resource_revision_deleted_but_result_of_returned_future_ignored_then_prints_warning_to_stderr() -> None:
