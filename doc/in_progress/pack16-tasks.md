@@ -172,6 +172,21 @@ written but wasn't (e.g., due to disk-full during a previous session).
 
 ---
 
+## Increment 4.5: Additional concurrency testing
+
+[ ] Heavily test concurrent scenarios for Create + {Read, Delete},
+    because Create does not sync with scheduler thread (and therefore
+    cannot assume it has exclusive access). See code marked as below.
+    - Also: Windows probably needs special happening RE Reads colliding with
+      other operations, since file Reads on Windows prevent Delete
+
+```python
+# NOTE: NOT @scheduler_affinity despite doing revision body I/O,
+#       because it uses lock-less mechanisms to accomodate concurrent operations
+```
+
+---
+
 ## Increment 5: Preferences UI — Revision Storage Format dropdown
 
 **Goal:** User can see and change the project's revision storage format in Preferences.
@@ -338,6 +353,14 @@ written but wasn't (e.g., due to disk-full during a previous session).
 - `src/crystal/tests/model/test_pack16.py`
 
 **Estimated time:** ~2 hours
+
+---
+
+## Increment 9: Post-branch fixes
+
+[ ] Fix broken "from crystal.model import *" in shell. The "project" subpackage
+    overrides the "project" builtin provided by the shell. Probably need to
+    define __all__ for crystal.model.
 
 ---
 
