@@ -13,6 +13,7 @@ from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.util import http_date, xcgi, xshutil
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.filesystem import rename_and_flush
+from crystal.util.xtyping import not_none
 from crystal.util.urls import is_unrewritable_url
 from crystal.util.xfutures import warn_if_result_not_read
 from crystal.util.xthreading import (
@@ -1145,8 +1146,10 @@ class ResourceRevision:
             if the delete partially failed, leaving behind a revision body file
         """
         from crystal.model.project import ProjectReadOnlyError
+        from crystal.model.pack16 import rewrite_pack_without_entry
         
         project = self.project
+        revision_id = not_none(self._id)  # capture
         body_filepath = self._body_filepath  # capture
         
         if project.readonly:
@@ -1158,17 +1161,35 @@ class ResourceRevision:
         #       That dangling file will occupy some disk space unnecessarily
         #       but shouldn't interfere with any future project operations.
         with project._db, closing(project._db.cursor()) as c:
-            c.execute('delete from resource_revision where id=?', (self._id,))
+            c.execute('delete from resource_revision where id=?', (revision_id,))
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.resource.already_downloaded_this_session = False
         
         # Delete revision's body file
-        try:
-            os.remove(body_filepath)
-        except FileNotFoundError:
-            # OK. The revision may have already been partially deleted outside of Crystal.
-            pass
+        if True:
+            # Try delete from pack file
+            if project.major_version >= 3:
+                try:
+                    rewrite_pack_without_entry(
+                        pack_filepath=self._body_pack_filepath_with(project.path, revision_id),
+                        entry_name=self._entry_name_for_revision_id(revision_id),
+                        tmp_dirpath=os.path.join(project.path, project._TEMPORARY_DIRNAME))
+                    delete_individual_file = False
+                except FileNotFoundError:
+                    # If no pack file exists then fall through to
+                    # look for an individual file to delete
+                    delete_individual_file = True
+            else:
+                delete_individual_file = True
+            
+            # Try delete individual file
+            if delete_individual_file:
+                try:
+                    os.remove(body_filepath)
+                except FileNotFoundError:
+                    # OK. The revision body may have already been deleted outside of Crystal.
+                    pass
     
     def __repr__(self) -> str:
         return "<ResourceRevision {} for '{}'>".format(self._id, self.resource.url)
