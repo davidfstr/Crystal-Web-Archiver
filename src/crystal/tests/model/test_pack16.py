@@ -8,10 +8,12 @@ from unittest import skip
 from crystal.model import Resource, ResourceRevision as RR, RevisionBodyMissingError
 from crystal.tests.util.asserts import assertEqual, assertRaises
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
+from crystal.tests.util.wait import wait_for, wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xtyping import not_none
 from io import BytesIO
 import os
+from unittest.mock import patch
 import zipfile
 
 
@@ -399,3 +401,138 @@ async def test_given_individual_files_exist_for_last_missing_incomplete_pack_fil
             assert revision is not None
             with revision.open() as f:
                 assertEqual(b'test body', f.read())
+
+
+# === Delete (major_version == 2) ===
+
+# TODO: Move these tests to a more-appropriate location,
+#       outside the Pack16 (major_version == 3) tests
+
+async def test_given_resource_revision_with_body_when_deleted_then_revision_no_longer_exists_and_body_file_removed() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        assertEqual(2, project.major_version)
+
+        # Create a resource with a revision
+        resource = Resource(project, 'http://example.com/delete-test')
+        revision = RR.create_from_response(
+            resource,
+            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+            body_stream=BytesIO(b'delete me'),
+        )
+
+        # Capture the body file path before deletion
+        body_filepath = revision._body_filepath  # capture
+        assert os.path.exists(body_filepath)
+        assert not_none(resource.default_revision())._id == revision._id
+
+        # Delete the revision
+        await wait_for_future(revision.delete())
+
+        # Verify the revision no longer exists
+        assert resource.default_revision() is None
+
+        # Verify the body file has been removed
+        assert not os.path.exists(body_filepath)
+
+
+async def test_given_resource_with_revisions_when_deleted_then_resource_and_all_revisions_no_longer_exist() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        assertEqual(2, project.major_version)
+
+        # Create a resource with multiple revisions
+        resource = Resource(project, 'http://example.com/multi-delete')
+        revision1 = RR.create_from_response(
+            resource,
+            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+            body_stream=BytesIO(b'revision 1'),
+        )
+        revision2 = RR.create_from_response(
+            resource,
+            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+            body_stream=BytesIO(b'revision 2'),
+        )
+
+        # Capture body file paths before deletion
+        body_filepath1 = revision1._body_filepath  # capture
+        body_filepath2 = revision2._body_filepath  # capture
+        assert os.path.exists(body_filepath1)
+        assert os.path.exists(body_filepath2)
+        assert len(list(resource.revisions())) == 2
+
+        # Delete the resource (and all its revisions)
+        await wait_for_future(resource.delete())
+
+        # Verify the resource no longer exists
+        assert project.get_resource(resource.url) is None
+
+        # Verify all body files have been removed
+        assert not os.path.exists(body_filepath1)
+        assert not os.path.exists(body_filepath2)
+
+
+# === Delete Backward Compatibility ===
+
+async def test_when_resource_revision_deleted_but_result_of_returned_future_ignored_then_prints_warning_to_stderr() -> None:
+    """
+    Test that code typical of Crystal <=2.2.0 which called ResourceRevision.delete()
+    but ignored its result - because it had no result at the time - will now print
+    a warning now that delete() returns a Future that expects its result to be read from.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        project._set_major_version_for_test(3)
+        
+        # Create a resource with a revision
+        resource = Resource(project, 'http://example.com/test')
+        revision = RR.create_from_response(
+            resource,
+            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+            body_stream=BytesIO(b'test body'),
+        )
+        
+        # NOTE: Do NOT call the real warn_if_result_not_read() to avoid printing
+        #       warnings to stderr after this test finishes 
+        with patch('crystal.model.resource_revision.warn_if_result_not_read') as mock_warn, \
+                patch.object(project, 'add_task', wraps=project.add_task) as mock_add_task:
+            # Delete revision WITHOUT saving the returned Future (Crystal <=2.2.0 style)
+            revision.delete()
+        
+        # Verify that warn_if_result_not_read() was called on delete_task.future,
+        # so that "WARNING: Future's result was never read:" will eventually be
+        # printed when task completes and its future finalizes without its result
+        # having been read
+        (delete_task,) = mock_add_task.call_args.args
+        (future_warn_called_on, _) = mock_warn.call_args.args
+        assert future_warn_called_on is delete_task.future
+
+
+async def test_when_resource_deleted_but_result_of_returned_future_ignored_then_prints_warning_to_stderr() -> None:
+    """
+    Test that code typical of Crystal <=2.2.0 which called Resource.delete()
+    but ignored its result - because it had no result at the time - will now print
+    a warning now that delete() returns a Future that expects its result to be read from.
+    """
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        project._set_major_version_for_test(3)
+        
+        # Create a resource with a revision
+        resource = Resource(project, 'http://example.com/test')
+        RR.create_from_response(
+            resource,
+            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+            body_stream=BytesIO(b'test body'),
+        )
+        
+        # NOTE: Do NOT call the real warn_if_result_not_read() to avoid printing
+        #       warnings to stderr after this test finishes 
+        with patch('crystal.model.resource.warn_if_result_not_read') as mock_warn, \
+                patch.object(project, 'add_task', wraps=project.add_task) as mock_add_task:
+            # Delete resource WITHOUT saving the returned Future (Crystal <=2.2.0 style)
+            resource.delete()
+        
+        # Verify that warn_if_result_not_read() was called on delete_task.future,
+        # so that "WARNING: Future's result was never read:" will eventually be
+        # printed when task completes and its future finalizes without its result
+        # having been read
+        (delete_task,) = mock_add_task.call_args.args
+        (future_warn_called_on, _) = mock_warn.call_args.args
+        assert future_warn_called_on is delete_task.future

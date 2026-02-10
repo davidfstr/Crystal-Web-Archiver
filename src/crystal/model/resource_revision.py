@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import Future
 from contextlib import closing
 import copy
 from crystal.doc.css import parse_css_and_links
@@ -13,8 +14,9 @@ from crystal.util import http_date, xcgi, xshutil
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.filesystem import rename_and_flush
 from crystal.util.urls import is_unrewritable_url
+from crystal.util.xfutures import warn_if_result_not_read
 from crystal.util.xthreading import (
-    fg_affinity, fg_call_and_wait, fg_call_later,
+    fg_affinity, fg_call_and_wait, fg_call_later, scheduler_affinity,
 )
 import datetime
 import json
@@ -167,6 +169,8 @@ class ResourceRevision:
         except Exception as e:
             return ResourceRevision.create_from_error(resource, e, request_cookie)
     
+    # NOTE: NOT @scheduler_affinity despite doing revision body I/O,
+    #       because it uses lock-less mechanisms to accomodate concurrent operations
     @staticmethod
     def _create_from_stream(
             resource: Resource,
@@ -203,6 +207,7 @@ class ResourceRevision:
             gracefully.
         """
         from crystal.model.project import Project, ProjectReadOnlyError
+        from crystal.task import is_synced_with_scheduler_thread
         
         self = ResourceRevision()
         self.resource = resource
@@ -339,6 +344,8 @@ class ResourceRevision:
         self.has_body = (self.error is None)
         return self
     
+    # NOTE: NOT @scheduler_affinity despite doing revision body I/O,
+    #       because it uses lock-less mechanisms to accomodate concurrent operations
     @classmethod
     def _pack_revisions_for_id(cls, project: Project, revision_id: int) -> None:
         """
@@ -383,7 +390,13 @@ class ResourceRevision:
 
         # Delete the individual revision files
         for body_filepath in revision_files.values():
-            os.remove(body_filepath)
+            # TODO: On Windows probably need to specially ignore concurrent
+            #       ResourceRevision.open() calls too
+            try:
+                os.remove(body_filepath)
+            except FileNotFoundError:
+                # Ignore concurrent delete
+                pass
     
     # === Init: Load ===
     
@@ -1098,9 +1111,31 @@ class ResourceRevision:
         return ResourceRevision._create_unsaved_from_revision_and_new_metadata(
             target_revision, new_metadata)
     
-    def delete(self) -> None:
+    def delete(self) -> Future[None]:
         """
-        Deletes this revision.
+        Deletes this revision asynchronously.
+        Returns a Future that resolves when deletion is complete.
+        
+        Future Raises:
+        * ProjectReadOnlyError
+        * sqlite3.DatabaseError --
+            if the delete fully failed due to a database error
+        * OSError -- 
+            if the delete partially failed, leaving behind a revision body file
+        """
+        from crystal.task import DeleteResourceRevisionTask
+        task = DeleteResourceRevisionTask(self)
+        self.project.add_task(task)
+        # NOTE: Crystal <=2.2.0 did NOT return a Future, so older callers may
+        #       not expect a Future and in particular may not wait for it properly.
+        #       Print a warning to make those now-improper callers easier to identify.
+        return warn_if_result_not_read(task.future, f'{self}.delete()')
+
+    @fg_affinity  # does database I/O
+    @scheduler_affinity  # does revision body I/O
+    def _delete_now(self) -> None:
+        """
+        Deletes this revision synchronously.
         
         Raises:
         * ProjectReadOnlyError

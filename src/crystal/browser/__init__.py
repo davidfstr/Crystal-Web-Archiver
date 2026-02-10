@@ -64,7 +64,7 @@ import os
 import sqlite3
 import time
 import traceback
-from typing import Optional
+from typing import Optional, assert_type
 import webbrowser
 import wx
 
@@ -1569,8 +1569,13 @@ class MainWindow(CloakMixin):
     def _on_forget_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
         assert selected_entity is not None
+        assert isinstance(selected_entity, (Alias, ResourceGroup, RootResource))
         
-        selected_entity.delete()
+        # NOTE: In the future we may add support for entities that only support
+        #       asynchronous deletion, like Resource or ResourceRevision.
+        #       When that happens assert_type() will flag any unhandled Future result.
+        result = selected_entity.delete()
+        assert_type(result, None)
     
     def _on_download_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
