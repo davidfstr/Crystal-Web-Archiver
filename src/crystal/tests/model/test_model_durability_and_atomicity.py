@@ -617,14 +617,14 @@ async def _test_orphaned_revision_repair(
             # If database_partially_corrupt_after_disk_reconnect is True, simulate corruption
             # during the deletion attempt.
             if database_partially_corrupt_after_disk_reconnect:
-                # Patch ResourceRevision.delete() to raise I/O error
+                # Patch ResourceRevision._delete_now() to raise I/O error
                 mock_delete_raised_error = False
                 def mock_delete_with_error(self):
                     nonlocal mock_delete_raised_error
                     mock_delete_raised_error = True
                     raise sqlite3.OperationalError('disk I/O error')  # SQLITE_IOERR
                 corruption_context = patch.object(
-                    ResourceRevision, 'delete', mock_delete_with_error
+                    ResourceRevision, '_delete_now', mock_delete_with_error
                 )  # type: AbstractContextManager
             else:
                 # No corruption simulation needed

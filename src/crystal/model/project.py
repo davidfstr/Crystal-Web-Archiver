@@ -1017,11 +1017,19 @@ class Project(ListenableMixin):
             file=sys.stderr,
         )
         # Delete database row. Ignore the missing body file.
-        try:
-            last_revision.delete()
-        except Exception as e:
-            # Repair failed. Continue opening the project anyway.
-            return
+        # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
+        #       This thread has exclusive access to the project while it is being created.
+        # HACK: Uses scheduler_thread_context(), which is intended for testing only
+        from crystal.tests.util.tasks import scheduler_thread_context
+        with scheduler_thread_context():
+            try:
+                # NOTE: Safe to call because scheduler thread is not running
+                #       and this thread has exclusive access to the project
+                #       while it is being created
+                last_revision._delete_now()
+            except Exception as e:
+                # Repair failed. Continue opening the project anyway.
+                return
     
     def _repair_missing_pack_of_resource_revision_create(self) -> None:
         """

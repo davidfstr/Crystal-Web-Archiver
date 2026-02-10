@@ -423,6 +423,8 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 wait_for_sync(lambda: 9 == rg_member_count())
             
             with subtests.test(case='test can delete project entities', return_if_failure=True):
+                py_exec(crystal, f'from crystal.tests.util.wait import wait_for_future')
+                
                 # Test can delete ResourceGroup
                 py_exec(crystal, f'rg_m = list(rg.members)[0]')
                 py_exec(crystal, f'rg.delete()')
@@ -442,12 +444,12 @@ def test_can_write_project_with_shell(subtests: SubtestsContext) -> None:
                 # Test can delete ResourceRevision
                 py_exec(crystal, f'rr_r = rr.resource')
                 assertEqual('1\n', py_eval(crystal, f'len(list(rr_r.revisions()))'))
-                py_exec(crystal, f'rr.delete()')
+                py_exec(crystal, f'await wait_for_future(rr.delete())')
                 # Ensure ResourceRevision itself is deleted
                 assertEqual('0\n', py_eval(crystal, f'len(list(rr_r.revisions()))'))
                 
                 # Test can delete Resource
-                py_exec(crystal, f'r.delete()')
+                py_exec(crystal, f'await wait_for_future(r.delete())')
                 # Ensure Resource itself is deleted
                 py_exec(crystal, f'p.get_resource(r.url)')
             
