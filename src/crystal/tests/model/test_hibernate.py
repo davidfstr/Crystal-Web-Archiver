@@ -4,7 +4,7 @@ from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 import crystal.task
 from crystal.task import (
-    DownloadResourceGroupMembersTask, DownloadResourceGroupTask,
+    DeleteResourceTask, DownloadResourceGroupMembersTask, DownloadResourceGroupTask,
     DownloadResourceTask,
 )
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotIn
@@ -18,7 +18,7 @@ from crystal.tests.util.tasks import (
     step_scheduler,
     step_scheduler_until_done,
 )
-from crystal.tests.util.wait import wait_for
+from crystal.tests.util.wait import wait_for, wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xtyping import not_none
@@ -291,7 +291,8 @@ async def test_when_close_project_abruptly_and_reopen_project_with_stale_resume_
             if True:
                 comic_g.delete()
                 feed_rr.delete()
-                feed_rr.resource.delete()  # HACK: Unrealistic. No way to delete Resource in the UI.
+                # HACK: Unrealistic. No way to delete Resource in the UI.
+                feed_rr.resource._delete_now()
                 # (comic2_rr is not deleted so it WILL be resumed later)
                 
                 append_deferred_top_level_tasks(project)

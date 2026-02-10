@@ -2,11 +2,14 @@ from concurrent.futures import Future
 from concurrent.futures._base import (  # type: ignore[attr-defined]  # private API
     CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, RUNNING
 )
+import sys
 import threading
+import weakref
 from typing import Any, Generic, TypeVar
 from typing_extensions import override
 
 
+_F = TypeVar('_F', bound=Future)
 _R = TypeVar('_R')
 
 
@@ -96,3 +99,46 @@ def patch_future_result_to_check_for_deadlock() -> None:
             )
         return super_result(self, timeout)
     Future.result = result  # type: ignore[method-assign]
+
+
+def warn_if_result_not_read(future: _F, future_description: str | None = None) -> _F:
+    """
+    Alters the specified Future to print a warning to stderr if its result
+    is never read before the Future is finalized.
+    """
+    if future_description is None:
+        future_description = repr(future)  # capture
+    
+    result_was_read = False
+    
+    original_result = future.result
+    def wrapped_result(*args, **kwargs):
+        nonlocal result_was_read
+        result_was_read = True
+        return original_result(*args, **kwargs)
+    future.result = wrapped_result  # type: ignore[method-assign]
+    
+    original_exception = future.exception
+    def wrapped_exception(*args, **kwargs):
+        nonlocal result_was_read
+        result_was_read = True
+        return original_exception(*args, **kwargs)
+    future.exception = wrapped_exception  # type: ignore[method-assign]
+    
+    original_add_done_callback = future.add_done_callback
+    def wrapped_add_done_callback(*args, **kwargs):
+        nonlocal result_was_read
+        result_was_read = True
+        return original_add_done_callback(*args, **kwargs)
+    future.add_done_callback = wrapped_add_done_callback  # type: ignore[method-assign]
+    
+    # Register a finalizer to check if result was read
+    # NOTE: Cannot access `future` itself in this finalizer
+    def check_result_was_read() -> None:
+        if not result_was_read:
+            print(
+                f"WARNING: Future's result was never read: {future_description}",
+                file=sys.stderr)
+    weakref.finalize(future, check_result_was_read)
+    
+    return future

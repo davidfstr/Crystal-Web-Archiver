@@ -10,7 +10,7 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### main / v2.3.0
 
 * Fidelity improvements
     * Improve resilience against exceptional error scenarios such as
@@ -19,6 +19,16 @@ Release Notes ⋮
         * All project operations are now fully atomic and durable unless documented
           otherwise. See <doc/model_durability_and_atomicity.md> for details.
         * Failed transactions are now explicitly rolled back correctly.
+
+* Shell changes
+    * `Resource.delete()` and `ResourceRevision.delete()` now are asynchronous
+      rather than synchronous, returning a `Future` to track completion.
+      **(Breaking Change)**
+        * This change is necessary to support safely deleting resources and
+          resource revisions in Pack16-format projects.
+        * To make it easier to identify callers that aren't expecting a future
+          to be returned, a warning will be printed to stderr if the result of
+          the returned future is never checked
 
 * Documentation improvements
     * Project format documented at: <doc/crystalproj_project_format.md>

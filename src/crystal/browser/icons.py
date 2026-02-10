@@ -23,6 +23,7 @@ def TREE_NODE_ICONS() -> dict[str, wx.Bitmap]:
             'entitytree_warning',
             
             # Task Tree Icons
+            'tasktree_delete',
             'tasktree_done',
             'tasktree_download_group_members',
             'tasktree_download_group',

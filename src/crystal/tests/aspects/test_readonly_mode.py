@@ -16,7 +16,7 @@ from crystal.tests.util.server import MockHttpServer, served_project, extracted_
 from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done, wait_for_download_task_to_start_and_finish
-from crystal.tests.util.wait import first_child_of_tree_item_is_not_loading_condition, tree_has_no_children_condition, wait_for
+from crystal.tests.util.wait import first_child_of_tree_item_is_not_loading_condition, tree_has_no_children_condition, wait_for, wait_for_future
 from crystal.tests.util.windows import MainWindow, MenuitemDisabledError, OpenOrCreateDialog, NewGroupDialog, NewRootUrlDialog, PreferencesDialog
 from crystal.util.db import DatabaseCursor
 from crystal.util.wx_dialog import mocked_show_modal
@@ -200,7 +200,7 @@ async def test_when_readonly_project_has_source_resource_linking_to_target_url_w
                 # Find and delete the Resource for page B (contact page)
                 contact_resource = project.get_resource(contact_url)
                 assert contact_resource is not None
-                contact_resource.delete()
+                await wait_for_future(contact_resource.delete())
                 
             # Reopen the project as read-only
             async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath, readonly=True) as (mw, project):

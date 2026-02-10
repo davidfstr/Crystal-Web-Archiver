@@ -3358,7 +3358,7 @@ async def _view_xkcd_home_page_when_embedded_image_is_undownloaded(
             assert embedded_image_r is not None, 'Embedded image should exist'
             embedded_image_rr = embedded_image_r.default_revision()
             assert embedded_image_rr is not None, 'Embedded image should have a revision'
-            embedded_image_rr.delete()
+            await wait_for_future(embedded_image_rr.delete())
             
             # Maybe: Create an entity matching the embedded_image_url
             before_view(embedded_image_r)
