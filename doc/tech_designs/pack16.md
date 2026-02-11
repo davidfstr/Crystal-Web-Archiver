@@ -196,6 +196,11 @@ Migration to Pack16 format is only allowed directly from Hierarchical format.
 If the user desires to migrate from Flat format to Pack16, they must migrate
 to Hierarchical first.
 
+Unlike the Flat → Hierarchical migration, which Crystal actively recommends
+when opening a v1 project, the Hierarchical → Pack16 migration is entirely
+voluntary. Crystal will happily open a v2 project without prompting the user
+to upgrade.
+
 ### Preferences UI
 
 The Preferences dialog displays the project's current revision storage format
@@ -254,6 +259,16 @@ This flow is intentionally similar to the existing Flat → Hierarchical
 migration, which also closes the project and performs migration during
 a modal progress dialog at reopen time.
 
+Detail: On step 3, when the project reopens and detects the migration-in-progress
+marker, it will show a confirmation prompt before starting the migration
+(reusing the existing `will_upgrade_revisions` callback in
+`OpenProjectProgressListener`). This means the user sees two prompts on
+initial migration: one in Preferences to confirm intent, and one on reopen
+to continue. This is a known awkwardness accepted in the initial implementation
+to minimize code changes to the existing v1→v2 migration path. A future
+improvement could skip the reopen prompt when migration has not yet done
+any work.
+
 ### Migration steps (performed inside the progress dialog)
 
 - Assert that `major_version == 3` and `major_version_old == 2`.
@@ -267,10 +282,11 @@ a modal progress dialog at reopen time.
   the full range of revision IDs have been scanned. Revisions that have been
   deleted or lack bodies are skipped. Incomplete packs (those with fewer than 16
   revisions) remain as individual files.
-- Report progress: "Migrating revision storage format — X of N packs"
-  (and optionally "— HH:MM:SS remaining").
-- N (the total pack count) is calculated as `floor(highest_revision_id / 16) + 1`.
-  The progress should show "N of N packs" when starting to write the final pack.
+- Report progress in terms of revisions processed (not packs), reusing the
+  existing `{will_upgrade_revisions, upgrading_revision, did_upgrade_revisions}`
+  callbacks in `OpenProjectProgressListener`. This avoids changing the model→UI
+  interface. The lower-level code processes in units of packs, but the progress
+  callbacks are invoked per-revision (or per-pack, advancing the count by 16).
 - On completion, remove the `major_version_old` marker.
 
 ### Migration details
