@@ -369,6 +369,8 @@ class ResourceRevision:
         """
         from crystal.model.pack16 import create_pack_file
         from crystal.model.project import Project
+        
+        assert project.major_version >= 3
 
         # Calculate the pack boundaries
         assert (revision_id % 16) == 15
@@ -380,8 +382,8 @@ class ResourceRevision:
         for rid in range(pack_base_id, pack_end_id + 1):
             body_filepath = cls._body_filepath_with(
                 project.path,
-                project.major_version,
-                rid)
+                major_version=2,  # hierarchical
+                revision_id=rid)
             if os.path.exists(body_filepath):
                 entry_name = cls._entry_name_for_revision_id(rid)
                 revision_files[entry_name] = body_filepath
