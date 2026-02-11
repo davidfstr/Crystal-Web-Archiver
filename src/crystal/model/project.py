@@ -704,9 +704,12 @@ class Project(ListenableMixin):
             
             # At major version 3
             if major_version == 3:
-                # Nothing to do
-                pass
-            
+                # Check if migration from v2 is in progress
+                with self._db, closing(self._db.cursor()) as c:
+                    major_version_old = self._get_major_version_old(c)
+                if major_version_old == 2:
+                    self._migrate_v2_to_v3(progress_listener)
+
             assert self._LATEST_SUPPORTED_MAJOR_VERSION == 3
     
     def _migrate_v1_to_v2(self,
@@ -891,6 +894,101 @@ class Project(ListenableMixin):
         # 2. Finish commit
         replace_and_flush(ip_revisions_dirpath, revisions_dirpath)
     
+    def _migrate_v2_to_v3(self,
+            progress_listener: OpenProjectProgressListener,
+            ) -> None:
+        """
+        Migrates a project from major version 2 (Hierarchical) to major version 3 (Pack16).
+
+        Packs all existing hierarchical revision files into groups of 16 (pack zip files).
+        Incomplete packs (fewer than 16 revisions) remain as individual files.
+
+        Raises:
+        * CancelOpenProject
+        * sqlite3.DatabaseError, OSError
+        """
+        from crystal.model.pack16 import create_pack_file
+
+        with self._db, closing(self._db.cursor()) as c:
+            assert self._get_major_version(c) == 3
+            assert self._get_major_version_old(c) == 2
+
+        # Get max revision ID for progress reporting
+        with self._db, closing(self._db.cursor()) as c:
+            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+        if len(rows) == 1:
+            [(max_revision_id,)] = rows
+        else:
+            max_revision_id = 0
+
+        approx_revision_count = max_revision_id or 0
+
+        # Signal that migration is starting.
+        # can_veto=False because major_version was already set to 3 (project won't open otherwise)
+        progress_listener.will_upgrade_revisions(approx_revision_count, can_veto=False)  # may raise CancelOpenProject
+
+        # Process complete packs: scan pack groups 0-15, 16-31, 32-47, ...
+        revisions_processed = 0
+        start_time = time.monotonic()
+        last_report_time = start_time
+
+        pack_start = 0
+        while True:
+            pack_end_id = pack_start + 15
+
+            if pack_end_id > max_revision_id:
+                # Incomplete last group — leave as individual files
+                break
+
+            # Check if pack already exists (supports resuming after crash or cancel)
+            pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
+            if not os.path.exists(pack_filepath):
+                # Collect existing revision body files for this group
+                revision_files = {}  # type: dict[str, str]
+                for rid in range(pack_start, pack_end_id + 1):
+                    body_filepath = ResourceRevision._body_filepath_with(self.path, 2, rid)
+                    if os.path.exists(body_filepath):
+                        entry_name = ResourceRevision._entry_name_for_revision_id(rid)
+                        revision_files[entry_name] = body_filepath
+
+                if revision_files:
+                    # Ensure the pack's parent directory exists
+                    pack_dir = os.path.dirname(pack_filepath)
+                    os.makedirs(pack_dir, exist_ok=True)
+
+                    # Create pack file atomically: write to tmp, fsync, move into place
+                    tmp_dir = os.path.join(self.path, self._TEMPORARY_DIRNAME)
+                    try:
+                        create_pack_file(revision_files, pack_filepath, tmp_dir)
+                    except OSError as e:
+                        # I/O error writing pack — skip this pack and warn
+                        print(
+                            f'Warning: Could not write pack file {pack_filepath}: {e}',
+                            file=sys.stderr)
+                    else:
+                        # Delete individual revision files (after pack is durably written)
+                        for body_filepath in revision_files.values():
+                            try:
+                                os.remove(body_filepath)
+                            except FileNotFoundError:
+                                pass  # already deleted
+
+            revisions_processed += 16
+            pack_start += 16
+
+            # Report progress approximately once per second
+            now = time.monotonic()
+            if now - last_report_time >= 1.0 or Project._report_progress_at_maximum_resolution:
+                elapsed = now - start_time
+                revisions_per_second = revisions_processed / elapsed if elapsed > 0 else 0.0
+                last_report_time = now
+                progress_listener.upgrading_revision(revisions_processed, revisions_per_second)  # may raise CancelOpenProject
+
+        # Migration complete — remove the marker
+        self._delete_major_version_old(self._db)
+
+        progress_listener.did_upgrade_revisions(revisions_processed)
+
     def _repair_incomplete_rollback_of_resource_revision_create(self) -> None:
         """
         If the last revision was likely intended to be deleted by a
@@ -1100,7 +1198,39 @@ class Project(ListenableMixin):
             c.execute(
                 'insert or replace into project_property (name, value) values (?, ?)',
                 ('major_version', major_version))
-    
+
+    @staticmethod
+    def _get_major_version_old(c: DatabaseCursor | sqlite3.Cursor) -> int | None:
+        """
+        Gets the major_version_old migration marker, or None if not set.
+
+        This marker is set when a migration is in progress (e.g., v2 -> v3).
+        It records the old major version before the migration started.
+        """
+        rows = list(c.execute(
+            'select value from project_property where name = ?',
+            ('major_version_old',)))
+        if len(rows) == 0:
+            return None
+        [(value,)] = rows
+        return int(value)
+
+    @staticmethod
+    def _set_major_version_old(major_version_old: int, db: DatabaseConnection) -> None:
+        """Sets the major_version_old migration marker."""
+        with db, closing(db.cursor()) as c:
+            c.execute(
+                'insert or replace into project_property (name, value) values (?, ?)',
+                ('major_version_old', major_version_old))
+
+    @staticmethod
+    def _delete_major_version_old(db: DatabaseConnection) -> None:
+        """Removes the major_version_old migration marker (signals migration complete)."""
+        with db, closing(db.cursor()) as c:
+            c.execute(
+                'delete from project_property where name = ?',
+                ('major_version_old',))
+
     # --- Load: Create & Load ---
     
     def _create(self) -> None:
@@ -1415,6 +1545,14 @@ class Project(ListenableMixin):
         For testing purposes only.
         """
         self._set_property('major_version', str(version))
+
+    def _set_major_version_old_for_test(self, version: int) -> None:
+        """
+        Sets the major_version_old migration marker of this project.
+
+        For testing purposes only.
+        """
+        self._set_property('major_version_old', str(version))
 
     def _get_default_url_prefix(self) -> str | None:
         """
