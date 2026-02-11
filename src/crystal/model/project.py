@@ -704,9 +704,12 @@ class Project(ListenableMixin):
             
             # At major version 3
             if major_version == 3:
-                # Nothing to do
-                pass
-            
+                # Check if migration from v2 is in progress
+                with self._db, closing(self._db.cursor()) as c:
+                    major_version_old = self._get_major_version_old(c)
+                if major_version_old == 2:
+                    self._migrate_v2_to_v3(progress_listener)
+
             assert self._LATEST_SUPPORTED_MAJOR_VERSION == 3
     
     def _migrate_v1_to_v2(self,
@@ -891,6 +894,79 @@ class Project(ListenableMixin):
         # 2. Finish commit
         replace_and_flush(ip_revisions_dirpath, revisions_dirpath)
     
+    def _migrate_v2_to_v3(self,
+            progress_listener: OpenProjectProgressListener,
+            ) -> None:
+        """
+        Migrates a project from major version 2 (Hierarchical) to major version 3 (Pack16).
+
+        Packs all existing hierarchical revision files into groups of 16 (pack zip files).
+        Incomplete packs (fewer than 16 revisions) remain as individual files.
+
+        Raises:
+        * CancelOpenProject
+        * sqlite3.DatabaseError, OSError
+        """
+        with self._db, closing(self._db.cursor()) as c:
+            assert self._get_major_version(c) == 3
+            assert self._get_major_version_old(c) == 2
+
+        # Get max revision ID for progress reporting
+        with self._db, closing(self._db.cursor()) as c:
+            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+        if len(rows) == 1:
+            [(max_revision_id,)] = rows
+        else:
+            max_revision_id = 0
+        approx_revision_count = max_revision_id or 0
+
+        # Report that migration is starting/resuming
+        progress_listener.will_upgrade_revisions(
+            approx_revision_count,
+            # Disallow veto because migration already in progress
+            can_veto=False,
+        )  # may raise CancelOpenProject
+
+        # Process complete packs: Scan pack groups 0-15, 16-31, 32-47, ...
+        # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
+        #       This thread has exclusive access to the project while it is being migrated.
+        # HACK: Uses scheduler_thread_context(), which is intended for testing only
+        from crystal.tests.util.tasks import scheduler_thread_context
+        with scheduler_thread_context():
+            start_time = time.monotonic()  # capture
+            last_report_time = start_time
+            pack_start_id = 0
+            while True:
+                pack_end_id = pack_start_id + 15
+                if pack_end_id > max_revision_id:
+                    # Incomplete last group. Leave as individual files.
+                    break
+
+                # Pack revisions [pack_start_id, pack_end_id], if not already done
+                pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
+                if not os.path.exists(pack_filepath):
+                    ResourceRevision._pack_revisions_for_id(
+                        self, pack_end_id, project_major_version=3)
+                pack_start_id += 16
+
+                # Report progress approximately once per second
+                current_time = time.monotonic()  # capture
+                if current_time - last_report_time >= 1.0 or Project._report_progress_at_maximum_resolution:
+                    elapsed = current_time - start_time
+                    revisions_processed = pack_start_id
+                    revisions_per_second = revisions_processed / elapsed if elapsed > 0 else 0.0
+                    progress_listener.upgrading_revision(
+                        revisions_processed,
+                        revisions_per_second,
+                    )  # may raise CancelOpenProject
+                    last_report_time = current_time
+            revisions_processed = pack_start_id
+
+        # Migration complete. Remove migration marker.
+        self._delete_major_version_old(self._db)
+
+        progress_listener.did_upgrade_revisions(revisions_processed)
+
     def _repair_incomplete_rollback_of_resource_revision_create(self) -> None:
         """
         If the last revision was likely intended to be deleted by a
@@ -1100,7 +1176,39 @@ class Project(ListenableMixin):
             c.execute(
                 'insert or replace into project_property (name, value) values (?, ?)',
                 ('major_version', major_version))
-    
+
+    @staticmethod
+    def _get_major_version_old(c: DatabaseCursor | sqlite3.Cursor) -> int | None:
+        """
+        Gets the major_version_old migration marker, or None if not set.
+
+        This marker is set when a migration is in progress (e.g., v2 -> v3).
+        It records the old major version before the migration started.
+        """
+        rows = list(c.execute(
+            'select value from project_property where name = ?',
+            ('major_version_old',)))
+        if len(rows) == 0:
+            return None
+        [(value,)] = rows
+        return int(value)
+
+    @staticmethod
+    def _set_major_version_old(major_version_old: int, db: DatabaseConnection) -> None:
+        """Sets the major_version_old migration marker."""
+        with db, closing(db.cursor()) as c:
+            c.execute(
+                'insert or replace into project_property (name, value) values (?, ?)',
+                ('major_version_old', major_version_old))
+
+    @staticmethod
+    def _delete_major_version_old(db: DatabaseConnection) -> None:
+        """Removes the major_version_old migration marker (signals migration complete)."""
+        with db, closing(db.cursor()) as c:
+            c.execute(
+                'delete from project_property where name = ?',
+                ('major_version_old',))
+
     # --- Load: Create & Load ---
     
     def _create(self) -> None:
@@ -1415,6 +1523,14 @@ class Project(ListenableMixin):
         For testing purposes only.
         """
         self._set_property('major_version', str(version))
+
+    def _set_major_version_old_for_test(self, version: int) -> None:
+        """
+        Sets the major_version_old migration marker of this project.
+
+        For testing purposes only.
+        """
+        self._set_property('major_version_old', str(version))
 
     def _get_default_url_prefix(self) -> str | None:
         """
