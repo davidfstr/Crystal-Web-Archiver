@@ -701,3 +701,138 @@ async def test_given_older_flat_or_hierarchical_project_when_resource_deleted_th
             # rather than raising the exception directly
             with assertRaises(KeyError):
                 await wait_for_future(second_future)
+
+
+# === Migrate (major_version 2 -> 3) ===
+
+async def test_given_project_with_major_version_2_when_migrate_to_pack16_then_creates_all_packs_and_upgrades_to_major_version_3() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        assertEqual(2, project.major_version)
+
+        # Create 50 revisions with bodies (v2 format: written as individual hierarchical files)
+        # Expected packs after migration:
+        #   00_.zip: IDs 0x001-0x00f (1-15)
+        #   01_.zip: IDs 0x010-0x01f (16-31)
+        #   02_.zip: IDs 0x020-0x02f (32-47)
+        # Remaining individual files: IDs 0x030-0x032 (48-50)
+        for i in range(1, 51):
+            resource = Resource(project, f'http://example.com/migrate/{i}')
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(f'body {i}'.encode()),
+            )
+
+        # Verify that revisions were written as individual hierarchical files (v2 format)
+        revision_001_path = os.path.join(
+            project_dirpath, 'revisions', '000', '000', '000', '000', '001')
+        assert os.path.exists(revision_001_path), \
+            'v2 project should have individual revision files before migration'
+
+        # Initiate migration: set markers then close (project reopens automatically at end of context)
+        project._set_major_version_old_for_test(2)
+        project._set_major_version_for_test(3)
+        # (Close project)
+
+    # Reopen project — migration runs automatically in _apply_migrations()
+    async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+        # Verify major version upgraded and migration marker removed
+        assertEqual(3, project.major_version)
+        assert project._get_property('major_version_old', None) is None, \
+            'major_version_old should be removed after migration completes'
+
+        # Verify pack files were created
+        revisions_dir = os.path.join(project_dirpath, 'revisions', '000', '000', '000', '000')
+        for pack_name in ['00_.zip', '01_.zip', '02_.zip']:
+            pack_path = os.path.join(revisions_dir, pack_name)
+            assert os.path.exists(pack_path), f'Pack file {pack_name} should exist after migration'
+
+        # Verify pack contents (each should have 15 entries for IDs 1-15, 16-31, 32-47)
+        with zipfile.ZipFile(os.path.join(revisions_dir, '00_.zip'), 'r') as zf:
+            assertEqual(15, len(zf.namelist()))
+        with zipfile.ZipFile(os.path.join(revisions_dir, '01_.zip'), 'r') as zf:
+            assertEqual(16, len(zf.namelist()))
+        with zipfile.ZipFile(os.path.join(revisions_dir, '02_.zip'), 'r') as zf:
+            assertEqual(16, len(zf.namelist()))
+
+        # Verify individual files for first pack group are gone
+        assert not os.path.exists(revision_001_path), \
+            'Individual files should be deleted after migration creates pack'
+
+        # Verify incomplete last group remains as individual files
+        for hex_id in ['030', '031', '032']:
+            individual_path = os.path.join(revisions_dir, hex_id)
+            assert os.path.exists(individual_path), \
+                f'Individual file {hex_id} should remain (incomplete last group)'
+
+        # Verify all revisions are still readable
+        for i in range(1, 51):
+            resource = not_none(project.get_resource(url=f'http://example.com/migrate/{i}'))
+            revision = resource.default_revision()
+            assert revision is not None
+            with revision.open() as f:
+                assertEqual(f'body {i}'.encode(), f.read())
+
+
+async def test_given_empty_project_when_migrate_to_pack16_then_migration_completes_immediately() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        assertEqual(2, project.major_version)
+
+        # (No revisions. Project is empty.)
+
+        # Initiate migration
+        project._set_major_version_old_for_test(2)
+        project._set_major_version_for_test(3)
+        # (Close project)
+
+    # Reopen project. Migration should complete immediately because no revisions to process.
+    async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+        # Verify major version upgraded and migration marker removed
+        assertEqual(3, project.major_version)
+        assert project._get_property('major_version_old', None) is None, \
+            'major_version_old should be removed after migration completes'
+
+        # Verify no pack files were created. No revisions to pack.
+        revisions_dir = os.path.join(project_dirpath, 'revisions')
+        pack_count = sum(
+            1
+            for (root, dirs, files) in os.walk(revisions_dir)
+            for f in files
+            if f.endswith('.zip')
+        )
+        assertEqual(0, pack_count)
+
+
+async def test_given_project_with_only_error_revisions_when_migrate_to_pack16_then_creates_no_pack_files() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        assertEqual(2, project.major_version)
+
+        # Create 32 error-only revisions (no body files)
+        for i in range(1, 33):
+            resource = Resource(project, f'http://example.com/error-migrate/{i}')
+            RR.create_from_error(resource, Exception(f'Error {i}'))
+
+        # Initiate migration
+        project._set_major_version_old_for_test(2)
+        project._set_major_version_for_test(3)
+        # (Close project)
+
+    # Reopen project. Migration runs but finds no body files to pack.
+    async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+        # Verify major version upgraded and migration marker removed
+        assertEqual(3, project.major_version)
+        assert project._get_property('major_version_old', None) is None, \
+            'major_version_old should be removed after migration completes'
+
+        # Verify no pack files were created. All revisions were error-only, no body files.
+        revisions_dir = os.path.join(project_dirpath, 'revisions')
+        pack_count = sum(
+            1
+            for (root, dirs, files) in os.walk(revisions_dir)
+            for f in files
+            if f.endswith('.zip')
+        )
+        assertEqual(0, pack_count)

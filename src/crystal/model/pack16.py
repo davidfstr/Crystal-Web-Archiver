@@ -45,6 +45,13 @@ def create_pack_file(
             tmp_filepath = tmp_file.name
             
             # Write a zip file containing the revision body files, uncompressed
+            # TODO: Extend to recover from I/O error when READING from the old
+            #       revision body file:
+            #       - Skip packing that individual file
+            #       - Return the caller a list of the files that were successfully packed,
+            #         so that caller knows which files are safe to delete.
+            #       Hard fail (raising I/O error to caller) if I/O error when
+            #       WRITING to the new pack zip file.
             with ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as zf:
                 for (entry_name, source_filepath) in revision_files.items():
                     zf.write(source_filepath, arcname=entry_name)

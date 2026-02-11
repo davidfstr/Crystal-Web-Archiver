@@ -354,21 +354,28 @@ class ResourceRevision:
     
     @classmethod
     #@scheduler_affinity if _revision_bodies_writable() says so
-    def _pack_revisions_for_id(cls, project: Project, revision_id: int) -> None:
+    def _pack_revisions_for_id(cls,
+            project: Project,
+            revision_id: int,
+            project_major_version: int | None = None) -> None:
         """
         Packs a group of 16 revisions into a zip file, given the ID of the last revision in the group.
+        Deletes the individual revision files after successfully writing the pack.
 
         This should be called when revision_id % 16 == 15.
 
         Arguments:
         * project -- the project containing the revisions
         * revision_id -- the ID of the last revision in the group (must satisfy revision_id % 16 == 15)
-
-        Raises:
-        * OSError -- if could not write pack file or delete individual files
+        * project_major_version -- if provided, use this value instead of project.major_version
+          (useful when properties are not yet loaded)
         """
         from crystal.model.pack16 import create_pack_file
         from crystal.model.project import Project
+
+        if project_major_version is None:
+            project_major_version = project.major_version
+        assert project_major_version >= 3
 
         # Calculate the pack boundaries
         assert (revision_id % 16) == 15
@@ -380,8 +387,10 @@ class ResourceRevision:
         for rid in range(pack_base_id, pack_end_id + 1):
             body_filepath = cls._body_filepath_with(
                 project.path,
-                project.major_version,
-                rid)
+                # NOTE: Always use major_version=2 paths: individual files are always stored
+                #       in the Hierarchical format, even in Pack16 (major_version==3) projects
+                major_version=2,  # hierarchical
+                revision_id=rid)
             if os.path.exists(body_filepath):
                 entry_name = cls._entry_name_for_revision_id(rid)
                 revision_files[entry_name] = body_filepath
@@ -389,12 +398,18 @@ class ResourceRevision:
         # Skip packing if no revision files exist
         if not revision_files:
             return
-        
-        with cls._revision_bodies_writable(project):
+
+        with cls._revision_bodies_writable(project, project_major_version):
             # Create the pack file
             pack_filepath = cls._body_pack_filepath_with(project.path, revision_id)
             tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
-            create_pack_file(revision_files, pack_filepath, tmp_dir)
+            try:
+                create_pack_file(revision_files, pack_filepath, tmp_dir)
+            except OSError as e:
+                print(
+                    f'WARNING: Could not write pack file {pack_filepath}: {e}',
+                    file=sys.stderr)
+                return
 
             # Delete the individual revision files
             for body_filepath in revision_files.values():
@@ -409,16 +424,22 @@ class ResourceRevision:
     @classmethod
     #@scheduler_affinity if _revision_bodies_writable() says so
     @contextmanager
-    def _revision_bodies_writable(cls, project: Project) -> Iterator[None]:
+    def _revision_bodies_writable(cls,
+            project: Project,
+            project_major_version: int | None = None) -> Iterator[None]:
         """
         Context in which revision body files are writable.
         May enforce @scheduler_affinity.
-        
+
         Any code that WRITES to the Project._REVISIONS_DIRNAME ('revisions')
         directory of a project should use this context manager to block
         other concurrent write operations.
+
+        Arguments:
+        * project_major_version -- if provided, use this value instead of
+          project.major_version (useful when properties are not yet loaded)
         """
-        if cls._uses_pack_files(project):
+        if cls._uses_pack_files(project, project_major_version):
             # Enforce @scheduler_affinity:
             # Accesses must be synchronized with the scheduler thread
             scheduler_affinity(lambda: None)()
@@ -428,10 +449,14 @@ class ResourceRevision:
             # which does not expect a @scheduler_affinity requirement
             pass
         yield
-    
+
     @staticmethod
-    def _uses_pack_files(project: Project) -> bool:
-        return project.major_version >= 3
+    def _uses_pack_files(
+            project: Project,
+            project_major_version: int | None = None) -> bool:
+        if project_major_version is None:
+            project_major_version = project.major_version
+        return project_major_version >= 3
     
     # === Init: Load ===
     
