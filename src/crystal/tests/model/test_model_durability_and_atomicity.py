@@ -29,7 +29,7 @@ from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.util.filesystem import flush_renames_in_directory, rename_and_flush
+from crystal.util.filesystem import flush_renames_in_directory, replace_and_flush
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xtyping import not_none
 import crystal.tests.util.xtempfile as xtempfile
@@ -311,7 +311,7 @@ async def test_create_resource_revision_is_durable() -> None:
             
             # Track rename_and_flush calls (only successful ones)
             successful_rename_and_flush_dst = None  # dst_filepath of the successful call
-            original_rename_and_flush = rename_and_flush
+            original_rename_and_flush = replace_and_flush
             def spy_rename_and_flush(src_filepath, dst_filepath):
                 nonlocal successful_rename_and_flush_dst
                 try:
@@ -833,7 +833,7 @@ def test_given_macos_or_linux_when_rename_and_flush_then_calls_fsync_on_parent_d
         # Spy on os.open and os.fsync
         with patch('os.open', side_effect=spy_open), \
                 patch('os.fsync', wraps=os.fsync) as spy_fsync:
-            rename_and_flush(src_path, dst_path)
+            replace_and_flush(src_path, dst_path)
             
             # Verify os.open was called to open the parent directory
             assert temp_dir_fd is not None, (
@@ -901,7 +901,7 @@ def test_given_windows_when_rename_and_flush_then_calls_movefile_with_writethrou
                     return spy_MoveFileExW
                 return attr
         with patch('ctypes.WinDLL', SpyWinDLL):
-            rename_and_flush(src_path, dst_path)
+            replace_and_flush(src_path, dst_path)
         
         # Verify MoveFileExW was called
         (call,) = move_calls

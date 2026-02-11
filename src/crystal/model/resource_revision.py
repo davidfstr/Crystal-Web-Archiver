@@ -13,7 +13,7 @@ from crystal.doc.xml import parse_xml_and_links
 from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.util import http_date, xcgi, xshutil
 from crystal.util.bulkheads import capture_crashes_to_stderr
-from crystal.util.filesystem import rename_and_flush
+from crystal.util.filesystem import replace_and_flush
 from crystal.util.xtyping import not_none
 from crystal.util.urls import is_unrewritable_url
 from crystal.util.xfutures import warn_if_result_not_read
@@ -296,10 +296,10 @@ class ResourceRevision:
                         # 1. Move body file to its final filename
                         # 2. Ensure rename is flushed to disk
                         try:
-                            rename_and_flush(body_file.name, revision_filepath)
+                            replace_and_flush(body_file.name, revision_filepath)
                         except FileNotFoundError:  # probably missing parent directory
                             os.makedirs(os.path.dirname(revision_filepath), exist_ok=True)
-                            rename_and_flush(body_file.name, revision_filepath)
+                            replace_and_flush(body_file.name, revision_filepath)
                     else:
                         # Remove body file
                         os.remove(body_file.name)
