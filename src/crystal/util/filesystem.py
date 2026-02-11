@@ -4,9 +4,10 @@ import errno
 import os
 
 
-def rename_and_flush(src_filepath: str, dst_filepath: str) -> None:
+def replace_and_flush(src_filepath: str, dst_filepath: str) -> None:
     """
     Renames a file and ensures the rename is flushed to disk.
+    If the destination file exists it will be replaced.
     
     If the filesystem on which the file resides does not support flushing
     then take no action when attempting to flush.
@@ -29,18 +30,19 @@ def rename_and_flush(src_filepath: str, dst_filepath: str) -> None:
         MoveFileExW.restype = wintypes.BOOL
         
         # Constants
-        MOVEFILE_WRITE_THROUGH = 0x8
+        MOVEFILE_REPLACE_EXISTING = 0x1
+        MOVEFILE_WRITE_THROUGH = 0x8  # flush rename to disk
         
         result = MoveFileExW(
             src_filepath,
             dst_filepath,
-            MOVEFILE_WRITE_THROUGH,  # flush rename to disk
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
         )
         if result == 0:
             # Raise an OSError with the Windows error code
             raise ctypes.WinError(ctypes.get_last_error())  # type: ignore[attr-defined]
     else:
-        os.rename(src_filepath, dst_filepath)
+        os.replace(src_filepath, dst_filepath)
         flush_renames_in_directory(os.path.dirname(dst_filepath))
 
 

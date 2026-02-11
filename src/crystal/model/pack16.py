@@ -6,7 +6,7 @@ uncompressed ZIP64 archives to improve storage efficiency on systems with
 large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
 """
 
-from crystal.util.filesystem import rename_and_flush
+from crystal.util.filesystem import replace_and_flush
 import os
 import shutil
 import tempfile
@@ -55,10 +55,10 @@ def create_pack_file(
         # Move to final location.
         # Create parent directory if needed.
         try:
-            rename_and_flush(tmp_filepath, dest_filepath)
+            replace_and_flush(tmp_filepath, dest_filepath)
         except FileNotFoundError:
             os.makedirs(os.path.dirname(dest_filepath), exist_ok=True)
-            rename_and_flush(tmp_filepath, dest_filepath)
+            replace_and_flush(tmp_filepath, dest_filepath)
     except:
         # Clean up temp file if operation failed
         if tmp_filepath is not None:
@@ -190,7 +190,7 @@ def rewrite_pack_without_entry(
             os.remove(pack_filepath)
         else:
             # Move new pack file to final location, replacing old pack file
-            rename_and_flush(tmp_filepath, pack_filepath)
+            replace_and_flush(tmp_filepath, pack_filepath)
     except:
         # Clean up temp file if operation failed
         if tmp_filepath is not None:
