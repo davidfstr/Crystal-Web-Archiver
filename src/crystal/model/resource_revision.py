@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from concurrent.futures import Future
-from contextlib import closing
+from contextlib import closing, contextmanager
 import copy
 from crystal.doc.css import parse_css_and_links
 from crystal.doc.generic import create_external_link
@@ -58,7 +59,10 @@ class ResourceRevision:
     
     # NOTE: This method is not used by the UI at this time.
     #       It is intended only to be used by shell programs.
+    # TODO: Introduce new API that never requires @scheduler_affinity,
+    #       which returns a Future[ResourceRevision]
     @staticmethod
+    #@scheduler_affinity if _revision_bodies_writable() says so
     def create_from_revision(
             resource: Resource,
             revision: ResourceRevision
@@ -111,7 +115,10 @@ class ResourceRevision:
             request_cookie=request_cookie,
             error=error)
     
+    # TODO: Introduce new API that never requires @scheduler_affinity,
+    #       which returns a Future[ResourceRevision]
     @staticmethod
+    #@scheduler_affinity if _revision_bodies_writable() says so
     def create_from_response(
             resource: Resource,
             metadata: ResourceRevisionMetadata | None,
@@ -170,9 +177,8 @@ class ResourceRevision:
         except Exception as e:
             return ResourceRevision.create_from_error(resource, e, request_cookie)
     
-    # NOTE: NOT @scheduler_affinity despite doing revision body I/O,
-    #       because it uses lock-less mechanisms to accomodate concurrent operations
     @staticmethod
+    #@scheduler_affinity if _revision_bodies_writable() says so
     def _create_from_stream(
             resource: Resource,
             *, request_cookie: str | None=None,
@@ -262,17 +268,18 @@ class ResourceRevision:
         try:
             # Download the resource's body, if available
             if body_stream:
-                with NamedTemporaryFile(
-                        mode='wb',
-                        suffix='.body',
-                        dir=os.path.join(project.path, Project._TEMPORARY_DIRNAME),
-                        delete=False) as body_file:
-                    xshutil.copyfileobj_readinto(body_stream, body_file)
-                    
-                    # Ensure data is flushed to stable storage
-                    body_file.flush()
-                    os.fsync(body_file.fileno())
-                body_file_downloaded_ok = True
+                with ResourceRevision._revision_bodies_writable(project):
+                    with NamedTemporaryFile(
+                            mode='wb',
+                            suffix='.body',
+                            dir=os.path.join(project.path, Project._TEMPORARY_DIRNAME),
+                            delete=False) as body_file:
+                        xshutil.copyfileobj_readinto(body_stream, body_file)
+                        
+                        # Ensure data is flushed to stable storage
+                        body_file.flush()
+                        os.fsync(body_file.fileno())
+                    body_file_downloaded_ok = True
             else:
                 body_file = None
         finally:
@@ -345,9 +352,8 @@ class ResourceRevision:
         self.has_body = (self.error is None)
         return self
     
-    # NOTE: NOT @scheduler_affinity despite doing revision body I/O,
-    #       because it uses lock-less mechanisms to accomodate concurrent operations
     @classmethod
+    #@scheduler_affinity if _revision_bodies_writable() says so
     def _pack_revisions_for_id(cls, project: Project, revision_id: int) -> None:
         """
         Packs a group of 16 revisions into a zip file, given the ID of the last revision in the group.
@@ -383,21 +389,49 @@ class ResourceRevision:
         # Skip packing if no revision files exist
         if not revision_files:
             return
+        
+        with cls._revision_bodies_writable(project):
+            # Create the pack file
+            pack_filepath = cls._body_pack_filepath_with(project.path, revision_id)
+            tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
+            create_pack_file(revision_files, pack_filepath, tmp_dir)
 
-        # Create the pack file
-        pack_filepath = cls._body_pack_filepath_with(project.path, revision_id)
-        tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
-        create_pack_file(revision_files, pack_filepath, tmp_dir)
-
-        # Delete the individual revision files
-        for body_filepath in revision_files.values():
-            # TODO: On Windows probably need to specially ignore concurrent
-            #       ResourceRevision.open() calls too
-            try:
-                os.remove(body_filepath)
-            except FileNotFoundError:
-                # Ignore concurrent delete
-                pass
+            # Delete the individual revision files
+            for body_filepath in revision_files.values():
+                # TODO: On Windows probably need to specially ignore concurrent
+                #       ResourceRevision.open() calls too
+                try:
+                    os.remove(body_filepath)
+                except FileNotFoundError:
+                    # Ignore concurrent delete
+                    pass
+    
+    @classmethod
+    #@scheduler_affinity if _revision_bodies_writable() says so
+    @contextmanager
+    def _revision_bodies_writable(cls, project: Project) -> Iterator[None]:
+        """
+        Context in which revision body files are writable.
+        May enforce @scheduler_affinity.
+        
+        Any code that WRITES to the Project._REVISIONS_DIRNAME ('revisions')
+        directory of a project should use this context manager to block
+        other concurrent write operations.
+        """
+        if cls._uses_pack_files(project):
+            # Enforce @scheduler_affinity:
+            # Accesses must be synchronized with the scheduler thread
+            scheduler_affinity(lambda: None)()
+        else:  # uses individual files
+            # Do NOT enforce @scheduler_affinity, for backward compatibility
+            # with code that only manipulates older project major versions
+            # which does not expect a @scheduler_affinity requirement
+            pass
+        yield
+    
+    @staticmethod
+    def _uses_pack_files(project: Project) -> bool:
+        return project.major_version >= 3
     
     # === Init: Load ===
     
@@ -1112,10 +1146,20 @@ class ResourceRevision:
         return ResourceRevision._create_unsaved_from_revision_and_new_metadata(
             target_revision, new_metadata)
     
-    def delete(self) -> Future[None]:
+    #@fg_affinity if always_async = False
+    def delete(self, *, always_async: bool = False) -> Future[None]:
         """
         Deletes this revision asynchronously.
         Returns a Future that resolves when deletion is complete.
+        
+        If always_async = False (the default), this function will delete
+        SYNCHRONOUSLY if the project's major version allows that operation
+        safely, for backward compatibility with Crystal <=2.2.0 callers that
+        expect delete() to be synchronous. Note that:
+        - If a synchronous delete is performed, this function requires @fg_affinity.
+          Pass always_async = True to remove the @fg_affinity restriction.
+        - If a synchronous delete is performed, any raised exception is still
+          reported through the returned Future and not raised directly.
         
         Future Raises:
         * ProjectReadOnlyError
@@ -1124,16 +1168,30 @@ class ResourceRevision:
         * OSError -- 
             if the delete partially failed, leaving behind a revision body file
         """
-        from crystal.task import DeleteResourceRevisionTask
-        task = DeleteResourceRevisionTask(self)
-        self.project.add_task(task)
+        if always_async or self._uses_pack_files(self.project):
+            # Perform asynchronously
+            from crystal.task import DeleteResourceRevisionTask
+            task = DeleteResourceRevisionTask(self)
+            self.project.add_task(task)
+            result_future = task.future
+        else:
+            # Perform synchronously, to preserve compatibility with
+            # Crystal <=2.2.0 callers that expect delete() to be synchronous,
+            # at least when working with older project major versions
+            result_future = Future()
+            try:
+                self._delete_now()
+            except BaseException as e:
+                result_future.set_exception(e)
+            else:
+                result_future.set_result(None)
         # NOTE: Crystal <=2.2.0 did NOT return a Future, so older callers may
         #       not expect a Future and in particular may not wait for it properly.
         #       Print a warning to make those now-improper callers easier to identify.
-        return warn_if_result_not_read(task.future, f'{self}.delete()')
+        return warn_if_result_not_read(result_future, f'{self}.delete()')
 
     @fg_affinity  # does database I/O
-    @scheduler_affinity  # does revision body I/O
+    #@scheduler_affinity if _revision_bodies_writable() says so
     def _delete_now(self) -> None:
         """
         Deletes this revision synchronously.
@@ -1167,7 +1225,7 @@ class ResourceRevision:
         self.resource.already_downloaded_this_session = False
         
         # Delete revision's body file
-        if True:
+        with self._revision_bodies_writable(self.project):
             # Try delete from pack file
             if project.major_version >= 3:
                 try:
