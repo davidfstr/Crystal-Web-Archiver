@@ -196,76 +196,73 @@ Migration to Pack16 format is only allowed directly from Hierarchical format.
 If the user desires to migrate from Flat format to Pack16, they must migrate
 to Hierarchical first.
 
-Migration is initiated explicitly by the user, in the following UI sequence:
-- User opens Preferences dialog and alters the project's "Revision Storage Format"
-  from "Hierarchical" to "Pack16".
-    - "Revision Storage Format" is a new project-level dropdown field exposed
-      in the Preferences dialog. It also displays "Flat" and "Hierarchical" as options.
-        - Transitioning from "Flat" to "Hierarchical" is supported: It triggers
-          the currently implemented UI flow for that type of migration.
-        - Transitioning from "Hierarchical" to "Flat" is NOT supported:
-          An error dialog will be shown upon attempt to save changes if that
-          transition is attempted.
-            - 'Migrating from "Hierarchical" to "Flat" format is not supported.'
-        - Transitioning between "Flat" and "Pack16" directly is NOT supported,
-          as mentioned earlier. Show an error dialog upon attempt to save.
-            - 'Migrating from "Pack16" to any other format is not supported.'
-            - 'Migrating from "Flat" to "Pack16" directly is not supported.
-               Migrate to "Hierarchical" first.'
-        - Transitioning from "Pack16" to "Hierarchical" is NOT currently supported.
-          Show an error dialog upon attempt to save.
-            - 'Migrating from "Pack16" to any other format is not supported.'
-- User presses "OK" button to save changes.
-  A warning dialog appears that says that migrating the Revision Storage Format 
-  will take an estimated time X to complete and that the project will not be 
-  writable while the migration is in progress.
-    - v1: Just say it "may take several hours to complete" rather than attempting
-      to estimate a more precise duration up front.
-- User confirms with "Migrate" button. Or they don't confirm using a "Cancel" button, 
-  which leaves the original Preferences dialog open.
+### Preferences UI
 
-Migration is performed offline, while project is put into readonly=True mode 
-(at the Crystal app level, not the database level) so that write operations 
-not related to the migration are prohibited.
+The Preferences dialog displays the project's current revision storage format
+as a read-only label, with a checkbox to initiate migration when applicable:
 
-A new type of Task - MigrateRevisionsToPack16FormatTask - with a title like 
-"Migrating revision storage format -- 1 of N packs -- HH:MM:SS remaining"
-is used to report the migration's progress to the user.
-The task waits for all other top-level tasks to complete before it begins work:
-it is created immediately when the user confirms migration, but sits idle in the
-task tree during its initial timeslices, and only starts actual work once it observes
-that it is the only top-level task remaining.
+- **Flat project (`major_version == 1`):**
+  `Revision Storage Format:  Flat`
+  No migration checkbox is shown. (The existing Flat → Hierarchical migration
+  UI is handled elsewhere.)
 
-Detail: N (the total pack count) is calculated as floor(highest_revision_id / 16) + 1.
-The progress should show "N of N packs" when starting to write the final pack.
+- **Hierarchical project (`major_version == 2`):**
+  `Revision Storage Format:  Hierarchical   [ ] Migrate to Pack16`
 
-Migration steps:
-- Assert that `major_version == 2` (usual case) or `major_version == 3`
-  (if resuming an incomplete migration).
-- Trigger an immediate Project.hibernate_tasks operation,
-  to persist that a migration has started.
-- Put the project into readonly mode. This blocks all database writes and filesystem
-  operations, raising ProjectReadOnlyError. The migration itself will use a private
-  API flag like `_cr_readonly_ok=True` to bypass readonly restrictions.
-- Identify the first unmigrated pack (containing at least one revision body).
-  Linear scan through revision IDs starting at ~~`16*0`~~ `1` progressing through 
-  `16*1`, `16*2`, etc. Look for a missing .zip file in the "revisions" directory.
-- Mark project as `major_version == 3`, if not already done.
-- Starting from the first unmigrated pack, write packs of revisions to .zip 
-  files using the same logic as "Operation: Write", processing all packs until 
-  the full range of revision ids have been scanned. Revisions that have been
+- **Pack16 project (`major_version == 3`):**
+  `Revision Storage Format:  Pack16`
+  No migration checkbox is shown (no further migrations are available).
+
+The checkbox is unchecked by default. Checking it and pressing "OK" to save
+triggers the migration flow described below. The checkbox acts as a deferred
+action, consistent with the Preferences dialog's save-on-OK pattern.
+
+### Migration flow
+
+Migration is initiated explicitly by the user, in the following sequence:
+
+- User checks "Migrate to Pack16" in Preferences and presses "OK".
+- A warning dialog appears: migration "may take several hours to complete"
+  and the project will not be usable while the migration is in progress.
+    - User confirms with "Migrate" button. Or cancels with "Cancel" button,
+      which leaves the Preferences dialog open.
+- On confirmation:
+    1. Save a migration-in-progress marker to the project. Specifically,
+       store the old major version in a `major_version_old` property and
+       set `major_version` to `3`.
+    2. Close the project fully using the usual procedure, including
+       hibernating any in-progress tasks.
+    3. Reopen the project. On open, the project detects the
+       migration-in-progress marker (`major_version_old` is present) and
+       shows a cancelable modal progress dialog to perform the migration.
+    4. If the user cancels the progress dialog, the project is closed.
+       The migration-in-progress marker remains, so the next open will
+       resume the migration.
+    5. After the progress dialog completes, remove the `major_version_old`
+       marker. The project opens normally as writable at `major_version == 3`.
+
+This flow is intentionally similar to the existing Flat → Hierarchical
+migration, which also closes the project and performs migration during
+a modal progress dialog at reopen time.
+
+### Migration steps (performed inside the progress dialog)
+
+- Assert that `major_version == 3` and `major_version_old == 2`.
+- Identify the first unmigrated pack. Linear scan through revision IDs
+  starting at `1`, progressing through `16*1`, `16*2`, etc. Look for a
+  missing .zip file in the "revisions" directory.
+- Starting from the first unmigrated pack, write packs of revisions to .zip
+  files using the same logic as "Operation: Write", processing all packs until
+  the full range of revision IDs have been scanned. Revisions that have been
   deleted or lack bodies are skipped. Incomplete packs (those with fewer than 16
   revisions) remain as individual files.
-- Put the project into writable mode.
-- Trigger an immediate Project.hibernate_tasks operation, pretending that the
-  Migration Task is already complete, to persist that a migration has completed.
-- Migration Task (actually) completes.
+- Report progress: "Migrating revision storage format — X of N packs"
+  (and optionally "— HH:MM:SS remaining").
+- N (the total pack count) is calculated as `floor(highest_revision_id / 16) + 1`.
+  The progress should show "N of N packs" when starting to write the final pack.
+- On completion, remove the `major_version_old` marker.
 
-Detail: If the user closes the project while a migration Task is running,
-the Project.{hibernate_tasks, unhibernate_tasks} will persist the *existence*
-of the MigrateRevisionsToPack16FormatTask but not any other metadata about the task.
-Upon reopening the project the scheduler will immediately start running the 
-restored MigrateRevisionsToPack16FormatTask.
+### Migration details
 
 Detail: During migration, only enough additional disk space is needed to write the
 largest individual pack file (typically a few MB). Individual Hierarchical files
@@ -280,6 +277,14 @@ Detail: If an I/O error occurs while reading a Hierarchical file during migratio
 The presumed-corrupted Hierarchical file will NOT be deleted after writing the
 pack file. A warning will be printed to stderr (visible to shell & developer
 users but not UI users).
+
+Detail: During migration, the project is fully closed — no reads or writes are
+possible. This is a simpler model than allowing reads during migration, at the
+cost of blocking project use until migration completes. For large projects
+(1–5 TB), migration may take many hours. The cancelable progress dialog allows
+the user to stop and resume later; the read path (Operation: Read) handles the
+mixed pack+loose state correctly, so a partially-migrated project that is
+force-opened would still be readable.
 
 ## Operation: Delete
 
@@ -317,7 +322,7 @@ pack file since it does not affect the revision body.
 
 **Robustness:**
 - fsync operations ensure durability before deleting source files
-- Readonly mode prevents concurrent writes during migration
+- Project is fully closed during migration (no concurrent access)
 - Corrupt file handling during migration is graceful (skip and warn)
 - Crash recovery cleans up temp files on project reopen
 - Incomplete packs at project open trigger automatic packing
@@ -331,4 +336,5 @@ pack file since it does not affect the revision body.
 - Can only migrate from Hierarchical → Pack16
 - Cannot rollback after migration starts
 - Progress tracking based on pack count
-- Migration resumes on project reopen if interrupted
+- Cancelable modal dialog; migration resumes on next project open if interrupted
+- Migration state persisted via `major_version_old` marker
