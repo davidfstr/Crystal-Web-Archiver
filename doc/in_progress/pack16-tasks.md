@@ -278,7 +278,7 @@ existing Flat → Hierarchical migration.
 ## Increment 7: Preferences UI — Revision Storage Format
 
 **Goal:** User can see the project's current revision storage format in Preferences
-and initiate a Hierarchical → Pack16 migration via a checkbox.
+and initiate a Hierarchical → Pack16 (or Flat → Hierarchical) migration via a checkbox.
 
 **Work:**
 - Add a "Revision Storage Format" section to Preferences showing:
@@ -303,15 +303,26 @@ and initiate a Hierarchical → Pack16 migration via a checkbox.
   - Open preferences for v1, v2, v3 projects
   - Verify label shows "Flat", "Hierarchical", "Pack16" respectively
   - Verify checkbox text and visibility is correct for each format
-- E2E: `test_given_hierarchical_project_when_migrate_to_pack16_via_preferences_then_migration_completes`
+- E2E: `test_given_hierarchical_project_when_migrate_to_pack16_via_preferences_and_user_confirms_then_migration_completes`
   - Create v2 project with revisions
   - Open Preferences, check "Migrate to Pack16", press OK, confirm warning
+  - Characterize current behavior where second dialog appears after project reopens,
+    that must be explicitly confirmed.
   - Verify migration runs (progress dialog appears and completes)
   - Verify project is now v3 with packs created
 - E2E: `test_given_hierarchical_project_when_migrate_to_pack16_via_preferences_and_cancel_warning_then_no_migration`
   - Create v2 project
   - Open Preferences, check "Migrate to Pack16", press OK, cancel warning
   - Verify project remains v2
+- E2E: `test_given_flat_project_when_migrate_to_hierarchical_via_preferences_then_migration_and_completes`
+  - Create v1 project with revisions
+  - Open/reopen project. Dismiss dialog prompting migrate v1 -> v2.
+    Project finishes opening as v1.
+  - Open Preferences, check "Migrate to Hierarchical", press OK.
+  - Characterize current behavior where un-vetoable dialog appears after project reopens,
+    that must be explicitly confirmed.
+  - Verify migration runs (progress dialog appears and completes)
+  - Verify project is now v2
 
 **Key files:**
 - `src/crystal/browser/preferences.py`
