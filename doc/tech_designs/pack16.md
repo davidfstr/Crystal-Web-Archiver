@@ -202,9 +202,13 @@ The Preferences dialog displays the project's current revision storage format
 as a read-only label, with a checkbox to initiate migration when applicable:
 
 - **Flat project (`major_version == 1`):**
-  `Revision Storage Format:  Flat`
-  No migration checkbox is shown. (The existing Flat → Hierarchical migration
-  UI is handled elsewhere.)
+  `Revision Storage Format:  Flat     [ ] Migrate to Hierarchical`
+    - Effect: Signal that a major_version 1 -> 2 migration is "in-progress"
+      by creating an empty "revisions.inprogress" directory inside the
+      project directory. (This is how this migration type has always
+      been signaled in the past.)
+    - Project is closed and reopened.
+      Migration 1 -> 2 starts/resumes automatically.
 
 - **Hierarchical project (`major_version == 2`):**
   `Revision Storage Format:  Hierarchical   [ ] Migrate to Pack16`
@@ -230,6 +234,11 @@ Migration is initiated explicitly by the user, in the following sequence:
     1. Save a migration-in-progress marker to the project. Specifically,
        store the old major version in a `major_version_old` property and
        set `major_version` to `3`.
+        - Setting the higher major version in the 2 -> 3 sequence in
+          the `major_version` property (rather than in some other property
+          like `major_version_new`) will prevent older versions of
+          Crystal that do not understand `major_version >= 3` from
+          opening the project while it is being migrated.
     2. Close the project fully using the usual procedure, including
        hibernating any in-progress tasks.
     3. Reopen the project. On open, the project detects the
@@ -250,7 +259,9 @@ a modal progress dialog at reopen time.
 - Assert that `major_version == 3` and `major_version_old == 2`.
 - Identify the first unmigrated pack. Linear scan through revision IDs
   starting at `1`, progressing through `16*1`, `16*2`, etc. Look for a
-  missing .zip file in the "revisions" directory.
+  missing .zip file in the "revisions" directory, where the associated
+  range of revision IDs in the project database has at least one revision
+  expecting a body.
 - Starting from the first unmigrated pack, write packs of revisions to .zip
   files using the same logic as "Operation: Write", processing all packs until
   the full range of revision IDs have been scanned. Revisions that have been
