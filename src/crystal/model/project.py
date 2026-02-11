@@ -24,7 +24,7 @@ from crystal.util.db import (
     get_index_names, get_table_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis
-from crystal.util.filesystem import rename_and_flush, flush_renames_in_directory
+from crystal.util.filesystem import replace_and_flush, flush_renames_in_directory
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import create_profiling_context
 from crystal.util.progress import DevNullFile
@@ -889,7 +889,7 @@ class Project(ListenableMixin):
         
         # 1. Move new revisions directory to final location
         # 2. Finish commit
-        rename_and_flush(ip_revisions_dirpath, revisions_dirpath)
+        replace_and_flush(ip_revisions_dirpath, revisions_dirpath)
     
     def _repair_incomplete_rollback_of_resource_revision_create(self) -> None:
         """
