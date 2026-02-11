@@ -907,8 +907,6 @@ class Project(ListenableMixin):
         * CancelOpenProject
         * sqlite3.DatabaseError, OSError
         """
-        from crystal.model.pack16 import create_pack_file
-
         with self._db, closing(self._db.cursor()) as c:
             assert self._get_major_version(c) == 3
             assert self._get_major_version_old(c) == 2
@@ -943,35 +941,13 @@ class Project(ListenableMixin):
             # Check if pack already exists (supports resuming after crash or cancel)
             pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
             if not os.path.exists(pack_filepath):
-                # Collect existing revision body files for this group
-                revision_files = {}  # type: dict[str, str]
-                for rid in range(pack_start, pack_end_id + 1):
-                    body_filepath = ResourceRevision._body_filepath_with(self.path, 2, rid)
-                    if os.path.exists(body_filepath):
-                        entry_name = ResourceRevision._entry_name_for_revision_id(rid)
-                        revision_files[entry_name] = body_filepath
-
-                if revision_files:
-                    # Ensure the pack's parent directory exists
-                    pack_dir = os.path.dirname(pack_filepath)
-                    os.makedirs(pack_dir, exist_ok=True)
-
-                    # Create pack file atomically: write to tmp, fsync, move into place
-                    tmp_dir = os.path.join(self.path, self._TEMPORARY_DIRNAME)
-                    try:
-                        create_pack_file(revision_files, pack_filepath, tmp_dir)
-                    except OSError as e:
-                        # I/O error writing pack — skip this pack and warn
-                        print(
-                            f'Warning: Could not write pack file {pack_filepath}: {e}',
-                            file=sys.stderr)
-                    else:
-                        # Delete individual revision files (after pack is durably written)
-                        for body_filepath in revision_files.values():
-                            try:
-                                os.remove(body_filepath)
-                            except FileNotFoundError:
-                                pass  # already deleted
+                # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
+                #       This thread has exclusive access to the project while it is being migrated.
+                # HACK: Uses scheduler_thread_context(), which is intended for testing only
+                from crystal.tests.util.tasks import scheduler_thread_context
+                with scheduler_thread_context():
+                    ResourceRevision._pack_revisions_for_id(
+                        self, pack_end_id, project_major_version=3)
 
             revisions_processed += 16
             pack_start += 16
