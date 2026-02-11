@@ -172,136 +172,152 @@ written but wasn't (e.g., due to disk-full during a previous session).
 
 ---
 
-## Increment 5: Preferences UI — Revision Storage Format dropdown
+## Increment 5: Migration — core logic
 
-**Goal:** User can see and change the project's revision storage format in Preferences.
+**Goal:** Packing all existing hierarchical revisions into Pack16 format during a
+modal progress dialog at project open, following the same pattern as the
+existing Flat → Hierarchical migration.
 
 **Work:**
-- Add a "Revision Storage Format" dropdown to the Project section of PreferencesDialog
-  with options: "Flat", "Hierarchical", "Pack16".
-- Display the current format based on `project.major_version` (1=Flat, 2=Hierarchical,
-  3=Pack16).
-- Validate transitions on OK:
-  - Flat → Hierarchical: trigger existing migration flow.
-  - Hierarchical → Pack16: allowed (will trigger migration in Increment 6).
-  - All other transitions: show error dialog with appropriate message per tech design:
-    - Hierarchical → Flat: 'Migrating from "Hierarchical" to "Flat" format is not supported.'
-    - Flat → Pack16: 'Migrating from "Flat" to "Pack16" directly is not supported. Migrate to "Hierarchical" first.'
-    - Pack16 → Hierarchical: 'Migrating from "Pack16" to any other format is not supported.'
-    - Pack16 → Flat: 'Migrating from "Pack16" to any other format is not supported.'
-- Disable the field when `project.readonly`.
-- For now, the Hierarchical → Pack16 transition just stores the intent; the actual
-  migration task is wired up in Increment 6.
+- Add migration logic to `_apply_migrations()` in `project.py` (or a new
+  `_migrate_v2_to_v3` function following the pattern of `_migrate_v1_to_v2`):
+  1. Detect migration-in-progress marker: `major_version == 3` and
+     `major_version_old == 2`.
+  2. Scan revision IDs starting at `1`, progressing in increments of 16.
+     For each group, check if the corresponding .zip file exists. If not,
+     and the range contains at least one revision expecting a body, pack it.
+  3. Skip revisions that have been deleted or lack bodies. Incomplete packs
+     (fewer than 16 revisions in the final group) remain as individual files.
+  4. On completion, remove the `major_version_old` marker.
+- Report progress in terms of revisions processed, reusing the existing
+  `{will_upgrade_revisions, upgrading_revision, did_upgrade_revisions}`
+  callbacks in `OpenProjectProgressListener`. The lower-level code processes
+  in units of packs but advances the progress count by 16 per pack (or by the
+  actual revision count in the final incomplete group).
+- The migration is triggered in tests by simulating what the Preferences UI
+  will do later (Increment 7):
+  1. Hibernate any running tasks (`hibernate_tasks`) and stop the scheduler
+     (`_stop_scheduler`).
+  2. Set `major_version_old` to `2`.
+  3. Set `major_version` to `3`.
+  4. Close the project. Reopen the project.
+  Migration starts/resumes automatically on reopen via `_apply_migrations()`.
+
+**Tests:**
+- E2E: `test_given_project_with_major_version_2_when_migrate_to_pack16_then_creates_all_packs_and_upgrades_to_major_version_3`
+  - Create v2 project with ~50 revisions
+  - Trigger migration programmatically (set markers, close, reopen)
+  - Verify all expected packs are created on disk
+  - Verify `major_version == 3` and `major_version_old` is removed
+  - Verify all revisions still readable via `open()`
+- E2E: `test_given_empty_project_when_migrate_to_pack16_then_migration_completes_immediately`
+  - Create v2 project with no revisions
+  - Trigger migration programmatically
+  - Verify project opens as v3 with no pack files
+- E2E: `test_given_project_with_only_error_revisions_when_migrate_to_pack16_then_creates_no_pack_files`
+  - Create v2 project where all revisions are error-only (no bodies)
+  - Trigger migration programmatically
+  - Verify no pack files created, project is v3
+
+**Key files:**
+- `src/crystal/model/project.py` (add `_migrate_v2_to_v3` in `_apply_migrations`)
+- `src/crystal/model/pack16.py` (reuse packing functions from Increment 1)
+- `src/crystal/tests/model/test_pack16.py`
+
+**Estimated time:** ~3 hours
+
+---
+
+## Increment 6: Migration robustness — resume, cancel, error handling
+
+**Goal:** Migration survives cancellation, crashes, and I/O errors gracefully.
+
+**Work:**
+- Ensure the `major_version_old` marker persists across close/reopen so that
+  an interrupted migration resumes automatically on next project open.
+  (This should work naturally from the Increment 5 design — the marker is only
+  removed on successful completion.)
+- Support cancellation: the modal progress dialog is cancelable. On cancel,
+  close the project. The migration-in-progress marker remains, so the next
+  open will resume from where it left off (scanning for the first unmigrated pack).
+- Handle I/O errors during migration: if a hierarchical file can't be read after
+  opening, skip it from the pack, leave the original file in place, warn to stderr.
+- Ensure temp pack files in `tmp/` are cleaned up on project open (existing tmp
+  cleanup logic already handles this).
+
+**Tests:**
+- E2E: `test_given_migration_in_progress_when_cancel_and_reopen_project_then_migration_resumes_and_completes`
+  - Create v2 project with 50+ revisions
+  - Trigger migration programmatically
+  - Cancel the progress dialog mid-migration
+  - Verify project is closed and some packs exist (partial migration)
+  - Reopen project
+  - Verify migration resumes and completes
+  - Verify all revisions readable
+- E2E: `test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns`
+  - Create v2 project with revisions
+  - Corrupt one revision file
+    - Simulate I/O error when reading a particular revision ID but not other IDs
+  - Trigger migration programmatically
+  - Verify migration completes
+  - Verify corrupt file is skipped from pack and left in place
+  - Verify warning is emitted to stderr
+- E2E: `test_given_interrupted_migration_when_reopen_then_cleans_up_temp_pack_files`
+  - Mark as `@skip('covered by: X')`, where X is the E2E test name verifying that
+    a project's "tmp" directory is cleaned upon open
+
+**Key files:**
+- `src/crystal/model/project.py` (migration resume logic, tmp cleanup)
+- `src/crystal/model/pack16.py`
+- `src/crystal/tests/model/test_pack16.py`
+
+**Estimated time:** ~3 hours
+
+---
+
+## Increment 7: Preferences UI — Revision Storage Format
+
+**Goal:** User can see the project's current revision storage format in Preferences
+and initiate a Hierarchical → Pack16 migration via a checkbox.
+
+**Work:**
+- Add a "Revision Storage Format" section to Preferences showing:
+  - A read-only label displaying the current format name
+    (1=Flat, 2=Hierarchical, 3=Pack16).
+  - A "Migrate to ..." checkbox, shown only when a valid migration is available:
+    - Flat project: `[ ] Migrate to Hierarchical`
+    - Hierarchical project: `[ ] Migrate to Pack16`
+    - Pack16 project: no checkbox shown.
+- When "Migrate to Hierarchical" is checked and OK is pressed: signal migration
+  by creating the `revisions.inprogress` directory (existing behavior), then
+  close and reopen the project.
+- When "Migrate to Pack16" is checked and OK is pressed:
+  1. Show warning dialog ("may take several hours", "Cancel" / "Migrate" buttons).
+  2. On confirm: set `major_version_old = 2`, set `major_version = 3`,
+     close and reopen the project. Migration starts automatically on reopen
+     (Increment 5).
+- Disable the checkbox when `project.readonly`.
 
 **Tests:**
 - E2E: `test_preferences_dialog_shows_current_revision_storage_format`
   - Open preferences for v1, v2, v3 projects
-  - Verify dropdown shows "Flat", "Hierarchical", "Pack16" respectively
-- E2E: `test_preferences_dialog_prevents_unsupported_format_transitions`
-  - Attempt each invalid transition
-  - Verify appropriate error dialog appears with correct message
-- E2E: `test_preferences_dialog_disables_format_dropdown_for_readonly_project`
-  - Open readonly project
-  - Verify dropdown is disabled
+  - Verify label shows "Flat", "Hierarchical", "Pack16" respectively
+  - Verify checkbox text and visibility is correct for each format
+- E2E: `test_given_hierarchical_project_when_migrate_to_pack16_via_preferences_then_migration_completes`
+  - Create v2 project with revisions
+  - Open Preferences, check "Migrate to Pack16", press OK, confirm warning
+  - Verify migration runs (progress dialog appears and completes)
+  - Verify project is now v3 with packs created
+- E2E: `test_given_hierarchical_project_when_migrate_to_pack16_via_preferences_and_cancel_warning_then_no_migration`
+  - Create v2 project
+  - Open Preferences, check "Migrate to Pack16", press OK, cancel warning
+  - Verify project remains v2
 
 **Key files:**
 - `src/crystal/browser/preferences.py`
 - `src/crystal/tests/test_preferences.py` (or new test file)
 
 **Estimated time:** ~2-3 hours
-
----
-
-## Increment 6: Migration task — core logic
-
-**Goal:** `MigrateRevisionsToPack16FormatTask` packs all existing hierarchical revisions.
-
-**Work:**
-- Create `MigrateRevisionsToPack16FormatTask` (leaf task) in `task.py` or a new module.
-- The task:
-  1. Waits until it is the only top-level task (sits idle during initial timeslices).
-  2. Puts the project into readonly mode (with `_cr_readonly_ok` bypass for itself).
-  3. Triggers immediate `Project.hibernate_tasks` to persist that migration has started.
-  4. Sets `major_version = 3` if not already.
-  5. Scans revision IDs in increments of 16, writing packs for each group.
-  6. Skips revisions that have been deleted or lack bodies.
-  7. Reports progress: "Migrating revision storage format — X of N packs — HH:MM:SS remaining".
-  8. On completion, restores writable mode.
-  9. Triggers immediate `Project.hibernate_tasks` (pretending task is complete) to persist completion.
-- N (total pack count) calculated as `floor(highest_revision_id / 16) + 1`.
-- Wire up the confirmation dialog flow from Preferences (Increment 5): when user selects
-  Hierarchical → Pack16 and presses OK, show warning dialog ("may take several hours"),
-  then create and schedule the migration task.
-
-**Tests:**
-- E2E: `test_given_project_with_major_version_2_when_migrate_to_pack16_then_creates_all_packs_and_upgrades_to_major_version_3`
-  - Create v2 project with ~50 revisions
-  - Trigger migration via preferences
-  - Verify all packs are created
-  - Verify project is v3
-  - Verify all revisions still readable via `open()`
-- E2E: `test_when_migration_in_progress_then_project_is_readonly`
-  - Create v2 project with revisions
-  - Start migration
-  - Verify attempts to download fail with `ProjectReadOnlyError`
-  - Wait for migration to complete
-  - Verify downloads work again
-- E2E: `test_when_migrate_to_pack16_then_task_tree_shows_progress`
-  - Start migration
-  - Verify task appears in task tree with progress updates
-
-**Key files:**
-- New: `src/crystal/model/migrate_to_pack16.py` (or add to existing migration code)
-- `src/crystal/task.py` (new task class, or import from new module)
-- `src/crystal/browser/preferences.py` (wire up confirmation + task creation)
-- `src/crystal/model/project.py` (readonly mode support for migration)
-- `src/crystal/tests/model/test_pack16.py`
-
-**Estimated time:** ~3 hours
-
----
-
-## Increment 7: Migration robustness — hibernate, resume, error handling
-
-**Goal:** Migration survives crashes, project close/reopen, and I/O errors gracefully.
-
-**Work:**
-- Add `MigrateRevisionsToPack16FormatTask` to `hibernate_tasks` / `unhibernate_tasks`
-  so that closing the project during migration persists the task's existence and
-  reopening the project restores it.
-- On reopen of a v3 project that still has unmigrated revisions (detected by checking
-  for missing pack files during the scan in `_load`), automatically schedule a new
-  migration task.
-- Handle I/O errors during migration: if a hierarchical file can't be read after
-  opening, skip it from the pack, leave the original file in place, warn to stderr.
-- Ensure temp pack files in `tmp/` are cleaned up on project open (existing tmp
-  cleanup logic may already handle this; verify).
-
-**Tests:**
-- E2E: `test_given_migration_in_progress_when_close_and_reopen_project_then_migration_resumes_and_completes`
-  - Create v2 project with 50+ revisions
-  - Start migration
-  - Close project mid-migration (may need to pause or use test hook)
-  - Reopen project
-  - Verify migration task is restored and completes
-- E2E: `test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns`
-  - Create v2 project with revisions
-  - Corrupt one revision file (truncate or write garbage)
-  - Start migration
-  - Verify migration completes
-  - Verify corrupt file is skipped from pack and left in place
-  - Verify warning is emitted to stderr (may need to capture stderr in test)
-- E2E: `test_given_interrupted_migration_when_reopen_then_cleans_up_temp_pack_files`
-  - Simulate crash during migration (manually create temp pack file in tmp/)
-  - Reopen project
-  - Verify temp files are removed
-
-**Key files:**
-- `src/crystal/model/project.py` (hibernate/unhibernate, project open logic, tmp cleanup)
-- `src/crystal/model/migrate_to_pack16.py`
-- `src/crystal/tests/model/test_pack16.py`
-
-**Estimated time:** ~3 hours
 
 ---
 
@@ -314,9 +330,6 @@ written but wasn't (e.g., due to disk-full during a previous session).
   but be defensive in pack boundary calculations).
 - Handle edge case: v3 project opened by older Crystal version → verify
   `ProjectTooNewError` is raised with a clear message. (Should already work, but test it.)
-- Handle edge case: empty project (no revisions) — migration is a no-op.
-- Handle edge case: project where all revisions are error-only (no bodies) — migration
-  produces no pack files.
 - Review all `body_filepath` usages across the codebase and verify they work for v3.
   (Search for `_body_filepath`, `_body_filepath_with`, `_REVISIONS_DIRNAME` usage.)
 - Add release notes entry to `RELEASE_NOTES.md` in the "main" branch section.
@@ -328,8 +341,6 @@ written but wasn't (e.g., due to disk-full during a previous session).
   - Temporarily set `Project._LATEST_SUPPORTED_MAJOR_VERSION = 2`
   - Attempt to open project
   - Verify `ProjectTooNewError` is raised
-- E2E: `test_given_empty_project_when_migrate_to_pack16_then_migration_completes_immediately`
-- E2E: `test_given_project_with_only_error_revisions_when_migrate_to_pack16_then_creates_no_pack_files`
 - Run full test suite (`crystal test` and `pytest`) to verify no regressions
 
 **Key files:**
@@ -357,9 +368,9 @@ written but wasn't (e.g., due to disk-full during a previous session).
 | 2 | Read revisions from pack files | 2h | 1 |
 | 3 | Recovery — complete incomplete packs on open | 2h | 1, 2 |
 | 4 | Delete revisions from pack files | 3h | 1, 2 |
-| 5 | Preferences UI — format dropdown | 2-3h | — |
-| 6 | Migration task — core logic | 3h | 1, 2, 3, 5 |
-| 7 | Migration robustness — hibernate, resume, errors | 3h | 6 |
+| 5 | Migration — core logic | 3h | 1, 2, 3 |
+| 6 | Migration robustness — resume, cancel, errors | 3h | 5 |
+| 7 | Preferences UI — revision storage format | 2-3h | 5, 6 |
 | 8 | Polish, edge cases, and release notes | 2h | all |
 | | **Total** | **~20-21h** | |
 
@@ -367,3 +378,5 @@ written but wasn't (e.g., due to disk-full during a previous session).
 
 Each increment builds working, testable functionality using E2E tests.
 Early increments (1-4) can use `project._set_major_version(3, project._db)` directly in tests before the UI is ready.
+Migration increments (5-6) trigger migration programmatically (set markers, close, reopen) without needing the Preferences UI.
+The Preferences UI (7) is implemented last, after the model-layer migration is solid.
