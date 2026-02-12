@@ -918,49 +918,51 @@ class Project(ListenableMixin):
             [(max_revision_id,)] = rows
         else:
             max_revision_id = 0
-
         approx_revision_count = max_revision_id or 0
 
-        # Signal that migration is starting.
-        # can_veto=False because major_version was already set to 3 (project won't open otherwise)
-        progress_listener.will_upgrade_revisions(approx_revision_count, can_veto=False)  # may raise CancelOpenProject
+        # Report that migration is starting/resuming
+        progress_listener.will_upgrade_revisions(
+            approx_revision_count,
+            # Disallow veto because migration already in progress
+            can_veto=False,
+        )  # may raise CancelOpenProject
 
-        # Process complete packs: scan pack groups 0-15, 16-31, 32-47, ...
-        revisions_processed = 0
-        start_time = time.monotonic()
-        last_report_time = start_time
+        # Process complete packs: Scan pack groups 0-15, 16-31, 32-47, ...
+        # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
+        #       This thread has exclusive access to the project while it is being migrated.
+        # HACK: Uses scheduler_thread_context(), which is intended for testing only
+        from crystal.tests.util.tasks import scheduler_thread_context
+        with scheduler_thread_context():
+            start_time = time.monotonic()  # capture
+            last_report_time = start_time
+            pack_start_id = 0
+            while True:
+                pack_end_id = pack_start_id + 15
+                if pack_end_id > max_revision_id:
+                    # Incomplete last group. Leave as individual files.
+                    break
 
-        pack_start = 0
-        while True:
-            pack_end_id = pack_start + 15
-
-            if pack_end_id > max_revision_id:
-                # Incomplete last group — leave as individual files
-                break
-
-            # Check if pack already exists (supports resuming after crash or cancel)
-            pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
-            if not os.path.exists(pack_filepath):
-                # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
-                #       This thread has exclusive access to the project while it is being migrated.
-                # HACK: Uses scheduler_thread_context(), which is intended for testing only
-                from crystal.tests.util.tasks import scheduler_thread_context
-                with scheduler_thread_context():
+                # Pack revisions [pack_start_id, pack_end_id], if not already done
+                pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
+                if not os.path.exists(pack_filepath):
                     ResourceRevision._pack_revisions_for_id(
                         self, pack_end_id, project_major_version=3)
+                pack_start_id += 16
 
-            revisions_processed += 16
-            pack_start += 16
+                # Report progress approximately once per second
+                current_time = time.monotonic()  # capture
+                if current_time - last_report_time >= 1.0 or Project._report_progress_at_maximum_resolution:
+                    elapsed = current_time - start_time
+                    revisions_processed = pack_start_id
+                    revisions_per_second = revisions_processed / elapsed if elapsed > 0 else 0.0
+                    progress_listener.upgrading_revision(
+                        revisions_processed,
+                        revisions_per_second,
+                    )  # may raise CancelOpenProject
+                    last_report_time = current_time
+            revisions_processed = pack_start_id
 
-            # Report progress approximately once per second
-            now = time.monotonic()
-            if now - last_report_time >= 1.0 or Project._report_progress_at_maximum_resolution:
-                elapsed = now - start_time
-                revisions_per_second = revisions_processed / elapsed if elapsed > 0 else 0.0
-                last_report_time = now
-                progress_listener.upgrading_revision(revisions_processed, revisions_per_second)  # may raise CancelOpenProject
-
-        # Migration complete — remove the marker
+        # Migration complete. Remove migration marker.
         self._delete_major_version_old(self._db)
 
         progress_listener.did_upgrade_revisions(revisions_processed)
