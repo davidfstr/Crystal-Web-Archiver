@@ -7,33 +7,51 @@ large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
 """
 
 from crystal.util.filesystem import replace_and_flush
+from crystal.util.xio import Reader, Writer
 import os
 import shutil
+import sys
 import tempfile
 from typing import IO, Self
-from zipfile import ZipFile, ZIP_STORED
+from zipfile import ZipFile, ZipInfo, ZIP_STORED
 
 
 def create_pack_file(
         revision_files: dict[str, str],
         dest_filepath: str,
-        tmp_dirpath: str) -> None:
+        tmp_dirpath: str,
+        retain_empty_pack_file_if_errors: bool = False,
+        ) -> set[str]:
     """
     Creates an uncompressed ZIP64 file from a mapping of entry names to
     source file paths, atomically.
+
+    If a source file cannot be read (I/O error), it is skipped and a warning
+    is printed to stderr. The caller can compare the returned set against the
+    input keys to determine which files were skipped.
 
     Arguments:
     * revision_files -- mapping from entry name (e.g., '01a') to source filepath
     * dest_filepath -- final destination path for the pack file
     * tmp_dirpath -- temporary directory to write the pack file before moving it
+    * retain_empty_pack_file_if_errors -- if True, still creates an empty 
+      pack file even when all reads fail, which can be useful as a 
+      migration skip-marker; default False
+
+    Returns:
+    * The set of entry names that were successfully packed.
+      Empty set if no files were packed (either no input files or all reads failed).
 
     Raises:
     * OSError -- if could not write pack file
     """
     if not revision_files:
-        # No files to pack. Don't create an empty zip.
-        return
-
+        # No files to pack. Don't create an empty pack file.
+        return set()
+    
+    good_entry_names = set()
+    dev_null = _DevNullWriter()
+    
     tmp_filepath = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -44,28 +62,86 @@ def create_pack_file(
                 ) as tmp_file:
             tmp_filepath = tmp_file.name
             
-            # Write a zip file containing the revision body files, uncompressed
-            # TODO: Extend to recover from I/O error when READING from the old
-            #       revision body file:
-            #       - Skip packing that individual file
-            #       - Return the caller a list of the files that were successfully packed,
-            #         so that caller knows which files are safe to delete.
-            #       Hard fail (raising I/O error to caller) if I/O error when
-            #       WRITING to the new pack zip file.
+            # 1. Write a zip file containing the revision body files, uncompressed
+            # 2. Scan all the source files for I/O errors
+            zip_file_ok = True
             with ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as zf:
                 for (entry_name, source_filepath) in revision_files.items():
-                    zf.write(source_filepath, arcname=entry_name)
+                    spy_source_file = None
+                    try:
+                        source_file = open(source_filepath, 'rb')
+                        spy_source_file = _ErrorObservingReader(source_file)
+                        with source_file:
+                            dest_file = (
+                                zf.open(ZipInfo(entry_name), 'w', force_zip64=True)
+                                if zip_file_ok
+                                else dev_null
+                            )
+                            with dest_file:
+                                shutil.copyfileobj(spy_source_file, dest_file)
+                    except OSError as e:
+                        if spy_source_file is None or spy_source_file.last_error is not None:
+                            # Open/read error from source_file
+                            print(
+                                f'WARNING: Could not read revision file {source_filepath}: {e}. '
+                                    f'Skipping from pack.',
+                                file=sys.stderr)
+                            
+                            # 1. Stop trying to write the zip file.
+                            # 2. Continue scanning source files for I/O errors.
+                            zip_file_ok = False
+                        else:
+                            # Open/write error to dest_file. Abort.
+                            raise
+                    else:
+                        good_entry_names.add(entry_name)
+            
+            # If an I/O error occurred while reading one of the revision body files,
+            # retry writing the zip file, but only with the revision body files with no errors
+            if not zip_file_ok:
+                # Rewind and clear the first partially written zip file
+                tmp_file.seek(0)
+                tmp_file.truncate()
+                
+                with ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as zf:
+                    for (entry_name, source_filepath) in revision_files.items():
+                        if entry_name not in good_entry_names:
+                            continue
+                        spy_source_file = None
+                        try:
+                            source_file = open(source_filepath, 'rb')
+                            spy_source_file = _ErrorObservingReader(source_file)
+                            with source_file:
+                                dest_file = zf.open(ZipInfo(entry_name), 'w', force_zip64=True)
+                                with dest_file:
+                                    shutil.copyfileobj(spy_source_file, dest_file)
+                        except OSError as e:
+                            if spy_source_file is None or spy_source_file.last_error is not None:
+                                # Open/read error from source_file
+                                
+                                # This source file was read successfully before,
+                                # so something strange is going on. Abort.
+                                raise
+                            else:
+                                # Open/write error to dest_file. Abort.
+                                raise
+                zip_file_ok = True
 
-            # Ensure data is flushed to stable storage
-            os.fsync(tmp_file.fileno())
+            keep_pack_file = good_entry_names or retain_empty_pack_file_if_errors
+            if keep_pack_file:
+                # Ensure data is flushed to stable storage
+                os.fsync(tmp_file.fileno())
         
-        # Move to final location.
-        # Create parent directory if needed.
-        try:
-            replace_and_flush(tmp_filepath, dest_filepath)
-        except FileNotFoundError:
-            os.makedirs(os.path.dirname(dest_filepath), exist_ok=True)
-            replace_and_flush(tmp_filepath, dest_filepath)
+        if keep_pack_file:
+            # Move to final location.
+            # Create parent directory if needed.
+            try:
+                replace_and_flush(tmp_filepath, dest_filepath)
+            except FileNotFoundError:
+                os.makedirs(os.path.dirname(dest_filepath), exist_ok=True)
+                replace_and_flush(tmp_filepath, dest_filepath)
+        else:
+            os.remove(tmp_filepath)
     except:
         # Clean up temp file if operation failed
         if tmp_filepath is not None:
@@ -74,6 +150,38 @@ def create_pack_file(
             except FileNotFoundError:
                 pass
         raise
+
+    return good_entry_names
+
+
+class _ErrorObservingReader(Reader):
+    """Wraps a reader, capturing any exceptions it raises."""
+    
+    def __init__(self, base: Reader) -> None:
+        self._base = base
+        self.last_error = None  # type: Exception | None
+    
+    def read(self, size: int = -1, /) -> bytes:
+        try:
+            if size == -1:
+                return self._base.read()
+            else:
+                return self._base.read(size)
+        except Exception as e:
+            self.last_error = e
+            raise
+
+
+class _DevNullWriter(Writer):
+    """Writer that discards all data written to it."""
+    def write(self, data: bytes, /) -> int:
+        return len(data)
+    
+    def __enter__(self) -> Self:
+        return self
+    
+    def __exit__(self, *args) -> None:
+        pass
 
 
 def open_pack_entry(pack_path: str, entry_name: str) -> 'ZipEntryReader':

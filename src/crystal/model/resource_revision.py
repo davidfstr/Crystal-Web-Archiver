@@ -31,6 +31,7 @@ from typing import (
     BinaryIO, IO, Optional, TYPE_CHECKING, TypedDict, cast,
 )
 from urllib.parse import urlparse
+from zipfile import ZipFile
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
@@ -357,7 +358,9 @@ class ResourceRevision:
     def _pack_revisions_for_id(cls,
             project: Project,
             revision_id: int,
-            project_major_version: int | None = None) -> None:
+            project_major_version: int | None = None,
+            retain_empty_pack_file_if_errors: bool = False,
+            ) -> None:
         """
         Packs a group of 16 revisions into a zip file, given the ID of the last revision in the group.
         Deletes the individual revision files after successfully writing the pack.
@@ -369,6 +372,9 @@ class ResourceRevision:
         * revision_id -- the ID of the last revision in the group (must satisfy revision_id % 16 == 15)
         * project_major_version -- if provided, use this value instead of project.major_version
           (useful when properties are not yet loaded)
+        * retain_empty_pack_file_if_errors -- if True, still creates an empty 
+          pack file even when all reads fail, which can be useful as a 
+          migration skip-marker; default False
         """
         from crystal.model.pack16 import create_pack_file
         from crystal.model.project import Project
@@ -404,15 +410,19 @@ class ResourceRevision:
             pack_filepath = cls._body_pack_filepath_with(project.path, revision_id)
             tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
             try:
-                create_pack_file(revision_files, pack_filepath, tmp_dir)
+                packed_entries = create_pack_file(
+                    revision_files, pack_filepath, tmp_dir, retain_empty_pack_file_if_errors)
             except OSError as e:
                 print(
                     f'WARNING: Could not write pack file {pack_filepath}: {e}',
                     file=sys.stderr)
                 return
 
-            # Delete the individual revision files
-            for body_filepath in revision_files.values():
+            # Delete only the individual revision files that were successfully packed.
+            # Files that failed to read (I/O errors) are left in place.
+            for (entry_name, body_filepath) in revision_files.items():
+                if entry_name not in packed_entries:
+                    continue
                 # TODO: On Windows probably need to specially ignore concurrent
                 #       ResourceRevision.open() calls too
                 try:
@@ -932,7 +942,6 @@ class ResourceRevision:
             if I/O error while reading revision body
         """
         from crystal.model.project import RevisionBodyMissingError
-        from zipfile import ZipFile
 
         self._ensure_has_body()
 
@@ -954,7 +963,10 @@ class ResourceRevision:
         try:
             return os.path.getsize(self._body_filepath)
         except FileNotFoundError:
-            raise RevisionBodyMissingError(self)
+            pass
+        
+        # Give up
+        raise RevisionBodyMissingError(self)
     
     def open(self) -> BinaryIO:
         """
@@ -988,7 +1000,10 @@ class ResourceRevision:
         try:
             return open(self._body_filepath, 'rb')
         except FileNotFoundError:
-            raise RevisionBodyMissingError(self)
+            pass
+        
+        # Give up
+        raise RevisionBodyMissingError(self)
     
     def links(self) -> list[Link]:
         """
