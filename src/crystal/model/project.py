@@ -946,7 +946,15 @@ class Project(ListenableMixin):
                 pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
                 if not os.path.exists(pack_filepath):
                     ResourceRevision._pack_revisions_for_id(
-                        self, pack_end_id, project_major_version=3)
+                        self,
+                        pack_end_id,
+                        project_major_version=3,
+                        # Leave empty pack file in place if all original
+                        # individual revision files have I/O errors so that
+                        # if the migration is restarted no attempt is made to
+                        # repack those bad revisions 
+                        retain_empty_pack_file_if_errors=True,
+                    )
                 pack_start_id += 16
 
                 # Report progress approximately once per second
