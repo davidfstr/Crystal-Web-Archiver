@@ -733,6 +733,7 @@ async def test_given_project_with_major_version_2_when_migrate_to_pack16_then_cr
         # Initiate migration: set markers then close (project reopens automatically at end of context)
         project._set_major_version_old_for_test(2)
         project._set_major_version_for_test(3)
+        # (Close project)
 
     # Reopen project — migration runs automatically in _apply_migrations()
     async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
@@ -779,20 +780,21 @@ async def test_given_empty_project_when_migrate_to_pack16_then_migration_complet
         project_dirpath = project.path
         assertEqual(2, project.major_version)
 
-        # No revisions — project is empty
+        # (No revisions. Project is empty.)
 
         # Initiate migration
         project._set_major_version_old_for_test(2)
         project._set_major_version_for_test(3)
+        # (Close project)
 
-    # Reopen project — migration should complete immediately (no revisions to process)
+    # Reopen project. Migration should complete immediately because no revisions to process.
     async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
         # Verify major version upgraded and migration marker removed
         assertEqual(3, project.major_version)
         assert project._get_property('major_version_old', None) is None, \
             'major_version_old should be removed after migration completes'
 
-        # Verify no pack files were created
+        # Verify no pack files were created. No revisions to pack.
         revisions_dir = os.path.join(project_dirpath, 'revisions')
         pack_count = sum(
             1
@@ -816,15 +818,16 @@ async def test_given_project_with_only_error_revisions_when_migrate_to_pack16_th
         # Initiate migration
         project._set_major_version_old_for_test(2)
         project._set_major_version_for_test(3)
+        # (Close project)
 
-    # Reopen project — migration runs but finds no body files to pack
+    # Reopen project. Migration runs but finds no body files to pack.
     async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
         # Verify major version upgraded and migration marker removed
         assertEqual(3, project.major_version)
         assert project._get_property('major_version_old', None) is None, \
             'major_version_old should be removed after migration completes'
 
-        # Verify no pack files were created (all revisions were error-only, no body files)
+        # Verify no pack files were created. All revisions were error-only, no body files.
         revisions_dir = os.path.join(project_dirpath, 'revisions')
         pack_count = sum(
             1
