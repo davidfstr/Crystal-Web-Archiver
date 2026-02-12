@@ -31,6 +31,7 @@ from typing import (
     BinaryIO, IO, Optional, TYPE_CHECKING, TypedDict, cast,
 )
 from urllib.parse import urlparse
+from zipfile import ZipFile
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
@@ -932,7 +933,6 @@ class ResourceRevision:
             if I/O error while reading revision body
         """
         from crystal.model.project import RevisionBodyMissingError
-        from zipfile import ZipFile
 
         self._ensure_has_body()
 
@@ -954,7 +954,10 @@ class ResourceRevision:
         try:
             return os.path.getsize(self._body_filepath)
         except FileNotFoundError:
-            raise RevisionBodyMissingError(self)
+            pass
+        
+        # Give up
+        raise RevisionBodyMissingError(self)
     
     def open(self) -> BinaryIO:
         """
@@ -988,7 +991,10 @@ class ResourceRevision:
         try:
             return open(self._body_filepath, 'rb')
         except FileNotFoundError:
-            raise RevisionBodyMissingError(self)
+            pass
+        
+        # Give up
+        raise RevisionBodyMissingError(self)
     
     def links(self) -> list[Link]:
         """
