@@ -242,6 +242,20 @@ existing Flat → Hierarchical migration.
   open will resume from where it left off (scanning for the first unmigrated pack).
 - Handle I/O errors during migration: if a hierarchical file can't be read after
   opening, skip it from the pack, leave the original file in place, warn to stderr.
+    - The current implementation in `create_pack_file` uses `ZipFile.write` which I suspect
+      doesn't provide enough control to:
+      (1) detect whether an I/O error occurred during a read of the old revision 
+          vs. an I/O error during a write to the pack file or
+      (2) recover from a failed write to the pack file - it's not clear from
+          the ZipFile documentation whether a failed `write` leaves the zip file
+          in a good state or not, with the partial entry removed. Look at CPython
+          source code (available in this workspace, or at `/Users/davidf/Projects/cpython`)
+          to see what kind of error recovery is builtin, if any.
+          - If no builtin error recovery, it MAY be sufficient to save the zip file's prior
+            location (via `tell`) immediately before attempting to write a zip entry,
+            and if an error is raised, rewind the zip file to the old location (via `seek`)
+            and truncate the file size to end at the old location. Testing required
+            to determine whether that procedure actually works.
 - Ensure temp pack files in `tmp/` are cleaned up on project open (existing tmp
   cleanup logic already handles this).
 
