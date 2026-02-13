@@ -358,7 +358,9 @@ class ResourceRevision:
     def _pack_revisions_for_id(cls,
             project: Project,
             revision_id: int,
-            project_major_version: int | None = None) -> None:
+            project_major_version: int | None = None,
+            retain_empty_pack_file_if_errors: bool = False,
+            ) -> None:
         """
         Packs a group of 16 revisions into a zip file, given the ID of the last revision in the group.
         Deletes the individual revision files after successfully writing the pack.
@@ -370,6 +372,9 @@ class ResourceRevision:
         * revision_id -- the ID of the last revision in the group (must satisfy revision_id % 16 == 15)
         * project_major_version -- if provided, use this value instead of project.major_version
           (useful when properties are not yet loaded)
+        * retain_empty_pack_file_if_errors -- if True, still creates an empty 
+          pack file even when all reads fail, which can be useful as a 
+          migration skip-marker; default False
         """
         from crystal.model.pack16 import create_pack_file
         from crystal.model.project import Project
@@ -405,7 +410,8 @@ class ResourceRevision:
             pack_filepath = cls._body_pack_filepath_with(project.path, revision_id)
             tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
             try:
-                packed_entries = create_pack_file(revision_files, pack_filepath, tmp_dir)
+                packed_entries = create_pack_file(
+                    revision_files, pack_filepath, tmp_dir, retain_empty_pack_file_if_errors)
             except OSError as e:
                 print(
                     f'Warning: Could not write pack file {pack_filepath}: {e}',

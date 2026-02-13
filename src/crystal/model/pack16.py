@@ -19,7 +19,9 @@ from zipfile import ZipFile, ZipInfo, ZIP_STORED
 def create_pack_file(
         revision_files: dict[str, str],
         dest_filepath: str,
-        tmp_dirpath: str) -> set[str]:
+        tmp_dirpath: str,
+        retain_empty_pack_file_if_errors: bool = False,
+        ) -> set[str]:
     """
     Creates an uncompressed ZIP64 file from a mapping of entry names to
     source file paths, atomically.
@@ -32,6 +34,9 @@ def create_pack_file(
     * revision_files -- mapping from entry name (e.g., '01a') to source filepath
     * dest_filepath -- final destination path for the pack file
     * tmp_dirpath -- temporary directory to write the pack file before moving it
+    * retain_empty_pack_file_if_errors -- if True, still creates an empty 
+      pack file even when all reads fail, which can be useful as a 
+      migration skip-marker; default False
 
     Returns:
     * The set of entry names that were successfully packed.
@@ -41,7 +46,7 @@ def create_pack_file(
     * OSError -- if could not write pack file
     """
     if not revision_files:
-        # No files to pack. Don't create an empty zip.
+        # No files to pack. Don't create an empty pack file.
         return set()
     
     good_entry_names = set()
@@ -90,6 +95,10 @@ def create_pack_file(
             # If an I/O error occurred while reading one of the revision body files,
             # retry writing the zip file, but only with the revision body files with no errors
             if not zip_file_ok:
+                # Rewind and clear the first partially written zip file
+                tmp_file.seek(0)
+                tmp_file.truncate()
+                
                 with ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as zf:
                     for (entry_name, source_filepath) in revision_files.items():
                         if entry_name not in good_entry_names:
@@ -114,16 +123,21 @@ def create_pack_file(
                                 raise
                 zip_file_ok = True
 
-            # Ensure data is flushed to stable storage
-            os.fsync(tmp_file.fileno())
-
-        # Move to final location.
-        # Create parent directory if needed.
-        try:
-            replace_and_flush(tmp_filepath, dest_filepath)
-        except FileNotFoundError:
-            os.makedirs(os.path.dirname(dest_filepath), exist_ok=True)
-            replace_and_flush(tmp_filepath, dest_filepath)
+            keep_pack_file = good_entry_names or retain_empty_pack_file_if_errors
+            if keep_pack_file:
+                # Ensure data is flushed to stable storage
+                os.fsync(tmp_file.fileno())
+        
+        if keep_pack_file:
+            # Move to final location.
+            # Create parent directory if needed.
+            try:
+                replace_and_flush(tmp_filepath, dest_filepath)
+            except FileNotFoundError:
+                os.makedirs(os.path.dirname(dest_filepath), exist_ok=True)
+                replace_and_flush(tmp_filepath, dest_filepath)
+        else:
+            os.remove(tmp_filepath)
     except:
         # Clean up temp file if operation failed
         if tmp_filepath is not None:
