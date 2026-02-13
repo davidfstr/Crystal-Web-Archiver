@@ -42,11 +42,16 @@ _P = ParamSpec('_P')
 _RT = TypeVar('_RT')
 
 
-_project_path_to_open_soon: Optional[str] = None
+# A project to open automatically when the current project is closed.
+# Is a tuple of (project_path, is_untitled) or None if no project.
+_project_to_open_soon: tuple[str, bool] | None = None
 # Interrupts prompt_for_prompt() to open _project_path_to_open_soon.
 # None if prompt_for_prompt() is not running.
 _interrupt_prompt_for_project_to_open_project: Optional[Callable[[], None]] = None
 
+
+# ------------------------------------------------------------------------------
+# Main
 
 def main() -> Never:
     """
@@ -602,8 +607,8 @@ def _main2(args: list[str]) -> None:
         @override
         def MacOpenFile(self, filepath):
             # Open the project at the next available opportunity
-            global _project_path_to_open_soon
-            _project_path_to_open_soon = filepath
+            global _project_to_open_soon
+            _project_to_open_soon = (filepath, False)
             
             # If the open/create dialog is currently showing,
             # interrupt it to observe the project we are requesting
@@ -622,7 +627,7 @@ def _main2(args: list[str]) -> None:
                 success = current_window.try_close()
                 if not success:
                     # Cancel the open operation
-                    _project_path_to_open_soon = None
+                    _project_to_open_soon = None
         
         @capture_crashes_to_stderr
         def _finish_launch(self, filepath: str | None=None) -> None:
@@ -873,10 +878,12 @@ async def _did_launch(
     import wx
 
     # If MacOpenFile queued a project to be opened, open it
-    global _project_path_to_open_soon
-    if _project_path_to_open_soon is not None and filepath is None:
-        filepath = _project_path_to_open_soon  # reinterpret
-        _project_path_to_open_soon = None  # consume
+    global _project_to_open_soon
+    if _project_to_open_soon is not None and filepath is None:
+        (filepath, is_untitled) = _project_to_open_soon  # reinterpret
+        _project_to_open_soon = None  # consume
+    else:
+        is_untitled = False
 
     # If project to open was passed on the command-line, use it
     if parsed_args.project_filepath is not None and filepath is None:
@@ -924,6 +931,7 @@ async def _did_launch(
                 # Get a project
                 project_kwargs = dict(
                     readonly=effective_readonly,
+                    is_untitled=is_untitled,
                 )  # type: dict[str, Any]
                 if filepath is None:
                     from crystal.app_preferences import app_prefs
@@ -934,10 +942,10 @@ async def _did_launch(
                         try:
                             # NOTE: Can raise CancelOpenProject
                             retry_on_cancel = True
+                            project_kwargs['is_untitled'] = True
                             project = _load_project(
                                 last_untitled_project_path,
                                 progress_listener,
-                                is_untitled=True,
                                 is_dirty=True,
                                 **project_kwargs
                             )
@@ -1146,10 +1154,12 @@ async def _prompt_for_project(
                             return _create_untitled_project(dialog, progress_listener, **project_kwargs)
                         elif choice == wx.ID_NO:  # Open
                             # If MacOpenFile queued a project to be opened, open it
-                            global _project_path_to_open_soon
-                            if _project_path_to_open_soon is not None:
-                                filepath = _project_path_to_open_soon
-                                _project_path_to_open_soon = None  # consume
+                            global _project_to_open_soon
+                            if _project_to_open_soon is not None:
+                                (filepath, is_untitled) = _project_to_open_soon
+                                _project_to_open_soon = None  # consume
+                                
+                                project_kwargs['is_untitled'] = is_untitled
                                 return _load_project(
                                     filepath,
                                     progress_listener,
@@ -1366,6 +1376,18 @@ def _capture_crashes_to_stderr_and_capture_systemexit_to_quit(
             set_is_quitting()
             return None
     return bulkhead_call
+
+
+# ------------------------------------------------------------------------------
+# API
+
+def queue_project_to_open_next(project_path: str, is_untitled: bool = False) -> None:
+    """
+    Queues a specific project to be opened automatically immediately after
+    the current project is closed.
+    """
+    global _project_to_open_soon
+    _project_to_open_soon = (project_path, is_untitled)
 
 
 # ------------------------------------------------------------------------------

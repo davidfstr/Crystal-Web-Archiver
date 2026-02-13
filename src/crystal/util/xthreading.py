@@ -182,6 +182,13 @@ def fg_trampoline(func: Callable[_P, None]) -> Callable[_P, None]:
 _deferred_fg_calls = deque()  # type: Deque[Callable[[], None]]
 _deferred_fg_calls_paused = False
 
+# TODO: Consider rename to "fg_call_soon" to (1) better-emphasize that it is possible
+#       this method invokes its callback immediately and not necessarily "later",
+#       unless force_later=True is passed explicitly and (2) better-distinguish
+#       from wx.CallLater() which will actually call its callback later.
+#       
+#       If rename actually done, leave fg_call_later() as a deprecated redirect,
+#       since it is very likely to be used by 3rd party shell code.
 def fg_call_later(
         callable: Callable[_P, None],
         # TODO: Give `args` the type `_P` once that can be spelled in Python's type system.
@@ -191,7 +198,7 @@ def fg_call_later(
         force_later: bool=False,
         ) -> None:
     """
-    Schedules the specified callable to be called on the foreground thread,
+    Schedules the specified callable to be called on the foreground thread soon,
     either immediately if the caller is already running on the foreground thread,
     or later if the caller is running on a different thread.
     
