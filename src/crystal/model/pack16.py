@@ -43,24 +43,6 @@ def create_pack_file(
         # No files to pack. Don't create an empty zip.
         return set()
 
-    # Read all source files into memory first, so that read errors
-    # can be cleanly separated from write errors.
-    # Revision body files are typically ~100 KB each, so buffering is fine.
-    packed_entries = {}  # type: dict[str, bytes]
-    for (entry_name, source_filepath) in revision_files.items():
-        try:
-            with open(source_filepath, 'rb') as f:
-                packed_entries[entry_name] = f.read()
-        except OSError as e:
-            print(
-                f'*** Warning: Could not read revision file {source_filepath}: {e}. '
-                f'Skipping from pack.',
-                file=sys.stderr)
-
-    if not packed_entries:
-        # All reads failed. Don't create an empty zip.
-        return set()
-
     tmp_filepath = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -73,11 +55,8 @@ def create_pack_file(
 
             # Write a zip file containing the revision body files, uncompressed
             with ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as zf:
-                for (entry_name, data) in packed_entries.items():
-                    zf.writestr(
-                        ZipInfo(entry_name),  # avoid storing timestamps
-                        data,
-                        compress_type=ZIP_STORED)
+                for (entry_name, source_filepath) in revision_files.items():
+                    zf.write(source_filepath, arcname=entry_name)
 
             # Ensure data is flushed to stable storage
             os.fsync(tmp_file.fileno())
@@ -98,7 +77,8 @@ def create_pack_file(
                 pass
         raise
 
-    return set(packed_entries.keys())
+    # TODO
+    return set()
 
 
 def open_pack_entry(pack_path: str, entry_name: str) -> 'ZipEntryReader':
