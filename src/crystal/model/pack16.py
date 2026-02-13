@@ -72,7 +72,11 @@ def create_pack_file(
                         source_file = open(source_filepath, 'rb')
                         spy_source_file = _ErrorObservingReader(source_file)
                         with source_file:
-                            dest_file = (zf.open(ZipInfo(entry_name), 'w') if zip_file_ok else dev_null)
+                            dest_file = (
+                                zf.open(ZipInfo(entry_name), 'w', force_zip64=True)
+                                if zip_file_ok
+                                else dev_null
+                            )
                             with dest_file:
                                 shutil.copyfileobj(spy_source_file, dest_file)
                     except OSError as e:
@@ -108,7 +112,7 @@ def create_pack_file(
                             source_file = open(source_filepath, 'rb')
                             spy_source_file = _ErrorObservingReader(source_file)
                             with source_file:
-                                dest_file = zf.open(ZipInfo(entry_name), 'w')
+                                dest_file = zf.open(ZipInfo(entry_name), 'w', force_zip64=True)
                                 with dest_file:
                                     shutil.copyfileobj(spy_source_file, dest_file)
                         except OSError as e:
