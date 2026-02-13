@@ -62,25 +62,30 @@ def create_pack_file(
             zip_file_ok = True
             with ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as zf:
                 for (entry_name, source_filepath) in revision_files.items():
-                    with open(source_filepath, 'rb') as source_file, \
-                            (zf.open(ZipInfo(entry_name), 'w') if zip_file_ok else dev_null) as dest_file:
+                    spy_source_file = None
+                    try:
+                        source_file = open(source_filepath, 'rb')
                         spy_source_file = _ErrorObservingReader(source_file)
-                        try:
-                            shutil.copyfileobj(spy_source_file, dest_file)
-                        except OSError as e:
-                            if spy_source_file.last_error is None:
-                                # Write error (to dest_file). Abort.
-                                raise
-                            else:
-                                # Read error (from source_file)
-                                print(
-                                    f'Warning: Could not read revision file {source_filepath}: {e}. '
-                                        f'Skipping from pack.',
-                                    file=sys.stderr)
-                                # (Do not add entry to the good_entry_names set.)
-                                zip_file_ok = False
+                        with source_file:
+                            dest_file = (zf.open(ZipInfo(entry_name), 'w') if zip_file_ok else dev_null)
+                            with dest_file:
+                                shutil.copyfileobj(spy_source_file, dest_file)
+                    except OSError as e:
+                        if spy_source_file is None or spy_source_file.last_error is not None:
+                            # Open/read error from source_file
+                            print(
+                                f'Warning: Could not read revision file {source_filepath}: {e}. '
+                                    f'Skipping from pack.',
+                                file=sys.stderr)
+                            
+                            # 1. Stop trying to write the zip file.
+                            # 2. Continue scanning source files for I/O errors.
+                            zip_file_ok = False
                         else:
-                            good_entry_names.add(entry_name)
+                            # Open/write error to dest_file. Abort.
+                            raise
+                    else:
+                        good_entry_names.add(entry_name)
             
             # If an I/O error occurred while reading one of the revision body files,
             # retry writing the zip file, but only with the revision body files with no errors
@@ -89,20 +94,24 @@ def create_pack_file(
                     for (entry_name, source_filepath) in revision_files.items():
                         if entry_name not in good_entry_names:
                             continue
-                        with open(source_filepath, 'rb') as source_file, \
-                                zf.open(ZipInfo(entry_name), 'w') as dest_file:
+                        spy_source_file = None
+                        try:
+                            source_file = open(source_filepath, 'rb')
                             spy_source_file = _ErrorObservingReader(source_file)
-                            try:
-                                shutil.copyfileobj(spy_source_file, dest_file)
-                            except OSError as e:
-                                if spy_source_file.last_error is None:
-                                    # Write error (to dest_file). Abort.
-                                    raise
-                                else:
-                                    # Read error (from source_file).
-                                    # This source file was read successfully before,
-                                    # so something strange is going on. Abort.
-                                    raise
+                            with source_file:
+                                dest_file = zf.open(ZipInfo(entry_name), 'w')
+                                with dest_file:
+                                    shutil.copyfileobj(spy_source_file, dest_file)
+                        except OSError as e:
+                            if spy_source_file is None or spy_source_file.last_error is not None:
+                                # Open/read error from source_file
+                                
+                                # This source file was read successfully before,
+                                # so something strange is going on. Abort.
+                                raise
+                            else:
+                                # Open/write error to dest_file. Abort.
+                                raise
                 zip_file_ok = True
 
             # Ensure data is flushed to stable storage
