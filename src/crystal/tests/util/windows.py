@@ -913,6 +913,8 @@ class AboutDialog:
 class PreferencesDialog:
     _dialog: wx.Dialog
     html_parser_field: wx.Choice
+    revision_format_label: wx.StaticText
+    migrate_checkbox: wx.CheckBox | None
     stale_before_checkbox: wx.CheckBox
     stale_before_date_picker: wx.adv.DatePickerCtrl
     cookie_field: wx.ComboBox
@@ -939,6 +941,14 @@ class PreferencesDialog:
         self.html_parser_field = self._dialog.FindWindow(name=
             'cr-preferences-dialog__html-parser-field')
         assert isinstance(self.html_parser_field, wx.Choice)
+        self.revision_format_label = self._dialog.FindWindow(name=
+            'cr-preferences-dialog__revision-format-label')
+        assert isinstance(self.revision_format_label, wx.StaticText)
+        migrate_checkbox = self._dialog.FindWindow(name=
+            'cr-preferences-dialog__migrate-checkbox')
+        if migrate_checkbox is not None:
+            assert isinstance(migrate_checkbox, wx.CheckBox)
+        self.migrate_checkbox = migrate_checkbox
         self.stale_before_checkbox = self._dialog.FindWindow(name=
             'cr-preferences-dialog__stale-before-checkbox')
         assert isinstance(self.stale_before_checkbox, wx.CheckBox)

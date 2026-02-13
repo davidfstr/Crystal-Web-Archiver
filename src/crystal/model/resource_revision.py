@@ -410,7 +410,7 @@ class ResourceRevision:
             pack_filepath = cls._body_pack_filepath_with(project.path, revision_id)
             tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
             try:
-                packed_entries = create_pack_file(
+                packed_entry_names = create_pack_file(
                     revision_files, pack_filepath, tmp_dir, retain_empty_pack_file_if_errors)
             except OSError as e:
                 print(
@@ -421,7 +421,7 @@ class ResourceRevision:
             # Delete only the individual revision files that were successfully packed.
             # Files that failed to read (I/O errors) are left in place.
             for (entry_name, body_filepath) in revision_files.items():
-                if entry_name not in packed_entries:
+                if entry_name not in packed_entry_names:
                     continue
                 # TODO: On Windows probably need to specially ignore concurrent
                 #       ResourceRevision.open() calls too

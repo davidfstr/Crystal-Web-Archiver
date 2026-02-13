@@ -47,7 +47,7 @@ from crystal.util.xthreading import (
     SwitchToThread, bg_affinity, bg_call_later, fg_affinity, fg_wait_for, start_thread_switching_coroutine,
 )
 import datetime
-from enum import Enum
+from enum import Enum, StrEnum, auto
 import json
 import math
 import os
@@ -65,7 +65,8 @@ import time
 from tqdm import tqdm
 import traceback
 from typing import (
-    Any, cast, Dict, Literal, List, Optional, Self, Tuple, TYPE_CHECKING, TypeAlias, TypeVar, Union,
+    assert_never, cast, Dict, Literal, List, Optional, Self, Tuple,
+    TYPE_CHECKING, TypeAlias, TypeVar, Union,
 )
 from typing_extensions import override
 import threading
@@ -103,6 +104,11 @@ class _Missing(Enum):
 
 
 EntityTitleFormat: TypeAlias = Literal['url_name', 'name_url']
+
+
+class MigrationType(StrEnum):
+    FLAT_TO_HIERARCHICAL = auto()
+    HIERARCHICAL_TO_PACK16 = auto()
 
 
 class Project(ListenableMixin):
@@ -1521,6 +1527,7 @@ class Project(ListenableMixin):
         * _get_major_version -- Reads the major version before project properties are loaded
         * _set_major_version -- Writes the major version before project properties are loaded
         * _set_major_version_for_test -- Writes the major version, for tests
+        * _FORMAT_NAME_FOR_MAJOR_VERSION -- User-facing name for each major version
         """
         return int(self._get_property('major_version', '1'))
 
@@ -2812,7 +2819,11 @@ class Project(ListenableMixin):
     # === Close & Reopen ===
     
     @fg_affinity
-    def close(self, *, capture_crashes: bool=True, _will_reopen: bool=False) -> None:
+    def close(self,
+            *, capture_crashes: bool = True,
+            migrate_after_reopen: MigrationType | None = None,
+            _will_reopen: bool = False
+            ) -> None:
         """
         Closes this project soon, stopping any tasks and closing all files.
         
@@ -2840,36 +2851,40 @@ class Project(ListenableMixin):
                     self._stop_scheduler()
                 finally:
                     try:
-                        self._close_database(self._db, self.readonly)
+                        if migrate_after_reopen is not None:
+                            self._queue_migration_after_reopen(migrate_after_reopen)
                     finally:
                         try:
-                            if self.is_untitled and not _will_reopen:
-                                # Forget the untitled project during a normal close operation
-                                # so that Crystal does not attempt to reopen it later
-                                del app_prefs.unsaved_untitled_project_path
-                                
-                                try:
-                                    # Try to send the untitled project to the trash,
-                                    # where the user can easily recover it if they change
-                                    # their mind about not saving it
-                                    send2trash(self.path)
-                                except:
-                                    try:
-                                        # Try to send the untitled project to the
-                                        # OS temporary directory, where it will
-                                        # be deleted when the computer restarts
-                                        temp_dirpath = tempfile.gettempdir()
-                                        os.rename(
-                                            self.path,
-                                            os.path.join(temp_dirpath, os.path.basename(self.path)))
-                                    except:
-                                        # Give up
-                                        pass
+                            self._close_database(self._db, self.readonly)
                         finally:
-                            # Unexport reference to self, if running tests
-                            if tests_are_running():
-                                if Project._last_opened_project is self:
-                                    Project._last_opened_project = None
+                            try:
+                                if self.is_untitled and not _will_reopen:
+                                    # Forget the untitled project during a normal close operation
+                                    # so that Crystal does not attempt to reopen it later
+                                    del app_prefs.unsaved_untitled_project_path
+                                    
+                                    try:
+                                        # Try to send the untitled project to the trash,
+                                        # where the user can easily recover it if they change
+                                        # their mind about not saving it
+                                        send2trash(self.path)
+                                    except:
+                                        try:
+                                            # Try to send the untitled project to the
+                                            # OS temporary directory, where it will
+                                            # be deleted when the computer restarts
+                                            temp_dirpath = tempfile.gettempdir()
+                                            os.rename(
+                                                self.path,
+                                                os.path.join(temp_dirpath, os.path.basename(self.path)))
+                                        except:
+                                            # Give up
+                                            pass
+                            finally:
+                                # Unexport reference to self, if running tests
+                                if tests_are_running():
+                                    if Project._last_opened_project is self:
+                                        Project._last_opened_project = None
             do_close()
         finally:
             self._closed = True
@@ -2940,6 +2955,24 @@ class Project(ListenableMixin):
                             print(
                                 f'*** Incomplete task cleanup: Task in task tree was not completed: '
                                 f'{r=!r}, {task_ref=!r}', file=sys.stderr)
+    
+    @fg_affinity
+    def _queue_migration_after_reopen(self, migration_type: MigrationType) -> None:
+        """Marks this project to be migrated when it is next reopened."""
+        if migration_type == MigrationType.FLAT_TO_HIERARCHICAL:  # v1 -> v2
+            if self.major_version != 1:
+                raise ValueError()
+            
+            os.mkdir(os.path.join(
+                self.path, self._IN_PROGRESS_REVISIONS_DIRNAME))
+        elif migration_type == MigrationType.HIERARCHICAL_TO_PACK16:  # v2 -> v3
+            if self.major_version != 2:
+                raise ValueError()
+            
+            self._set_major_version_old(2, self._db)
+            self._set_major_version(3, self._db)
+        else:
+            assert_never(migration_type)
     
     @staticmethod
     @fg_affinity

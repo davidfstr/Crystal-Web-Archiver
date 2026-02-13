@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from unittest import skip
 from crystal import progress
 from crystal.model import Project, Resource, ResourceRevision as RR, RevisionBodyMissingError
+from crystal.model.project import MigrationType
 from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
 from crystal.tests.util.asserts import assertEqual, assertRaises
 from crystal.tests.util.runner import bg_sleep
@@ -735,12 +736,10 @@ async def test_given_project_with_major_version_2_when_migrate_to_pack16_then_cr
         assert os.path.exists(revision_001_path), \
             'v2 project should have individual revision files before migration'
 
-        # Initiate migration: set markers then close (project reopens automatically at end of context)
-        project._set_major_version_old_for_test(2)
-        project._set_major_version_for_test(3)
-        # (Close project)
+        # Initiate migration
+        project._queue_migration_after_reopen(MigrationType.HIERARCHICAL_TO_PACK16)
 
-    # Reopen project — migration runs automatically in _apply_migrations()
+    # Reopen project. Migration runs automatically.
     async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
         # Verify major version upgraded and migration marker removed
         assertEqual(3, project.major_version)
@@ -788,9 +787,7 @@ async def test_given_empty_project_when_migrate_to_pack16_then_migration_complet
         # (No revisions. Project is empty.)
 
         # Initiate migration
-        project._set_major_version_old_for_test(2)
-        project._set_major_version_for_test(3)
-        # (Close project)
+        project._queue_migration_after_reopen(MigrationType.HIERARCHICAL_TO_PACK16)
 
     # Reopen project. Migration should complete immediately because no revisions to process.
     async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
@@ -819,11 +816,9 @@ async def test_given_project_with_only_error_revisions_when_migrate_to_pack16_th
         for i in range(1, 33):
             resource = Resource(project, f'http://example.com/error-migrate/{i}')
             RR.create_from_error(resource, Exception(f'Error {i}'))
-
+        
         # Initiate migration
-        project._set_major_version_old_for_test(2)
-        project._set_major_version_for_test(3)
-        # (Close project)
+        project._queue_migration_after_reopen(MigrationType.HIERARCHICAL_TO_PACK16)
 
     # Reopen project. Migration runs but finds no body files to pack.
     async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
@@ -859,9 +854,8 @@ async def test_given_migration_in_progress_when_cancel_and_reopen_project_then_m
                 body_stream=BytesIO(f'body {i}'.encode()),
             )
 
-        # Initiate migration: set markers then close
-        project._set_major_version_old_for_test(2)
-        project._set_major_version_for_test(3)
+        # Initiate migration
+        project._queue_migration_after_reopen(MigrationType.HIERARCHICAL_TO_PACK16)
 
     # Open project, but cancel the migration after the first pack is processed
     if True:
@@ -939,9 +933,8 @@ async def test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_fil
             project_dirpath, 'revisions', '000', '000', '000', '000', '008')
         assert os.path.exists(corrupt_revision_filepath)
 
-        # Initiate migration: set markers then close
-        project._set_major_version_old_for_test(2)
-        project._set_major_version_for_test(3)
+        # Initiate migration
+        project._queue_migration_after_reopen(MigrationType.HIERARCHICAL_TO_PACK16)
 
     # Mock builtins.open to raise OSError when reading the corrupt file
     real_open = open  # capture

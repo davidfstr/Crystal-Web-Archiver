@@ -3,8 +3,8 @@ from crystal.util import features
 from crystal.util.wx_bind import bind
 from crystal.util.wx_date_picker import fix_date_picker_size
 from crystal.util.wx_dialog import (
-    add_title_heading_to_dialog_if_needed, position_dialog_initially, 
-    ShowWindowModal,
+    add_title_heading_to_dialog_if_needed, position_dialog_initially,
+    ShowModal, ShowWindowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_windows, preferences_are_called_settings_in_this_os
@@ -15,7 +15,7 @@ import wx
 
 if TYPE_CHECKING:
     from crystal.doc.html import HtmlParserType
-    from crystal.model import Project
+    from crystal.model.project import MigrationType, Project
 
 
 _WINDOW_INNER_PADDING = 10
@@ -37,21 +37,29 @@ class PreferencesDialog:
         v: k for (k, v) in _HTML_PARSER_TYPE_FOR_ITEM.items()
     }
     
-    # === Init ===
+    _FORMAT_NAME_FOR_MAJOR_VERSION = {
+        1: 'Flat',
+        2: 'Hierarchical',
+        3: 'Pack16',
+    }
     
+    # === Init ===
+
     def __init__(self,
             parent: wx.Window,
-            project: 'Project', 
-            on_close: Callable[[], None] | None = None,
+            project: 'Project',
+            on_close: 'Callable[[MigrationType | None], None] | None' = None,
             ) -> None:
         """
         Arguments:
         * parent -- parent wx.Window that this dialog is attached to.
         * project -- the project whose preferences are being edited.
         * on_close -- optional callback called when dialog is closed.
+                      Receives the user's requested migration, if any.
         """
         self._project = project
-        self._on_close_callback = on_close or (lambda: None)
+        self._on_close_callback = on_close or (lambda migration_type: None)
+        self._migration_type: 'MigrationType | None' = None
         
         dialog = self.dialog = wx.Dialog(
             parent,
@@ -109,6 +117,7 @@ class PreferencesDialog:
             flag=wx.EXPAND|wx.TOP, pos=wx.GBPosition(0, 0), span=wx.GBSpan(1, 2),
             border=5 if is_windows() else 0)
         
+        # HTML Parser
         fields_sizer.Add(
             wx.StaticText(parent, label='HTML Parser:'),
             flag=wx.EXPAND, pos=wx.GBPosition(1, 0))
@@ -124,11 +133,48 @@ class PreferencesDialog:
             self._ITEM_FOR_HTML_PARSER_TYPE[self._old_html_parser_type])
         if self._project.readonly:
             self.html_parser_field.Enabled = False
-        
         fields_sizer.Add(
             self.html_parser_field,
             flag=wx.EXPAND, pos=wx.GBPosition(1, 1))
-        
+
+        # Revision Storage Format
+        fields_sizer.Add(
+            wx.StaticText(parent, label='Revision Storage Format:'),
+            flag=wx.EXPAND, pos=wx.GBPosition(2, 0))
+        format_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        if True:
+            major_version = self._project.major_version
+            
+            if major_version not in self._FORMAT_NAME_FOR_MAJOR_VERSION:
+                raise ValueError(f'Unknown {major_version=}')
+            format_sizer.Add(
+                wx.StaticText(
+                    parent,
+                    label=self._FORMAT_NAME_FOR_MAJOR_VERSION[major_version],
+                    name='cr-preferences-dialog__revision-format-label'),
+                flag=wx.CENTER
+            )
+
+            if major_version == 1:
+                self._migrate_checkbox = wx.CheckBox(
+                    parent, label='Migrate to Hierarchical',
+                    name='cr-preferences-dialog__migrate-checkbox')
+            elif major_version == 2:
+                self._migrate_checkbox = wx.CheckBox(
+                    parent, label='Migrate to Pack16',
+                    name='cr-preferences-dialog__migrate-checkbox')
+            elif major_version == 3:
+                self._migrate_checkbox = None
+            else:
+                raise ValueError(f'Unknown {major_version=}')
+            if self._migrate_checkbox is not None:
+                format_sizer.AddSpacer(_FORM_LABEL_INPUT_SPACING * 2)
+                format_sizer.Add(self._migrate_checkbox, flag=wx.CENTER)
+                self._migrate_checkbox.Enabled = not self._project.readonly
+        fields_sizer.Add(
+            format_sizer,
+            flag=wx.EXPAND, pos=wx.GBPosition(2, 1))
+
         return fields_sizer
     
     def _create_session_fields(self, parent: wx.Window) -> wx.Sizer:
@@ -360,8 +406,8 @@ class PreferencesDialog:
             self._on_cancel(event)
     
     def _on_close(self, event: wx.CloseEvent) -> None:
-        self._on_close_callback()
-        
+        self._on_close_callback(self._migration_type)
+
         self.dialog.Destroy()
     
     def _on_ok(self, event: wx.CommandEvent) -> None:
@@ -372,7 +418,7 @@ class PreferencesDialog:
                     self.html_parser_field.Items[self.html_parser_field.Selection]]
             if new_html_parser_type != self._old_html_parser_type:
                 self._project.html_parser_type = new_html_parser_type
-        
+
         # Save session fields
         self._project.request_cookie = self.cookie_field.Value or None
         if self.stale_before_checkbox.Value:
@@ -389,7 +435,7 @@ class PreferencesDialog:
             self._project.min_fetch_date = stale_before_dt_local
         else:
             self._project.min_fetch_date = None
-        
+
         # Save app fields
         if features.proxy_enabled():
             if self.no_proxy_radio.Value:
@@ -398,19 +444,42 @@ class PreferencesDialog:
                 app_prefs.proxy_type = 'socks5'
             else:
                 raise AssertionError()
-            
+
             try:
                 app_prefs.socks5_proxy_host = self.socks5_host_field.Value.strip()
             except ValueError:  # invalid format
                 del app_prefs.socks5_proxy_host
-            
+
             port_str = self.socks5_port_field.Value.strip()
             try:
                 port = int(port_str)
                 app_prefs.socks5_proxy_port = port
             except ValueError:  # invalid format
                 del app_prefs.socks5_proxy_port
-        
+
+        # Check for migration request
+        if self._migrate_checkbox is not None and self._migrate_checkbox.Value:
+            from crystal.model.project import MigrationType
+            
+            major_version = self._project.major_version
+            if major_version == 1:
+                self._migration_type = MigrationType.FLAT_TO_HIERARCHICAL
+            elif major_version == 2:
+                # Show warning dialog for Pack16 migration
+                warning_dialog = wx.MessageDialog(
+                    self.dialog,
+                    'Migration may take several hours to complete. '
+                    'The project will not be usable while migration is in progress.',
+                    'Migrate to Pack16',
+                    wx.OK | wx.CANCEL | wx.ICON_WARNING)
+                warning_dialog.Name = 'cr-migrate-to-pack16-warning'
+                warning_dialog.SetOKCancelLabels('Migrate', 'Cancel')
+                with warning_dialog:
+                    result = ShowModal(warning_dialog)
+                if result != wx.ID_OK:
+                    return  # user cancelled; leave Preferences open
+                self._migration_type = MigrationType.HIERARCHICAL_TO_PACK16
+
         self.dialog.Close()  # will call _on_close()
     
     def _on_cancel(self, event: wx.Event) -> None:
