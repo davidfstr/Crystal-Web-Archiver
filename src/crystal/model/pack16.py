@@ -9,30 +9,57 @@ large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
 from crystal.util.filesystem import replace_and_flush
 import os
 import shutil
+import sys
 import tempfile
 from typing import IO, Self
-from zipfile import ZipFile, ZIP_STORED
+from zipfile import ZipFile, ZipInfo, ZIP_STORED
 
 
 def create_pack_file(
         revision_files: dict[str, str],
         dest_filepath: str,
-        tmp_dirpath: str) -> None:
+        tmp_dirpath: str) -> set[str]:
     """
     Creates an uncompressed ZIP64 file from a mapping of entry names to
     source file paths, atomically.
+
+    If a source file cannot be read (I/O error), it is skipped and a warning
+    is printed to stderr. The caller can compare the returned set against the
+    input keys to determine which files were skipped.
 
     Arguments:
     * revision_files -- mapping from entry name (e.g., '01a') to source filepath
     * dest_filepath -- final destination path for the pack file
     * tmp_dirpath -- temporary directory to write the pack file before moving it
 
+    Returns:
+    * The set of entry names that were successfully packed.
+      Empty set if no files were packed (either no input files or all reads failed).
+
     Raises:
     * OSError -- if could not write pack file
     """
     if not revision_files:
         # No files to pack. Don't create an empty zip.
-        return
+        return set()
+
+    # Read all source files into memory first, so that read errors
+    # can be cleanly separated from write errors.
+    # Revision body files are typically ~100 KB each, so buffering is fine.
+    packed_entries = {}  # type: dict[str, bytes]
+    for (entry_name, source_filepath) in revision_files.items():
+        try:
+            with open(source_filepath, 'rb') as f:
+                packed_entries[entry_name] = f.read()
+        except OSError as e:
+            print(
+                f'*** Warning: Could not read revision file {source_filepath}: {e}. '
+                f'Skipping from pack.',
+                file=sys.stderr)
+
+    if not packed_entries:
+        # All reads failed. Don't create an empty zip.
+        return set()
 
     tmp_filepath = None
     try:
@@ -43,22 +70,18 @@ def create_pack_file(
                 delete=False,
                 ) as tmp_file:
             tmp_filepath = tmp_file.name
-            
+
             # Write a zip file containing the revision body files, uncompressed
-            # TODO: Extend to recover from I/O error when READING from the old
-            #       revision body file:
-            #       - Skip packing that individual file
-            #       - Return the caller a list of the files that were successfully packed,
-            #         so that caller knows which files are safe to delete.
-            #       Hard fail (raising I/O error to caller) if I/O error when
-            #       WRITING to the new pack zip file.
             with ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as zf:
-                for (entry_name, source_filepath) in revision_files.items():
-                    zf.write(source_filepath, arcname=entry_name)
+                for (entry_name, data) in packed_entries.items():
+                    zf.writestr(
+                        ZipInfo(entry_name),  # avoid storing timestamps
+                        data,
+                        compress_type=ZIP_STORED)
 
             # Ensure data is flushed to stable storage
             os.fsync(tmp_file.fileno())
-        
+
         # Move to final location.
         # Create parent directory if needed.
         try:
@@ -74,6 +97,8 @@ def create_pack_file(
             except FileNotFoundError:
                 pass
         raise
+
+    return set(packed_entries.keys())
 
 
 def open_pack_entry(pack_path: str, entry_name: str) -> 'ZipEntryReader':

@@ -4,12 +4,17 @@ Tests for Pack16 revision storage format (major_version == 3).
 All tests below implicitly include the condition:
 * given_project_in_pack16_format
 """
+from contextlib import contextmanager
+from collections.abc import Iterator
 from unittest import skip
-from crystal.model import Resource, ResourceRevision as RR, RevisionBodyMissingError
+from crystal import progress
+from crystal.model import Project, Resource, ResourceRevision as RR, RevisionBodyMissingError
+from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
 from crystal.tests.util.asserts import assertEqual, assertRaises
+from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, scheduler_thread_context
-from crystal.tests.util.wait import wait_for, wait_for_future
+from crystal.tests.util.wait import wait_for, wait_for_future, wait_while
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xtyping import not_none
 from io import BytesIO
@@ -836,3 +841,173 @@ async def test_given_project_with_only_error_revisions_when_migrate_to_pack16_th
             if f.endswith('.zip')
         )
         assertEqual(0, pack_count)
+
+
+# === Migrate Robustness (major_version 2 -> 3) ===
+
+async def test_given_migration_in_progress_when_cancel_and_reopen_project_then_migration_resumes_and_completes() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        assertEqual(2, project.major_version)
+
+        # Create 50 revisions with bodies (v2 format)
+        for i in range(1, 51):
+            resource = Resource(project, f'http://example.com/cancel-migrate/{i}')
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(f'body {i}'.encode()),
+            )
+
+        # Initiate migration: set markers then close
+        project._set_major_version_old_for_test(2)
+        project._set_major_version_for_test(3)
+
+    # Open project, but cancel the migration after the first pack is processed
+    if True:
+        ocd = await OpenOrCreateDialog.wait_for()
+
+        progress_listener = progress._active_progress_listener
+        assert progress_listener is not None
+
+        # Prepare to: Cancel migration in the middle
+        did_cancel_migration_in_middle = False
+        def upgrading_revision(index: int, revisions_per_second: float) -> None:
+            nonlocal did_cancel_migration_in_middle
+            if index >= 16:
+                # Cancel after processing the first pack
+                did_cancel_migration_in_middle = True
+                raise CancelOpenProject()
+
+        with patch.object(progress_listener, 'upgrading_revision', upgrading_revision), \
+                _progress_reported_at_maximum_resolution():
+            await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
+
+            # HACK: Wait minimum duration to allow open to finish
+            await bg_sleep(0.5)
+
+            # Wait for migration to start, get cancelled, and return to initial dialog
+            ocd = await OpenOrCreateDialog.wait_for()
+            assert did_cancel_migration_in_middle
+
+    # Verify partial migration state:
+    # At least the first pack should exist (migration got past index >= 16)
+    revisions_dir = os.path.join(project_dirpath, 'revisions', '000', '000', '000', '000')
+    pack_00_path = os.path.join(revisions_dir, '00_.zip')
+    assert os.path.exists(pack_00_path), \
+        'First pack should exist after partial migration'
+
+    # Resume migration by reopening — allow to finish this time
+    async with (await OpenOrCreateDialog.wait_for()).open(
+            project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+        # Verify migration completed
+        assertEqual(3, project.major_version)
+        assert project._get_property('major_version_old', None) is None, \
+            'major_version_old should be removed after migration completes'
+
+        # Verify all expected packs were created
+        for pack_name in ['00_.zip', '01_.zip', '02_.zip']:
+            pack_path = os.path.join(revisions_dir, pack_name)
+            assert os.path.exists(pack_path), \
+                f'Pack file {pack_name} should exist after migration completes'
+
+        # Verify all revisions are still readable
+        for i in range(1, 51):
+            resource = not_none(project.get_resource(url=f'http://example.com/cancel-migrate/{i}'))
+            revision = resource.default_revision()
+            assert revision is not None
+            with revision.open() as f:
+                assertEqual(f'body {i}'.encode(), f.read())
+
+
+async def test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        assertEqual(2, project.major_version)
+
+        # Create 16 revisions with bodies (enough for one complete pack)
+        for i in range(1, 17):
+            resource = Resource(project, f'http://example.com/corrupt-migrate/{i}')
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(f'body {i}'.encode()),
+            )
+
+        # Identify the revision file for ID 8 (to simulate corruption)
+        corrupt_revision_filepath = os.path.join(
+            project_dirpath, 'revisions', '000', '000', '000', '000', '008')
+        assert os.path.exists(corrupt_revision_filepath)
+
+        # Initiate migration: set markers then close
+        project._set_major_version_old_for_test(2)
+        project._set_major_version_for_test(3)
+
+    # Mock builtins.open to raise OSError when reading the corrupt file
+    real_open = open  # capture
+    def mock_open_func(filepath, *args, **kwargs):
+        if os.path.abspath(filepath) == os.path.abspath(corrupt_revision_filepath):
+            raise OSError(5, 'Input/output error')
+        return real_open(filepath, *args, **kwargs)
+
+    # Reopen project with the mock — migration runs automatically
+    with patch('builtins.open', mock_open_func):
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+            # Verify migration completed
+            assertEqual(3, project.major_version)
+            assert project._get_property('major_version_old', None) is None, \
+                'major_version_old should be removed after migration completes'
+
+            # Verify pack file was created but WITHOUT the corrupt entry
+            pack_00_path = os.path.join(
+                project_dirpath, 'revisions', '000', '000', '000', '000', '00_.zip')
+            assert os.path.exists(pack_00_path), 'Pack file should exist'
+            with zipfile.ZipFile(pack_00_path, 'r') as zf:
+                entries = set(zf.namelist())
+                assert '008' not in entries, \
+                    'Corrupt entry should be excluded from pack'
+                # Other entries should be present (IDs 1-7, 9-15)
+                assertEqual(14, len(entries))
+
+            # Verify corrupt file is still on disk (not deleted)
+            assert os.path.exists(corrupt_revision_filepath), \
+                'Corrupt file should be left in place'
+
+            # Verify non-corrupt revisions in the pack are readable
+            for i in range(1, 16):
+                if i == 8:
+                    continue  # skip the corrupt one
+                resource = not_none(project.get_resource(url=f'http://example.com/corrupt-migrate/{i}'))
+                revision = resource.default_revision()
+                assert revision is not None
+                with revision.open() as f:
+                    assertEqual(f'body {i}'.encode(), f.read())
+
+
+@skip('covered by: test_when_create_resource_revision_and_disk_disconnects_or_disk_full_or_process_terminates_before_filesystem_flush_then_will_rollback_when_project_reopened')
+async def test_given_interrupted_migration_when_reopen_then_cleans_up_temp_pack_files() -> None:
+    pass
+
+
+# --- Utility ---
+
+@contextmanager
+def _progress_reported_at_maximum_resolution() -> Iterator[None]:
+    was_enabled = Project._report_progress_at_maximum_resolution
+    Project._report_progress_at_maximum_resolution = True
+    try:
+        yield
+    finally:
+        Project._report_progress_at_maximum_resolution = was_enabled
+
+
+async def _wait_for_project_to_upgrade() -> None:
+    def progression_func() -> int | None:
+        return OpenProjectProgressDialog._upgrading_revision_progress
+    await wait_while(progression_func)
+
+def _wait_for_project_to_upgrade__before_open() -> None:
+    OpenProjectProgressDialog._upgrading_revision_progress = 0
+_wait_for_project_to_upgrade.before_open = (  # type: ignore[attr-defined]
+    _wait_for_project_to_upgrade__before_open
+)

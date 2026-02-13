@@ -405,15 +405,18 @@ class ResourceRevision:
             pack_filepath = cls._body_pack_filepath_with(project.path, revision_id)
             tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
             try:
-                create_pack_file(revision_files, pack_filepath, tmp_dir)
+                packed_entries = create_pack_file(revision_files, pack_filepath, tmp_dir)
             except OSError as e:
                 print(
                     f'Warning: Could not write pack file {pack_filepath}: {e}',
                     file=sys.stderr)
                 return
 
-        # Delete the individual revision files
-        for body_filepath in revision_files.values():
+        # Delete only the individual revision files that were successfully packed.
+        # Files that failed to read (I/O errors) are left in place.
+        for (entry_name, body_filepath) in revision_files.items():
+            if entry_name not in packed_entries:
+                continue
             # TODO: On Windows probably need to specially ignore concurrent
             #       ResourceRevision.open() calls too
             try:
