@@ -6,6 +6,7 @@ uncompressed ZIP64 archives to improve storage efficiency on systems with
 large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
 """
 
+from io import Reader, Writer
 from crystal.util.filesystem import replace_and_flush
 import os
 import shutil
@@ -42,7 +43,10 @@ def create_pack_file(
     if not revision_files:
         # No files to pack. Don't create an empty zip.
         return set()
-
+    
+    good_entry_names = set()
+    dev_null = _DevNullWriter()
+    
     tmp_filepath = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -52,11 +56,54 @@ def create_pack_file(
                 delete=False,
                 ) as tmp_file:
             tmp_filepath = tmp_file.name
-
-            # Write a zip file containing the revision body files, uncompressed
+            
+            # 1. Write a zip file containing the revision body files, uncompressed
+            # 2. Scan all the source files for I/O errors
+            zip_file_ok = True
             with ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as zf:
                 for (entry_name, source_filepath) in revision_files.items():
-                    zf.write(source_filepath, arcname=entry_name)
+                    with open(source_filepath, 'rb') as source_file, \
+                            (zf.open(ZipInfo(entry_name), 'w') if zip_file_ok else dev_null) as dest_file:
+                        spy_source_file = _ErrorObservingReader(source_file)
+                        try:
+                            shutil.copyfileobj(spy_source_file, dest_file)
+                        except OSError as e:
+                            if spy_source_file.last_error is None:
+                                # Write error (to dest_file). Abort.
+                                raise
+                            else:
+                                # Read error (from source_file)
+                                print(
+                                    f'Warning: Could not read revision file {source_filepath}: {e}. '
+                                        f'Skipping from pack.',
+                                    file=sys.stderr)
+                                # (Do not add entry to the good_entry_names set.)
+                                zip_file_ok = False
+                        else:
+                            good_entry_names.add(entry_name)
+            
+            # If an I/O error occurred while reading one of the revision body files,
+            # retry writing the zip file, but only with the revision body files with no errors
+            if not zip_file_ok:
+                with ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as zf:
+                    for (entry_name, source_filepath) in revision_files.items():
+                        if entry_name not in good_entry_names:
+                            continue
+                        with open(source_filepath, 'rb') as source_file, \
+                                zf.open(ZipInfo(entry_name), 'w') as dest_file:
+                            spy_source_file = _ErrorObservingReader(source_file)
+                            try:
+                                shutil.copyfileobj(spy_source_file, dest_file)
+                            except OSError as e:
+                                if spy_source_file.last_error is None:
+                                    # Write error (to dest_file). Abort.
+                                    raise
+                                else:
+                                    # Read error (from source_file).
+                                    # This source file was read successfully before,
+                                    # so something strange is going on. Abort.
+                                    raise
+                zip_file_ok = True
 
             # Ensure data is flushed to stable storage
             os.fsync(tmp_file.fileno())
@@ -77,8 +124,37 @@ def create_pack_file(
                 pass
         raise
 
-    # TODO
-    return set()
+    return good_entry_names
+
+
+class _ErrorObservingReader(Reader):
+    """Wraps a reader, capturing any exceptions it raises."""
+    
+    def __init__(self, base: Reader) -> None:
+        self._base = base
+        self.last_error = None  # type: Exception | None
+    
+    def read(self, size: int = -1, /) -> bytes:
+        try:
+            if size == -1:
+                return self._base.read()
+            else:
+                return self._base.read(size)
+        except Exception as e:
+            self.last_error = e
+            raise
+
+
+class _DevNullWriter(Writer):
+    """Writer that discards all data written to it."""
+    def write(self, data: bytes, /) -> int:
+        return len(data)
+    
+    def __enter__(self) -> Self:
+        return self
+    
+    def __exit__(self, *args) -> None:
+        pass
 
 
 def open_pack_entry(pack_path: str, entry_name: str) -> 'ZipEntryReader':
