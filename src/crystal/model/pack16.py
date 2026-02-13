@@ -6,8 +6,8 @@ uncompressed ZIP64 archives to improve storage efficiency on systems with
 large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
 """
 
-from io import Reader, Writer
 from crystal.util.filesystem import replace_and_flush
+from io import Reader, Writer
 import os
 import shutil
 import sys
