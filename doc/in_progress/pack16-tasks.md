@@ -348,7 +348,7 @@ and initiate a Hierarchical → Pack16 (or Flat → Hierarchical) migration via 
 
 ## Increment 7b: Migration UI Robustness
 
-- When open project, if a migration is already in progress
+- 7b1. When open project, if a migration is already in progress
   then don't prompt the user whether to continue it or or cancel opening the project.
   Instead, just continue immediately. The user can cancel opening the project
   during the migration process itself if desired.
@@ -360,19 +360,19 @@ and initiate a Hierarchical → Pack16 (or Flat → Hierarchical) migration via 
     - Add above test function def: `# TODO: Add 1 confirmation dialog before starting migration`
 
 Error handling during v2 -> v3 migration, in UI layer:
-- If I/O error while reading an individual revision file being packed, it is left outside the pack, a warning is printed to stderr (not to the UI), and the migration continues.
+- 7b2. If I/O error while reading an individual revision file being packed, it is left outside the pack, a warning is printed to stderr (not to the UI), and the migration continues.
   - [ ] E2E test extend: `test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns`
     - Extend to actually check that a warning is printed to stderr
-- If I/O error while writing a pack file...
+- 7b2. If I/O error while writing a pack file...
   - Currently, `create_pack_file` raises OSError when fail to write pack file.
     Then `_pack_revisions_for_id` prints warning to stderr and otherwise fails silently.
     Then `_migrate_v2_to_v3` continues on to further pack files. This is OK actually.
   - [ ] E2E test add: `test_given_cannot_write_pack_file_when_migrate_to_pack16_then_skips_file_and_warns`,
     after existing test: `test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns`
-  - [ ] Update docstring of `_pack_revisions_for_id` to explain that fails with
+  - [ ] Update docstring of `_pack_revisions_for_id` to explain that it fails with
         a warning to stderr if cannot write pack file but does NOT raise an
         error to its caller
-- If disk disconnect while running migration...
+- 7b3. If disk disconnect while running migration...
   - See §"Crystal: Migrate: Disk disconnect scenario" below.
 
 ### Crystal: Migrate: Disk disconnect scenario
