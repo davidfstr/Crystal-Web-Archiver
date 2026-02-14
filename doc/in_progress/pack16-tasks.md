@@ -361,15 +361,15 @@ and initiate a Hierarchical → Pack16 (or Flat → Hierarchical) migration via 
 
 Error handling during v2 -> v3 migration, in UI layer:
 - 7b2. If I/O error while reading an individual revision file being packed, it is left outside the pack, a warning is printed to stderr (not to the UI), and the migration continues.
-  - [ ] E2E test extend: `test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns`
+  - [x] E2E test extend: `test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns`
     - Extend to actually check that a warning is printed to stderr
 - 7b2. If I/O error while writing a pack file...
   - Currently, `create_pack_file` raises OSError when fail to write pack file.
     Then `_pack_revisions_for_id` prints warning to stderr and otherwise fails silently.
     Then `_migrate_v2_to_v3` continues on to further pack files. This is OK actually.
-  - [ ] E2E test add: `test_given_cannot_write_pack_file_when_migrate_to_pack16_then_skips_file_and_warns`,
+  - [x] E2E test add: `test_given_cannot_write_pack_file_when_migrate_to_pack16_then_skips_file_and_warns`,
     after existing test: `test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns`
-  - [ ] Update docstring of `_pack_revisions_for_id` to explain that it fails with
+  - [x] Update docstring of `_pack_revisions_for_id` to explain that it fails with
         a warning to stderr if cannot write pack file but does NOT raise an
         error to its caller
 - 7b3. If disk disconnect while running migration...
