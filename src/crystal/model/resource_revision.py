@@ -366,14 +366,26 @@ class ResourceRevision:
         Deletes the individual revision files after successfully writing the pack.
 
         This should be called when revision_id % 16 == 15.
+        
+        If an I/O error occurs while packing files a warning will be logged to
+        stderr but no error will be raised by this method. Specifically:
+        - If an I/O error occurs while reading an individual revision file, it is
+          skipped from the pack, left on disk, and a warning is printed to stderr.
+          The pack is written with only the successfully-read files.
+        - If an I/O error occurs while writing the pack file, 
+          a warning is printed to stderr. Individual revision files are NOT
+          deleted in this case.
+        Regardless of whether there was an I/O error or not, every revision
+        will always be readable from either the packed file or from its 
+        individual file by ResourceRevision.open().
 
         Arguments:
         * project -- the project containing the revisions
         * revision_id -- the ID of the last revision in the group (must satisfy revision_id % 16 == 15)
         * project_major_version -- if provided, use this value instead of project.major_version
           (useful when properties are not yet loaded)
-        * retain_empty_pack_file_if_errors -- if True, still creates an empty 
-          pack file even when all reads fail, which can be useful as a 
+        * retain_empty_pack_file_if_errors -- if True, still creates an empty
+          pack file even when all reads fail, which can be useful as a
           migration skip-marker; default False
         """
         from crystal.model.pack16 import create_pack_file

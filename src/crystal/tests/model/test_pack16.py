@@ -4,21 +4,21 @@ Tests for Pack16 revision storage format (major_version == 3).
 All tests below implicitly include the condition:
 * given_project_in_pack16_format
 """
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr
 from collections.abc import Iterator
 from unittest import skip
 from crystal import progress
 from crystal.model import Project, Resource, ResourceRevision as RR, RevisionBodyMissingError
 from crystal.model.project import MigrationType
 from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
-from crystal.tests.util.asserts import assertEqual, assertRaises
+from crystal.tests.util.asserts import assertEqual, assertIn, assertRaises
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, scheduler_thread_context
 from crystal.tests.util.wait import wait_for, wait_for_future, wait_while
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xtyping import not_none
-from io import BytesIO
+from io import BytesIO, StringIO
 import os
 from unittest.mock import patch
 import zipfile
@@ -944,7 +944,7 @@ async def test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_fil
         return real_open(filepath, *args, **kwargs)
 
     # Reopen project with the mock — migration runs automatically
-    with patch('builtins.open', mock_open_func):
+    with patch('builtins.open', mock_open_func), redirect_stderr(StringIO()) as captured_stderr:
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
             # Verify migration completed
             assertEqual(3, project.major_version)
@@ -975,6 +975,79 @@ async def test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_fil
                 assert revision is not None
                 with revision.open() as f:
                     assertEqual(f'body {i}'.encode(), f.read())
+
+    # Verify warning was printed to stderr about the corrupt file
+    stderr_output = captured_stderr.getvalue()
+    assertIn('WARNING: Could not read revision file', stderr_output)
+    assertIn(corrupt_revision_filepath, stderr_output)
+
+
+async def test_given_cannot_write_pack_file_when_migrate_to_pack16_then_skips_file_and_warns() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        assertEqual(2, project.major_version)
+
+        # Create 32 revisions (two complete packs worth: IDs 1-15 and 16-31,
+        # plus individual file for ID 32)
+        for i in range(1, 33):
+            resource = Resource(project, f'http://example.com/write-fail-migrate/{i}')
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(f'body {i}'.encode()),
+            )
+
+        # Initiate migration
+        project._queue_migration_after_reopen(MigrationType.HIERARCHICAL_TO_PACK16)
+
+    revisions_dir = os.path.join(project_dirpath, 'revisions', '000', '000', '000', '000')
+    pack_00_path = os.path.join(revisions_dir, '00_.zip')
+    pack_01_path = os.path.join(revisions_dir, '01_.zip')
+
+    # Mock create_pack_file to raise OSError when writing the first pack
+    from crystal.model.pack16 import create_pack_file as _real_create_pack_file
+    def mock_create_pack_file(revision_files, dest_filepath, *args, **kwargs):
+        if dest_filepath == pack_00_path:
+            raise OSError(28, 'No space left on device')
+        return _real_create_pack_file(revision_files, dest_filepath, *args, **kwargs)
+
+    # Reopen project with the mock — migration runs automatically
+    with patch('crystal.model.pack16.create_pack_file', mock_create_pack_file), \
+            redirect_stderr(StringIO()) as captured_stderr:
+        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+            # Verify migration completed (even though first pack write failed)
+            assertEqual(3, project.major_version)
+            assert project._get_property('major_version_old', None) is None, \
+                'major_version_old should be removed after migration completes'
+
+            # Verify second pack was created successfully
+            assert os.path.exists(pack_01_path), \
+                'Second pack file should exist after migration'
+
+            # Verify first pack was NOT created (write failed)
+            assert not os.path.exists(pack_00_path), \
+                'First pack file should not exist (write failed)'
+
+            # Verify individual files for first pack remain on disk
+            # (not deleted because packing failed)
+            for rid in range(1, 16):  # IDs 1-15 = hex 001-00f
+                body_filepath = os.path.join(revisions_dir, f'{rid:03x}')
+                assert os.path.exists(body_filepath), \
+                    f'Individual file {rid:03x} should remain (packing failed)'
+
+            # Verify all revisions are still readable
+            # (first pack's revisions fall back to individual files; second pack reads from zip)
+            for i in range(1, 33):
+                resource = not_none(project.get_resource(url=f'http://example.com/write-fail-migrate/{i}'))
+                revision = resource.default_revision()
+                assert revision is not None
+                with revision.open() as f:
+                    assertEqual(f'body {i}'.encode(), f.read())
+
+    # Verify warning was printed to stderr about the failed pack write
+    stderr_output = captured_stderr.getvalue()
+    assertIn('WARNING: Could not write pack file', stderr_output)
+    assertIn(pack_00_path, stderr_output)
 
 
 @skip('covered by: test_when_create_resource_revision_and_disk_disconnects_or_disk_full_or_process_terminates_before_filesystem_flush_then_will_rollback_when_project_reopened')
