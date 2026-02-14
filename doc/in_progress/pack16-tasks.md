@@ -289,7 +289,7 @@ existing Flat → Hierarchical migration.
 
 ---
 
-## Increment 7: Preferences UI — Revision Storage Format
+## Increment 7a: Preferences UI — Revision Storage Format
 
 **Goal:** User can see the project's current revision storage format in Preferences
 and initiate a Hierarchical → Pack16 (or Flat → Hierarchical) migration via a checkbox.
@@ -346,6 +346,52 @@ and initiate a Hierarchical → Pack16 (or Flat → Hierarchical) migration via 
 
 ---
 
+## Increment 7b: Migration UI Robustness
+
+- When open project, if a migration is already in progress
+  then don't prompt the user whether to continue it or or cancel opening the project.
+  Instead, just continue immediately. The user can cancel opening the project
+  during the migration process itself if desired.
+  - [ ] Alter behavior, to remove unhelpful prompt
+  - [ ] E2E test change: `test_given_hierarchical_project_when_migrate_to_pack16_via_preferences_and_user_confirms_then_migration_completes`
+    - No second dialog appears after project reopens
+  - [ ] E2E test change: `test_given_flat_project_when_migrate_to_hierarchical_via_preferences_then_migration_and_completes`
+    - No confirmation dialog appears at all to start the migration. Hmm.
+    - Add above test function def: `# TODO: Add 1 confirmation dialog before starting migration`
+
+Error handling during v2 -> v3 migration, in UI layer:
+- If I/O error while reading an individual revision file being packed, it is left outside the pack, a warning is printed to stderr (not to the UI), and the migration continues.
+  - [ ] E2E test extend: `test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns`
+    - Extend to actually check that a warning is printed to stderr
+- If I/O error while writing a pack file...
+  - Currently, `create_pack_file` raises OSError when fail to write pack file.
+    Then `_pack_revisions_for_id` prints warning to stderr and otherwise fails silently.
+    Then `_migrate_v2_to_v3` continues on to further pack files. This is OK actually.
+  - [ ] E2E test add: `test_given_cannot_write_pack_file_when_migrate_to_pack16_then_skips_file_and_warns`,
+    after existing test: `test_given_corrupt_revision_file_when_migrate_to_pack16_then_skips_file_and_warns`
+  - [ ] Update docstring of `_pack_revisions_for_id` to explain that fails with
+        a warning to stderr if cannot write pack file but does NOT raise an
+        error to its caller
+- If disk disconnect while running migration...
+  - See §"Crystal: Migrate: Disk disconnect scenario" below.
+
+### Crystal: Migrate: Disk disconnect scenario
+
+Crystal‘s current migration strategy of skipping individual divisions or pack files with IO errors works well when there are individual I owe issues. (such as bad blocks). However, this strategy of skipping individual files does not work well when a widespread error takes an entire project directory off-line, such as disk disconnection. Currently, a disk disconnection will cause very many IO errors to be printed to the console, but the migration will continue until the very last step when it tries to commit the migration to the database. At that point it will fail, but it will in the meantime have spent a lot of wasted time trying to migrate individual revisions and pack files that cannot be accessed at all.
+
+A better behavior would be to periodically do a lightweight check of overall disk health during a migration. If the disk health check fails, then the entire migration should be aborted early rather than continuing all the way to the end. 
+
+Proposal:
+- Every ~256 revisions (revision_id % 256 == 0) the directory containing the current/next revision should be listed to see whether the directory list operation has a IO error in particular if it has a file not found error. If any of these errors are detected on the directory list operation than the entire migration should be aborted and the UI should report that the disk containing the project appears to no longer be available and to try the migration again later.
+- A similar check is performed directly after processing the last revision being migrated.
+
+Tasks:
+- Implement the above change in behavior, such that the UI will report when a migration fails early because of disk disconnection.
+- Add test: test given disk disconnects before migration reaches intermediate checkpoint then when checkpoint hit then aborts migration early and displays error dialog and closes project
+- Add test: test given disk disconnects before migration reaches final checkpoint then when checkpoint hit then aborts migration early and displays error dialog and closes project
+
+---
+
 ## Increment 8: Polish, edge cases, and release notes
 
 **Goal:** Ensure all edge cases are covered, comprehensive test coverage, and documentation.
@@ -362,6 +408,7 @@ and initiate a Hierarchical → Pack16 (or Flat → Hierarchical) migration via 
 
 **Tests:**
 - E2E: `test_given_project_with_major_version_3_when_opened_by_older_crystal_then_raises_project_too_new_error`
+  - `# NOTE: See also: test_refuses_to_open_project_with_unknown_high_major_version`
   - Create v3 project
   - Temporarily set `Project._LATEST_SUPPORTED_MAJOR_VERSION = 2`
   - Attempt to open project
@@ -377,7 +424,7 @@ and initiate a Hierarchical → Pack16 (or Flat → Hierarchical) migration via 
 
 ---
 
-## Increment 9: Post-branch fixes
+## Increment 9: Pre/post-branch fixes
 
 [ ] Fix broken "from crystal.model import *" in shell. The "project" subpackage
     overrides the "project" builtin provided by the shell. Probably need to
