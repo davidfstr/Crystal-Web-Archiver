@@ -4,23 +4,26 @@ Tests for Pack16 revision storage format (major_version == 3).
 All tests below implicitly include the condition:
 * given_project_in_pack16_format
 """
-from contextlib import contextmanager, redirect_stderr
 from collections.abc import Iterator
+from contextlib import closing, contextmanager, redirect_stderr
 from unittest import skip
 from crystal import progress
 from crystal.model import Project, Resource, ResourceRevision as RR, RevisionBodyMissingError
 from crystal.model.project import MigrationType
 from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
+from crystal.tests.model.test_project_migrate import project_opened_without_migrating
 from crystal.tests.util.asserts import assertEqual, assertIn, assertRaises
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, scheduler_thread_context
 from crystal.tests.util.wait import wait_for, wait_for_future, wait_while
 from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xtyping import not_none
 from io import BytesIO, StringIO
 import os
 from unittest.mock import patch
+import wx
 import zipfile
 
 
@@ -1050,6 +1053,172 @@ async def test_given_cannot_write_pack_file_when_migrate_to_pack16_then_skips_fi
     assertIn(pack_00_path, stderr_output)
 
 
+async def test_given_disk_disconnects_before_migration_reaches_intermediate_checkpoint_when_checkpoint_hit_then_aborts_migration_early_and_displays_error_dialog_and_closes_project() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        assertEqual(2, project.major_version)
+
+        # Create 64 revisions with bodies (4 complete packs worth)
+        for i in range(1, 65):
+            resource = Resource(project, f'http://example.com/disk-disconnect-mid/{i}')
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(f'body {i}'.encode()),
+            )
+
+        # Initiate migration
+        project._queue_migration_after_reopen(MigrationType.HIERARCHICAL_TO_PACK16)
+
+    revisions_dir = os.path.join(project_dirpath, 'revisions')
+    leaf_revisions_dir = os.path.join(revisions_dir, '000', '000', '000', '000')
+
+    # Simulate disk disconnect after some packs are written
+    real_listdir = os.listdir
+    disk_disconnected = False
+    def mock_listdir(path):
+        if disk_disconnected and os.path.normpath(path) == os.path.normpath(revisions_dir):
+            raise OSError(5, 'Input/output error')
+        return real_listdir(path)
+
+    # Disconnect disk after the first pack is written (before the intermediate checkpoint)
+    from crystal.model.pack16 import create_pack_file as _real_create_pack_file
+    packs_written = 0
+    def mock_create_pack_file(revision_files, dest_filepath, *args, **kwargs):
+        nonlocal packs_written, disk_disconnected
+        result = _real_create_pack_file(revision_files, dest_filepath, *args, **kwargs)
+        packs_written += 1
+        if packs_written >= 1:
+            disk_disconnected = True
+        return result
+
+    # Reopen project. Migration should detect disk disconnect and abort.
+    with patch('os.listdir', mock_listdir), \
+            patch('crystal.model.pack16.create_pack_file', mock_create_pack_file), \
+            patch('crystal.progress.ShowModal',
+                mocked_show_modal('cr-disk-error', wx.ID_OK)) as show_modal_method, \
+            _revision_count_between_disk_health_checks_set_to(32):
+        ocd = await OpenOrCreateDialog.wait_for()
+        await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
+
+        # HACK: Wait minimum duration to allow open to finish
+        await bg_sleep(0.5)
+
+        # Wait for migration to abort and return to initial dialog
+        ocd = await OpenOrCreateDialog.wait_for()
+        assertEqual(1, show_modal_method.call_count)
+
+    # Verify partial migration state: at least one pack was created before abort
+    pack_00_path = os.path.join(leaf_revisions_dir, '00_.zip')
+    assert os.path.exists(pack_00_path), \
+        'First pack should exist (written before disk disconnect)'
+
+    # Verify migration marker still present (migration was not completed)
+    async with project_opened_without_migrating(project_dirpath) as (_, project):
+        assertEqual(3, project.major_version)
+        with project._db, closing(project._db.cursor()) as c:
+            assertEqual(2, project._get_major_version_old(c))
+
+    # Verify migration can resume successfully after disk reconnects
+    async with (await OpenOrCreateDialog.wait_for()).open(
+            project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+        assertEqual(3, project.major_version)
+        with project._db, closing(project._db.cursor()) as c:
+            assertEqual(None, project._get_major_version_old(c))
+
+        # Verify all revisions are readable
+        for i in range(1, 65):
+            resource = not_none(project.get_resource(url=f'http://example.com/disk-disconnect-mid/{i}'))
+            revision = resource.default_revision()
+            assert revision is not None
+            with revision.open() as f:
+                assertEqual(f'body {i}'.encode(), f.read())
+
+
+async def test_given_disk_disconnects_before_migration_reaches_final_checkpoint_when_checkpoint_hit_then_aborts_migration_early_and_displays_error_dialog_and_closes_project() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        assertEqual(2, project.major_version)
+
+        # Create 32 revisions with bodies (2 complete packs worth)
+        for i in range(1, 33):
+            resource = Resource(project, f'http://example.com/disk-disconnect-final/{i}')
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(f'body {i}'.encode()),
+            )
+
+        # Initiate migration
+        project._queue_migration_after_reopen(MigrationType.HIERARCHICAL_TO_PACK16)
+
+    revisions_dir = os.path.join(project_dirpath, 'revisions')
+    leaf_revisions_dir = os.path.join(revisions_dir, '000', '000', '000', '000')
+
+    # Simulate disk disconnect after all packs are written
+    real_listdir = os.listdir
+    disk_disconnected = False
+    def mock_listdir(path):
+        if disk_disconnected and os.path.normpath(path) == os.path.normpath(revisions_dir):
+            raise OSError(5, 'Input/output error')
+        return real_listdir(path)
+
+    # Disconnect disk after the last pack is written (before the final checkpoint)
+    from crystal.model.pack16 import create_pack_file as _real_create_pack_file
+    packs_written = 0
+    def mock_create_pack_file(revision_files, dest_filepath, *args, **kwargs):
+        nonlocal packs_written, disk_disconnected
+        result = _real_create_pack_file(revision_files, dest_filepath, *args, **kwargs)
+        packs_written += 1
+        if packs_written >= 2:  # disconnect after both packs are written
+            disk_disconnected = True
+        return result
+
+    # Reopen project. Migration should detect disk disconnect at final checkpoint.
+    # NOTE: Uses a large checkpoint interval (e.g. 256) so no intermediate checkpoint fires;
+    #       only the final checkpoint should catch the disconnect
+    with patch('os.listdir', mock_listdir), \
+            patch('crystal.model.pack16.create_pack_file', mock_create_pack_file), \
+            patch('crystal.progress.ShowModal',
+                mocked_show_modal('cr-disk-error', wx.ID_OK)) as show_modal_method:
+        ocd = await OpenOrCreateDialog.wait_for()
+        await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
+
+        # HACK: Wait minimum duration to allow open to finish
+        await bg_sleep(0.5)
+
+        # Wait for migration to abort and return to initial dialog
+        ocd = await OpenOrCreateDialog.wait_for()
+        assertEqual(1, show_modal_method.call_count)
+    
+    # Verify both packs were created before the disconnect was detected
+    pack_00_path = os.path.join(leaf_revisions_dir, '00_.zip')
+    pack_01_path = os.path.join(leaf_revisions_dir, '01_.zip')
+    assert os.path.exists(pack_00_path), 'First pack should exist'
+    assert os.path.exists(pack_01_path), 'Second pack should exist'
+
+    # Verify migration marker still present (migration was not completed)
+    async with project_opened_without_migrating(project_dirpath) as (_, project):
+        assertEqual(3, project.major_version)
+        with project._db, closing(project._db.cursor()) as c:
+            assertEqual(2, project._get_major_version_old(c))
+
+    # Verify migration can resume successfully after disk reconnects
+    async with (await OpenOrCreateDialog.wait_for()).open(
+            project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+        assertEqual(3, project.major_version)
+        with project._db, closing(project._db.cursor()) as c:
+            assertEqual(None, project._get_major_version_old(c))
+
+        # Verify all revisions are readable
+        for i in range(1, 33):
+            resource = not_none(project.get_resource(url=f'http://example.com/disk-disconnect-final/{i}'))
+            revision = resource.default_revision()
+            assert revision is not None
+            with revision.open() as f:
+                assertEqual(f'body {i}'.encode(), f.read())
+
+
 @skip('covered by: test_when_create_resource_revision_and_disk_disconnects_or_disk_full_or_process_terminates_before_filesystem_flush_then_will_rollback_when_project_reopened')
 async def test_given_interrupted_migration_when_reopen_then_cleans_up_temp_pack_files() -> None:
     pass
@@ -1065,6 +1234,16 @@ def _progress_reported_at_maximum_resolution() -> Iterator[None]:
         yield
     finally:
         Project._report_progress_at_maximum_resolution = was_enabled
+
+
+@contextmanager
+def _revision_count_between_disk_health_checks_set_to(count: int) -> Iterator[None]:
+    was_count = Project._revision_count_between_disk_health_checks
+    Project._revision_count_between_disk_health_checks = count
+    try:
+        yield
+    finally:
+        Project._revision_count_between_disk_health_checks = was_count
 
 
 async def _wait_for_project_to_upgrade() -> None:
