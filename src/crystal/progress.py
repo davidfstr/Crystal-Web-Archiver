@@ -163,6 +163,9 @@ class OpenProjectProgressListener:
     def upgrading_revision(self, index: int, revisions_per_second: float) -> None:
         pass
     
+    def upgrade_revisions_disk_error(self) -> None:
+        pass
+    
     def did_upgrade_revisions(self, revision_count: int) -> None:
         pass
     
@@ -324,6 +327,28 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         print(f'Upgrading revisions: {index:n} / {self._approx_revision_count:n} ({int(revisions_per_second):n} rev/sec)')
         self._update(index)
         OpenProjectProgressDialog._upgrading_revision_progress = index
+    
+    @override
+    def upgrade_revisions_disk_error(self) -> None:
+        """
+        Called when a disk health check fails during migration,
+        indicating the project's disk may no longer be available.
+
+        Displays an error dialog.
+        """
+        dialog = wx.MessageDialog(None,
+            message=(
+                'The disk containing this project appears to no longer '
+                'be available. The migration will be paused and can be '
+                'resumed the next time the project is opened.'
+            ),
+            caption='Disk Error',
+            style=wx.OK|wx.ICON_ERROR,
+        )
+        dialog.Name = 'cr-disk-error'
+        with dialog:
+            position_dialog_initially(dialog)
+            ShowModal(dialog)
     
     @override
     def did_upgrade_revisions(self, revision_count: int) -> None:

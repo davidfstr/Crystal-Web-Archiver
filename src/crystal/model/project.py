@@ -180,6 +180,7 @@ class Project(ListenableMixin):
     # NOTE: Only changed when tests are running
     _last_opened_project: Project | None=None
     _report_progress_at_maximum_resolution: bool=False
+    _revision_count_between_disk_health_checks: int=256
     
     # === Load ===
     
@@ -694,7 +695,7 @@ class Project(ListenableMixin):
             
             # Upgrade major version 1 -> 2
             if major_version == 1:
-                self._migrate_v1_to_v2(progress_listener)
+                self._migrate_v1_to_v2(progress_listener)  # may raise CancelOpenProject
             
             # At major version 2
             if major_version == 2:
@@ -714,7 +715,7 @@ class Project(ListenableMixin):
                 with self._db, closing(self._db.cursor()) as c:
                     major_version_old = self._get_major_version_old(c)
                 if major_version_old == 2:
-                    self._migrate_v2_to_v3(progress_listener)
+                    self._migrate_v2_to_v3(progress_listener)  # may raise CancelOpenProject
 
             assert self._LATEST_SUPPORTED_MAJOR_VERSION == 3
     
@@ -958,10 +959,18 @@ class Project(ListenableMixin):
                         # Leave empty pack file in place if all original
                         # individual revision files have I/O errors so that
                         # if the migration is restarted no attempt is made to
-                        # repack those bad revisions 
+                        # repack those bad revisions
                         retain_empty_pack_file_if_errors=True,
                     )
                 pack_start_id += 16
+
+                # Periodic disk health check: Every 256 revisions (16 packs),
+                # verify the project disk is still accessible.
+                # This detects disk disconnection early rather than continuing
+                # to silently skip all remaining packs.
+                if pack_start_id % Project._revision_count_between_disk_health_checks == 0:
+                    self._check_disk_health_during_migration(
+                        self.path, progress_listener)  # may raise CancelOpenProject
 
                 # Report progress approximately once per second
                 current_time = time.monotonic()  # capture
@@ -975,11 +984,39 @@ class Project(ListenableMixin):
                     )  # may raise CancelOpenProject
                     last_report_time = current_time
             revisions_processed = pack_start_id
+            
+            # Final disk health check after the last pack is processed
+            if pack_start_id > 0:
+                self._check_disk_health_during_migration(
+                    self.path, progress_listener)  # may raise CancelOpenProject
 
         # Migration complete. Remove migration marker.
         self._delete_major_version_old(self._db)
 
         progress_listener.did_upgrade_revisions(revisions_processed)
+
+    @staticmethod
+    def _check_disk_health_during_migration(
+            project_path: str,
+            progress_listener: OpenProjectProgressListener,
+            ) -> None:
+        """
+        Performs a lightweight disk health check during migration by listing
+        the project's top-level revisions directory.
+
+        If the directory listing fails with an I/O error (e.g. due to disk
+        disconnection), calls progress_listener.upgrade_revisions_disk_error()
+        to display an error dialog and raises CancelOpenProject.
+
+        Raises:
+        * CancelOpenProject
+        """
+        revisions_dir = os.path.join(project_path, Project._REVISIONS_DIRNAME)
+        try:
+            os.listdir(revisions_dir)
+        except OSError:
+            progress_listener.upgrade_revisions_disk_error()
+            raise CancelOpenProject()
 
     def _repair_incomplete_rollback_of_resource_revision_create(self) -> None:
         """
@@ -1257,12 +1294,13 @@ class Project(ListenableMixin):
             progress_listener: OpenProjectProgressListener) -> None:
         """
         Raises:
+        * CancelOpenProject
         * sqlite3.DatabaseError, OSError
         """
         
         # Upgrade database schema to latest version (unless is readonly)
         if not self.readonly:
-            self._apply_migrations(progress_listener)
+            self._apply_migrations(progress_listener)  # may raise CancelOpenProject
         
         # Ensure major version is recognized
         with self._db, closing(self._db.cursor()) as c:
