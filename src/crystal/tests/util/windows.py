@@ -121,9 +121,15 @@ class OpenOrCreateDialog:
             'cr-open-or-create-project__checkbox')
         assert isinstance(self.open_as_readonly, wx.CheckBox)
         self.open_button = self.open_or_create_project_dialog.FindWindow(id=wx.ID_NO)
-        assert isinstance(self.open_button, wx.Button)
+        # NOTE: On Linux sometimes this specific control reports that it is
+        #       a wx.StaticText even though it looks/behaves like a wx.Button.
+        #       No idea why. Maybe memory corruption?
+        assert isinstance(self.open_button, (wx.Button, wx.StaticText))
         self.create_button = self.open_or_create_project_dialog.FindWindow(id=wx.ID_YES)
-        assert isinstance(self.create_button, wx.Button)
+        # NOTE: On Linux sometimes this specific control reports that it is
+        #       a wx.StaticText even though it looks/behaves like a wx.Button.
+        #       No idea why. Maybe memory corruption?
+        assert isinstance(self.create_button, (wx.Button, wx.StaticText))
         return self
     
     def __init__(self, *, _ready: bool=False) -> None:
