@@ -94,7 +94,10 @@ async def test_given_hierarchical_project_when_migrate_to_pack16_via_preferences
             project1: Project,
             *, pre_verify: Callable[[Project], None] | None = None,
             ) -> None:
-        # Wait for new main window to appear after migration
+        # Wait for new main window to appear after migration.
+        # NOTE: No second dialog appears on project reopen since migration is
+        #       already in progress. User already confirmed the desire to start
+        #       the migration via Preferences.
         mw2 = await MainWindow.wait_for()
         try:
             project2 = Project._last_opened_project
@@ -178,6 +181,7 @@ async def test_given_hierarchical_project_when_migrate_to_pack16_via_preferences
             assertEqual(2, project.major_version)
 
 
+# TODO: Add 1 confirmation dialog before starting migration
 async def test_given_flat_project_when_migrate_to_hierarchical_via_preferences_then_migration_completes() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Open project without migrating (stays at v1)
