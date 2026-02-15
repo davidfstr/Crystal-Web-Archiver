@@ -352,10 +352,10 @@ and initiate a Hierarchical → Pack16 (or Flat → Hierarchical) migration via 
   then don't prompt the user whether to continue it or or cancel opening the project.
   Instead, just continue immediately. The user can cancel opening the project
   during the migration process itself if desired.
-  - [ ] Alter behavior, to remove unhelpful prompt
-  - [ ] E2E test change: `test_given_hierarchical_project_when_migrate_to_pack16_via_preferences_and_user_confirms_then_migration_completes`
+  - [x] Alter behavior, to remove unhelpful prompt
+  - [#] E2E test change: `test_given_hierarchical_project_when_migrate_to_pack16_via_preferences_and_user_confirms_then_migration_completes`
     - No second dialog appears after project reopens
-  - [ ] E2E test change: `test_given_flat_project_when_migrate_to_hierarchical_via_preferences_then_migration_and_completes`
+  - [#] E2E test change: `test_given_flat_project_when_migrate_to_hierarchical_via_preferences_then_migration_and_completes`
     - No confirmation dialog appears at all to start the migration. Hmm.
     - Add above test function def: `# TODO: Add 1 confirmation dialog before starting migration`
 
