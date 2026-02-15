@@ -10,8 +10,12 @@ from unittest import skip
 from crystal import progress
 from crystal.model import Project, Resource, ResourceRevision as RR, RevisionBodyMissingError
 from crystal.model.project import MigrationType
-from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
-from crystal.tests.model.test_project_migrate import project_opened_without_migrating
+from crystal.progress import CancelOpenProject
+from crystal.tests.model.test_project_migrate import (
+    progress_reported_at_maximum_resolution,
+    project_opened_without_migrating,
+    wait_for_project_to_upgrade,
+)
 from crystal.tests.util.asserts import assertEqual, assertIn, assertRaises
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
@@ -877,7 +881,7 @@ async def test_given_migration_in_progress_when_cancel_and_reopen_project_then_m
                 raise CancelOpenProject()
 
         with patch.object(progress_listener, 'upgrading_revision', upgrading_revision), \
-                _progress_reported_at_maximum_resolution():
+                progress_reported_at_maximum_resolution():
             await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
 
             # HACK: Wait minimum duration to allow open to finish
@@ -896,7 +900,7 @@ async def test_given_migration_in_progress_when_cancel_and_reopen_project_then_m
 
     # Resume migration by reopening — allow to finish this time
     async with (await OpenOrCreateDialog.wait_for()).open(
-            project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+            project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
         # Verify migration completed
         assertEqual(3, project.major_version)
         assert project._get_property('major_version_old', None) is None, \
@@ -1121,7 +1125,7 @@ async def test_given_disk_disconnects_before_migration_reaches_intermediate_chec
 
     # Verify migration can resume successfully after disk reconnects
     async with (await OpenOrCreateDialog.wait_for()).open(
-            project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+            project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
         assertEqual(3, project.major_version)
         with project._db, closing(project._db.cursor()) as c:
             assertEqual(None, project._get_major_version_old(c))
@@ -1205,7 +1209,7 @@ async def test_given_disk_disconnects_before_migration_reaches_final_checkpoint_
 
     # Verify migration can resume successfully after disk reconnects
     async with (await OpenOrCreateDialog.wait_for()).open(
-            project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+            project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
         assertEqual(3, project.major_version)
         with project._db, closing(project._db.cursor()) as c:
             assertEqual(None, project._get_major_version_old(c))
@@ -1227,16 +1231,6 @@ async def test_given_interrupted_migration_when_reopen_then_cleans_up_temp_pack_
 # --- Utility ---
 
 @contextmanager
-def _progress_reported_at_maximum_resolution() -> Iterator[None]:
-    was_enabled = Project._report_progress_at_maximum_resolution
-    Project._report_progress_at_maximum_resolution = True
-    try:
-        yield
-    finally:
-        Project._report_progress_at_maximum_resolution = was_enabled
-
-
-@contextmanager
 def _revision_count_between_disk_health_checks_set_to(count: int) -> Iterator[None]:
     was_count = Project._revision_count_between_disk_health_checks
     Project._revision_count_between_disk_health_checks = count
@@ -1244,15 +1238,3 @@ def _revision_count_between_disk_health_checks_set_to(count: int) -> Iterator[No
         yield
     finally:
         Project._revision_count_between_disk_health_checks = was_count
-
-
-async def _wait_for_project_to_upgrade() -> None:
-    def progression_func() -> int | None:
-        return OpenProjectProgressDialog._upgrading_revision_progress
-    await wait_while(progression_func)
-
-def _wait_for_project_to_upgrade__before_open() -> None:
-    OpenProjectProgressDialog._upgrading_revision_progress = 0
-_wait_for_project_to_upgrade.before_open = (  # type: ignore[attr-defined]
-    _wait_for_project_to_upgrade__before_open
-)

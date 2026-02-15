@@ -162,7 +162,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                     mocked_show_modal('cr-upgrade-required', continue_button_id)
                     ) as show_modal_method:
             async with (await OpenOrCreateDialog.wait_for()).open(
-                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+                    project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
                 assert 1 == show_modal_method.call_count
                 
                 assert project.major_version >= 2, (
@@ -304,7 +304,7 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
         # Upgrade the project to major version >= 2.
         # Ensure revisions appear to be migrated correctly.
         async with (await OpenOrCreateDialog.wait_for()).open(
-                project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+                project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
             assert project.major_version >= 2, (
                 'Expected project to be upgraded'
             )  # not == 1
@@ -354,7 +354,7 @@ async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_
                     raise CancelOpenProject()
             
             with patch.object(progress_listener, 'upgrading_revision', upgrading_revision), \
-                    _progress_reported_at_maximum_resolution():
+                    progress_reported_at_maximum_resolution():
                 await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
                 
                 # HACK: Wait minimum duration to allow open to finish
@@ -375,7 +375,7 @@ async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_
         # Resume upgrading the project to major version >= 2. Allow to finish.
         if True:
             async with (await OpenOrCreateDialog.wait_for()).open(
-                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+                    project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
                 assert project.major_version >= 2, (
                     'Expected project to be upgraded'
                 )  # not == 1
@@ -440,7 +440,7 @@ def _upgrade_required_modal_always_shown() -> Iterator[None]:
 
 
 @contextmanager
-def _progress_reported_at_maximum_resolution() -> Iterator[None]:
+def progress_reported_at_maximum_resolution() -> Iterator[None]:
     was_enabled = Project._report_progress_at_maximum_resolution
     Project._report_progress_at_maximum_resolution = True
     try:
@@ -456,13 +456,13 @@ def _count_files_in(dirpath: str) -> int:
     return file_count
 
 
-async def _wait_for_project_to_upgrade() -> None:
+async def wait_for_project_to_upgrade() -> None:
     def progression_func() -> int | None:
         return OpenProjectProgressDialog._upgrading_revision_progress
     await wait_while(progression_func)
 
 def _wait_for_project_to_upgrade__before_open() -> None:
     OpenProjectProgressDialog._upgrading_revision_progress = 0
-_wait_for_project_to_upgrade.before_open = (  # type: ignore[attr-defined]
+wait_for_project_to_upgrade.before_open = (  # type: ignore[attr-defined]
     _wait_for_project_to_upgrade__before_open
 )
