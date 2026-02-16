@@ -71,15 +71,10 @@ if TYPE_CHECKING:
 # ------------------------------------------------------------------------------
 # ProjectServer
 
-def _DEFAULT_SERVER_PORT() -> int:
-    """Returns the default server port, allowing override via environment variable for testing."""
-    env_port = os.environ.get('CRYSTAL_DEFAULT_SERVER_PORT')
-    if env_port is not None:
-        return int(env_port)
-    return 2797  # CRYS on telephone keypad
-
-
-_DEFAULT_SERVER_HOST = '127.0.0.1'
+from crystal.util.server_ports import (
+    DEFAULT_SERVER_HOST as _DEFAULT_SERVER_HOST,
+    DEFAULT_SERVER_PORT as _DEFAULT_SERVER_PORT,
+)
 
 
 Verbosity: TypeAlias = Literal['normal', 'indent']
