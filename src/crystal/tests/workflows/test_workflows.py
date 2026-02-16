@@ -803,11 +803,12 @@ async def test_can_download_and_serve_a_static_site_using_using_browser(pw: Play
                     
                     expect(page.download_or_create_group_button).to_contain_text('⬇ Download')
                     expect(page.download_or_create_group_button).to_be_enabled()
-                    page.download_or_create_group_button.click()
-                    
-                    # The button should get disabled as download starts
-                    expect(page.download_or_create_group_button).to_be_disabled()
-                    expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
+                    with fetch_paused(page.raw_page):
+                        page.download_or_create_group_button.click()
+                        
+                        # The button should get disabled as download starts
+                        expect(page.download_or_create_group_button).to_be_disabled()
+                        expect(page.download_or_create_group_button).to_contain_text('Creating & Starting Download...')
                     
                     # Wait for the page to reload (indicating successful download)
                     expect(raw_page).to_have_title('xkcd: Petit Trees (sketch)')

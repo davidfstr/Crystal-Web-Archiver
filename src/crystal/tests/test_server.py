@@ -1,7 +1,6 @@
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, closing, redirect_stdout
 from copy import deepcopy
-import warnings
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
 import crystal.server
@@ -1145,20 +1144,11 @@ async def test_given_create_group_form_visible_and_group_previously_created_when
             page.create_group_form_enabled.expect()
             
             # Click the create button
-            page.download_or_create_group_button.click()
-            
-            # Verify form gets disabled immediately
-            try:
+            with fetch_paused(raw_page):
+                page.download_or_create_group_button.click()
+                
+                # Verify form gets disabled immediately
                 expect(page.download_or_create_group_button).to_be_disabled()
-            except Exception as e:
-                if 'Locator expected to be disabled' in str(e):
-                    warnings.warn(
-                        'Form not observed as disabled after create group started. '
-                        'Did it complete immediately?'
-                    )
-                    # (keep going)
-                else:
-                    raise
             
             # Wait for the creation to complete and success message to appear
             expect(page.action_message).to_be_visible()
@@ -1227,6 +1217,12 @@ async def test_given_create_group_form_visible_when_download_or_create_button_cl
                 page.download_or_create_group_button.click()
                 
                 # Verify form gets disabled immediately
+                # HACK: Relies on observing disabled state within the 1-second
+                #       pause that network_down_after_delay() does internally,
+                #       a race condition.
+                # TODO: Use fetch_paused() here to reliably observe the in-progress state.
+                #       However fetch_paused() cannot currently be used at the same
+                #       time as network_down_after_delay()
                 expect(page.download_or_create_group_button).to_be_disabled()
                 expect(page.download_or_create_group_button).to_contain_text('Creating...')
                 
