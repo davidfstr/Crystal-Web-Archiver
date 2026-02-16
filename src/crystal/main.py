@@ -227,7 +227,7 @@ def _main2(args: list[str]) -> None:
     args = [a for a in args if not a.startswith('-psn_')]  # reinterpret
     
     from crystal import APP_NAME, __version__
-    from crystal.server import _DEFAULT_SERVER_HOST, _DEFAULT_SERVER_PORT
+    from crystal.util.server_ports import DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT
     from crystal.util.xos import is_linux
 
     # Parse CLI arguments
@@ -300,13 +300,13 @@ def _main2(args: list[str]) -> None:
         )
         parser.add_argument(
             '--port', '-p',
-            help=f'Specify the port to bind to when using --serve (default: {_DEFAULT_SERVER_PORT()}).',
+            help=f'Specify the port to bind to when using --serve (default: {DEFAULT_SERVER_PORT()}).',
             type=int,
             default=None,
         )
         parser.add_argument(
             '--host',
-            help=f'Specify the host to bind to when using --serve (default: {_DEFAULT_SERVER_HOST}).',
+            help=f'Specify the host to bind to when using --serve (default: {DEFAULT_SERVER_HOST}).',
             type=str,
             default=None,
         )
@@ -470,9 +470,12 @@ def _main2(args: list[str]) -> None:
         sys.exit(exit_code)
     
     # Start GUI subsystem
+    if 'wx' in sys.modules:
+        raise AssertionError('wx was imported earlier than intended')
     import wx
     import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
     import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
+    assert 'wx' in sys.modules
     
     def on_atexit() -> None:
         """Called when the main thread and all non-daemon threads have exited."""
@@ -863,8 +866,8 @@ async def _did_launch(
     """
     from crystal.model import Project
     from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
-    from crystal.server import _DEFAULT_SERVER_HOST, _DEFAULT_SERVER_PORT
     from crystal.util.ports import is_port_in_use_error
+    from crystal.util.server_ports import DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT
     from crystal.util.test_mode import tests_are_running
     from crystal.util.xos import is_mac_os
     import wx
@@ -910,7 +913,7 @@ async def _did_launch(
                     # Explicitly --no-readonly
                     effective_readonly = False
                 else:
-                    host = parsed_args.host or _DEFAULT_SERVER_HOST
+                    host = parsed_args.host or DEFAULT_SERVER_HOST
                     if host == '127.0.0.1':
                         # Serving to localhost. Default to writable.
                         effective_readonly = False
@@ -1019,8 +1022,8 @@ async def _did_launch(
                 project.close()
             
             if is_port_in_use_error(e):
-                port = parsed_args.port or _DEFAULT_SERVER_PORT()
-                host = parsed_args.host or _DEFAULT_SERVER_HOST
+                port = parsed_args.port or DEFAULT_SERVER_PORT()
+                host = parsed_args.host or DEFAULT_SERVER_HOST
                 print(f'*** Cannot start server on {host}:{port} - address already in use', file=sys.stderr)
             else:
                 print(f'*** Cannot start server', file=sys.stderr)
