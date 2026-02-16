@@ -710,6 +710,8 @@ def _main2(args: list[str]) -> None:
         # Start shell if requested
         if shell is not None:
             shell.start(wait_for_banner=True)  # if not already started
+        if os.environ.get('CRYSTAL_PRINT_WHEN_SHELL_READY', 'False') == 'True':
+            print('Shell ready')
         
         # Start (serial) tests if requested
         if parsed_args.test is not None:

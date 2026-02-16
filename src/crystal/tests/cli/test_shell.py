@@ -613,11 +613,11 @@ def test_given_pyrepl_waiting_for_input_when_write_to_stdouterr_then_write_defer
 # Tests: Ctrl-C (and KeyboardInterrupt)
 
 def test_given_crystal_started_without_shell_when_ctrl_c_pressed_then_exits_with_exit_code_sigint() -> None:
-    with crystal_running(args=[], kill=False) as crystal:
+    with crystal_running(args=[], kill=False, env_extra={'CRYSTAL_PRINT_WHEN_SHELL_READY': 'True'}) as crystal:
+        assert isinstance(crystal.stdout, TextIOBase)
+        
         # Wait for Crystal to start up
-        # TODO: Find a way to actually detect when Crystal finished starting,
-        #       that doesn't require the shell, which isn't available for this test
-        time.sleep(1.0)
+        read_until(crystal.stdout, 'Shell ready\n', timeout=2.0)
         
         # Send SIGINT (Ctrl-C)
         os.kill(crystal.pid, signal.SIGINT)
