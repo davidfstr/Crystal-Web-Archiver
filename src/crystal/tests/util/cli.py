@@ -182,9 +182,15 @@ def crystal_running(
         if kill or did_raise:
             if not tty:
                 assert crystal.stdin is not None
-                crystal.stdin.close()
+                try:
+                    crystal.stdin.close()
+                except BrokenPipeError:
+                    pass
                 assert crystal.stdout is not None
-                crystal.stdout.close()
+                try:
+                    crystal.stdout.close()
+                except BrokenPipeError:
+                    pass
             
             crystal.kill()
         
