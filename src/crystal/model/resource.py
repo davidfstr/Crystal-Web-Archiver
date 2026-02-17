@@ -1049,10 +1049,20 @@ class Resource:
         return True
     
     # NOTE: Only used from a Python REPL at the moment
-    def delete(self) -> Future[None]:
+    #@fg_affinity if always_async = False
+    def delete(self, *, always_async: bool = False) -> Future[None]:
         """
         Deletes this resource asynchronously, including any related revisions.
         Returns a Future that resolves when deletion is complete.
+        
+        If always_async = False (the default), this function will delete
+        SYNCHRONOUSLY if the project's major version allows that operation
+        safely, for backward compatibility with Crystal <=2.2.0 callers that
+        expect delete() to be synchronous. Note that:
+        - If a synchronous delete is performed, this function requires @fg_affinity.
+          Pass always_async = True to remove the @fg_affinity restriction.
+        - If a synchronous delete is performed, any raised exception is still
+          reported through the returned Future and not raised directly.
 
         Future Raises:
         * ProjectReadOnlyError
@@ -1060,16 +1070,31 @@ class Resource:
         * sqlite3.DatabaseError, OSError --
             if the delete partially/fully failed, leaving behind zero or more revisions
         """
-        from crystal.task import DeleteResourceTask
-        task = DeleteResourceTask(self)
-        self.project.add_task(task)
+        from crystal.model.resource_revision import ResourceRevision
+        if always_async or ResourceRevision._uses_pack_files(self.project):
+            # Perform asynchronously
+            from crystal.task import DeleteResourceTask
+            task = DeleteResourceTask(self)
+            self.project.add_task(task)
+            result_future = task.future
+        else:
+            # Perform synchronously, to preserve compatibility with
+            # Crystal <=2.2.0 callers that expect delete() to be synchronous,
+            # at least when working with older project major versions
+            result_future = Future()
+            try:
+                self._delete_now()
+            except BaseException as e:
+                result_future.set_exception(e)
+            else:
+                result_future.set_result(None)
         # NOTE: Crystal <=2.2.0 did NOT return a Future, so older callers may
         #       not expect a Future and in particular may not wait for it properly.
         #       Print a warning to make those now-improper callers easier to identify.
-        return warn_if_result_not_read(task.future, f'{self}.delete()')
+        return warn_if_result_not_read(result_future, f'{self}.delete()')
 
     @fg_affinity  # does database I/O
-    @scheduler_affinity  # does revision body I/O
+    #@scheduler_affinity if _revision_bodies_writable() says so
     def _delete_now(self) -> None:
         """
         Deletes this resource synchronously, including any related revisions.

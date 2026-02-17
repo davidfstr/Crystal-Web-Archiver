@@ -1597,15 +1597,16 @@ async def test_given_fetch_error_page_visible_when_click_retry_button_then_retry
                 expect(fetch_error_page.progress_bar).not_to_be_visible()
                 
                 with reloads_paused(raw_page):
-                    # Click the retry button
-                    fetch_error_page.retry_button.click()
-                    
-                    # Verify button state changes during retry
-                    expect(fetch_error_page.retry_button).to_be_disabled()
-                    expect(fetch_error_page.retry_button).to_contain_text('⟳ Retrying...')
-                    
-                    # Verify progress bar becomes visible
-                    expect(fetch_error_page.progress_bar).to_be_visible()
+                    with fetch_paused(raw_page):
+                        # Click the retry button
+                        fetch_error_page.retry_button.click()
+                        
+                        # Verify button state changes during retry
+                        expect(fetch_error_page.retry_button).to_be_disabled()
+                        expect(fetch_error_page.retry_button).to_contain_text('⟳ Retrying...')
+                        
+                        # Verify progress bar becomes visible
+                        expect(fetch_error_page.progress_bar).to_be_visible()
                     
                     # (Wait for progress to complete. And reload.)
                 

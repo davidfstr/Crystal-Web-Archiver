@@ -1072,7 +1072,12 @@ class Project(ListenableMixin):
             return
         
         # Create the pack file from the individual revision files
-        ResourceRevision._pack_revisions_for_id(self, pack_end_id)
+        # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
+        #       This thread has exclusive access to the project while it is being created.
+        # HACK: Uses scheduler_thread_context(), which is intended for testing only
+        from crystal.tests.util.tasks import scheduler_thread_context
+        with scheduler_thread_context():
+            ResourceRevision._pack_revisions_for_id(self, pack_end_id)
     
     # TODO: Consider accepting `db: DatabaseConnection` rather than `c: DatabaseCursor`
     @staticmethod
