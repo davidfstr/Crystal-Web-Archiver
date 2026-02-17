@@ -19,14 +19,14 @@ def get_application_menu_name() -> str:
         # Load the Foundation framework
         foundation_path = ctypes.util.find_library('Foundation')
         if foundation_path is None:
-            print('Warning: Could not find Foundation framework', file=sys.stderr)
+            print('WARNING: Could not find Foundation framework', file=sys.stderr)
             return 'Unknown'
         foundation = ctypes.cdll.LoadLibrary(foundation_path)
         
         # Load the objc library
         objc_path = ctypes.util.find_library('objc')
         if objc_path is None:
-            print('Warning: Could not find objc library', file=sys.stderr)
+            print('WARNING: Could not find objc library', file=sys.stderr)
             return 'Unknown'
         objc = ctypes.cdll.LoadLibrary(objc_path)
         
@@ -83,7 +83,7 @@ def get_application_menu_name() -> str:
         return c_string.decode('utf-8')
     
     except Exception as e:
-        print(f'Warning: Failed to get application name: {e}', file=sys.stderr)
+        print(f'WARNING: Failed to get application name: {e}', file=sys.stderr)
         return 'Unknown'
 
 
@@ -99,14 +99,14 @@ def set_application_menu_name(app_name: str) -> None:
         # Load the Foundation framework
         foundation_path = ctypes.util.find_library('Foundation')
         if foundation_path is None:
-            print('Warning: Could not find Foundation framework', file=sys.stderr)
+            print('WARNING: Could not find Foundation framework', file=sys.stderr)
             return
         foundation = ctypes.cdll.LoadLibrary(foundation_path)
         
         # Load the objc library
         objc_path = ctypes.util.find_library('objc')
         if objc_path is None:
-            print('Warning: Could not find objc library', file=sys.stderr)
+            print('WARNING: Could not find objc library', file=sys.stderr)
             return
         objc = ctypes.cdll.LoadLibrary(objc_path)
         
@@ -148,7 +148,7 @@ def set_application_menu_name(app_name: str) -> None:
         objc_msgSend_set(infoDict, setObject_forKey_sel, appNameNSString, cfBundleNameKey)
     
     except Exception as e:
-        print(f'Warning: Failed to set application name: {e}', file=sys.stderr)
+        print(f'WARNING: Failed to set application name: {e}', file=sys.stderr)
 
 
 def warn_if_application_menu_name_changes_from(
@@ -196,14 +196,14 @@ def bring_app_to_front() -> None:
         # Load the AppKit framework
         appkit_path = ctypes.util.find_library('AppKit')
         if appkit_path is None:
-            print('Warning: Could not find AppKit framework', file=sys.stderr)
+            print('WARNING: Could not find AppKit framework', file=sys.stderr)
             return
         appkit = ctypes.cdll.LoadLibrary(appkit_path)
         
         # Load the objc library
         objc_path = ctypes.util.find_library('objc')
         if objc_path is None:
-            print('Warning: Could not find objc library', file=sys.stderr)
+            print('WARNING: Could not find objc library', file=sys.stderr)
             return
         objc = ctypes.cdll.LoadLibrary(objc_path)
         
@@ -232,4 +232,4 @@ def bring_app_to_front() -> None:
         objc_msgSend_bool(app, activateIgnoringOtherApps, True)
         
     except Exception as e:
-        print(f'Warning: Failed to bring application to front: {e}', file=sys.stderr)
+        print(f'WARNING: Failed to bring application to front: {e}', file=sys.stderr)

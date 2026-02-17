@@ -151,7 +151,7 @@ def _run_with_socket(exe_filepath: str, remaining_args: list[str]) -> None:
         # Only report if it's not a harmless "broken pipe" error
         # (which happens when subprocess closes connection)
         if not isinstance(stdin_thread_exception, BrokenPipeError):
-            print(f'Warning: Exception in stdin thread: {stdin_thread_exception}', file=sys.stderr)
+            print(f'WARNING: Exception in stdin thread: {stdin_thread_exception}', file=sys.stderr)
     
     sys.exit(process_returncode)
 

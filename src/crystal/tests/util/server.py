@@ -81,7 +81,7 @@ def served_project_from_filepath(
                     for rr in list(r.revisions()):
                         if rr.metadata is None:
                             print(
-                                f'Warning: Unable to alter fetch date of '
+                                f'WARNING: Unable to alter fetch date of '
                                 f'resource revision lacking HTTP headers: {rr}',
                                 file=sys.stderr)
                             continue

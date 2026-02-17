@@ -828,7 +828,7 @@ def _run_worker(
                 process.wait(timeout=5.0)
             except subprocess.TimeoutExpired:
                 print(
-                    f'[Runner] Warning: Timed out waiting for worker {worker_id} process to terminate.',
+                    f'[Runner] WARNING: Timed out waiting for worker {worker_id} process to terminate.',
                     file=sys.stderr)
         
         # Close interrupt pipe read-end.

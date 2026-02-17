@@ -47,7 +47,7 @@ def patch_urlparse_to_never_raise_valueerror():
                             pass
                         else:
                             print(
-                                f'Warning: urlparse/urlsplit returned output that does not '
+                                f'WARNING: urlparse/urlsplit returned output that does not '
                                     f'unparse/unsplit to the input: {url!r} -> {url2!r}',
                                 file=sys.stderr
                             )
@@ -83,7 +83,7 @@ def patch_urlparse_to_never_raise_valueerror():
                             pass
                         else:
                             print(
-                                f'Warning: urlparse/urlsplit returned output that does not '
+                                f'WARNING: urlparse/urlsplit returned output that does not '
                                     f'unparse/unsplit to the input: {url!r} -> {url2!r}',
                                 file=sys.stderr
                             )
@@ -122,7 +122,7 @@ def patch_urlparse_to_never_raise_valueerror():
                         pass
                     else:
                         print(
-                            f'Warning: urlparse returned output that does not '
+                            f'WARNING: urlparse returned output that does not '
                                 f'unparse to the input: {url!r} -> {url2!r}',
                             file=sys.stderr
                         )

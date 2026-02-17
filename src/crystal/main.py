@@ -553,7 +553,7 @@ def _main2(args: list[str]) -> None:
                 appicon = wx.Icon()
                 success = appicon.LoadFile(resources.get_filepath('appicon.png'), wx.BITMAP_TYPE_PNG)
                 if not success:
-                    print('Warning: Failed to load Dock icon', file=sys.stderr)
+                    print('WARNING: Failed to load Dock icon', file=sys.stderr)
                 else:
                     tbi = wx.adv.TaskBarIcon(wx.adv.TBI_DOCK)
                     tbi.SetIcon(appicon, 'Crystal')
@@ -852,7 +852,7 @@ def _main2(args: list[str]) -> None:
         if app.HasPendingEvents():
             app.ProcessPendingEvents()
             if app.HasPendingEvents():
-                print('Warning: Exiting app while some pending events still exist', file=sys.stderr)
+                print('WARNING: Exiting app while some pending events still exist', file=sys.stderr)
 
 
 async def _did_launch(

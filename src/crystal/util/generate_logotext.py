@@ -52,7 +52,7 @@ def generate_logotext_bitmaps(output_dir: str | None = None):
             if not font_1x.IsOk() or font_1x.GetFaceName() != 'Futura':
                 # Fallback to system font with bold weight
                 font_1x = wx.Font(_BASE_FONT_SIZE, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-                print(f'Warning: Futura font not found, using fallback: {font_1x.GetFaceName()}', file=sys.stderr)
+                print(f'WARNING: Futura font not found, using fallback: {font_1x.GetFaceName()}', file=sys.stderr)
             else:
                 print(f'Using Futura font: {font_1x.GetFaceName()}')
         else:

@@ -1825,7 +1825,7 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
     
     def finish(self) -> None:
         if self.complete:
-            print(f'Warning: finish() called on already-finished task. Ignoring call.', file=sys.stderr)
+            print(f'WARNING: finish() called on already-finished task. Ignoring call.', file=sys.stderr)
             traceback.print_stack(file=sys.stderr)
             return
         
