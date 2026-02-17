@@ -694,8 +694,7 @@ class Project(ListenableMixin):
         # Apply major version migrations
         if True:
             # Get the project's major version
-            with self._db, closing(self._db.cursor()) as c:
-                major_version = self._get_major_version(c)
+            major_version = self._get_major_version(self._db)
             
             # Upgrade major version 1 -> 2
             if major_version == 1:
@@ -716,8 +715,7 @@ class Project(ListenableMixin):
             # At major version 3
             if major_version == 3:
                 # Check if migration from v2 is in progress
-                with self._db, closing(self._db.cursor()) as c:
-                    major_version_old = self._get_major_version_old(c)
+                major_version_old = self._get_major_version_old(self._db)
                 if major_version_old == 2:
                     self._migrate_v2_to_v3(progress_listener)  # may raise CancelOpenProject
 
@@ -880,8 +878,7 @@ class Project(ListenableMixin):
         Raises:
         * sqlite3.DatabaseError, OSError
         """
-        with self._db, closing(self._db.cursor()) as c:
-            assert self._get_major_version(c) in [1, 2]
+        assert self._get_major_version(self._db) in [1, 2]
         
         revisions_dirpath = os.path.join(
             self.path, self._REVISIONS_DIRNAME)  # cache
@@ -916,9 +913,8 @@ class Project(ListenableMixin):
         * CancelOpenProject
         * sqlite3.DatabaseError, OSError
         """
-        with self._db, closing(self._db.cursor()) as c:
-            assert self._get_major_version(c) == 3
-            assert self._get_major_version_old(c) == 2
+        assert self._get_major_version(self._db) == 3
+        assert self._get_major_version_old(self._db) == 2
 
         # Get max revision ID for progress reporting
         with self._db, closing(self._db.cursor()) as c:
@@ -1207,18 +1203,18 @@ class Project(ListenableMixin):
         with scheduler_thread_context():
             ResourceRevision._pack_revisions_for_id(self, pack_end_id)
     
-    # TODO: Consider accepting `db: DatabaseConnection` rather than `c: DatabaseCursor`
     @staticmethod
-    def _get_major_version(c: DatabaseCursor | sqlite3.Cursor) -> int:
+    def _get_major_version(db: DatabaseConnection | sqlite3.Connection) -> int:
         """Gets the major version of a project, before the project's properties are loaded."""
-        rows = list(c.execute(
-            'select value from project_property where name = ?',
-            ('major_version',)))
-        if len(rows) == 0:
-            major_version = 1
-        else:
-            [(major_version_str,)] = rows
-            major_version = int(major_version_str)
+        with db, closing(db.cursor()) as c:
+            rows = list(c.execute(
+                'select value from project_property where name = ?',
+                ('major_version',)))
+            if len(rows) == 0:
+                major_version = 1
+            else:
+                [(major_version_str,)] = rows
+                major_version = int(major_version_str)
         return major_version
     
     @staticmethod
@@ -1230,20 +1226,21 @@ class Project(ListenableMixin):
                 ('major_version', major_version))
 
     @staticmethod
-    def _get_major_version_old(c: DatabaseCursor | sqlite3.Cursor) -> int | None:
+    def _get_major_version_old(db: DatabaseConnection) -> int | None:
         """
         Gets the major_version_old migration marker, or None if not set.
 
         This marker is set when a migration is in progress (e.g., v2 -> v3).
         It records the old major version before the migration started.
         """
-        rows = list(c.execute(
-            'select value from project_property where name = ?',
-            ('major_version_old',)))
-        if len(rows) == 0:
-            return None
-        [(value,)] = rows
-        return int(value)
+        with db, closing(db.cursor()) as c:
+            rows = list(c.execute(
+                'select value from project_property where name = ?',
+                ('major_version_old',)))
+            if len(rows) == 0:
+                return None
+            [(value,)] = rows
+            return int(value)
 
     @staticmethod
     def _set_major_version_old(major_version_old: int, db: DatabaseConnection) -> None:
@@ -1304,8 +1301,7 @@ class Project(ListenableMixin):
             self._apply_migrations(progress_listener)  # may raise CancelOpenProject
         
         # Ensure major version is recognized
-        with self._db, closing(self._db.cursor()) as c:
-            major_version = self._get_major_version(c)
+        major_version = self._get_major_version(self._db)
         if major_version > self._LATEST_SUPPORTED_MAJOR_VERSION:
             raise ProjectTooNewError(
                 f'Project has major version {major_version} but this '
@@ -2674,12 +2670,14 @@ class Project(ListenableMixin):
             db_raw = sqlite3.connect(
                 'file:' + url_quote(db_filepath) + db_connect_query,
                 uri=True)
+            
+            major_version = Project._get_major_version(db_raw)
+            
+            # Get IDs for random revision sample
             with db_raw, closing(db_raw.cursor()) as c:
                 # NOTE: This is much faster than count(1)
                 [(max_revision_id,)] = c.execute('select max(id) from resource_revision')
                 approx_revision_count = max_revision_id or 0
-                
-                major_version = Project._get_major_version(c)
                 
                 # Estimate total size of all resource revisions
                 progress_listener.calculating_total_size(

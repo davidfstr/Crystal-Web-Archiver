@@ -1124,15 +1124,13 @@ async def test_given_disk_disconnects_before_migration_reaches_intermediate_chec
     # Verify migration marker still present (migration was not completed)
     async with project_opened_without_migrating(project_dirpath) as (_, project):
         assertEqual(3, project.major_version)
-        with project._db, closing(project._db.cursor()) as c:
-            assertEqual(2, project._get_major_version_old(c))
+        assertEqual(2, project._get_major_version_old(project._db))
 
     # Verify migration can resume successfully after disk reconnects
     async with (await OpenOrCreateDialog.wait_for()).open(
             project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
         assertEqual(3, project.major_version)
-        with project._db, closing(project._db.cursor()) as c:
-            assertEqual(None, project._get_major_version_old(c))
+        assertEqual(None, project._get_major_version_old(project._db))
 
         # Verify all revisions are readable
         for i in range(1, 65):
@@ -1208,15 +1206,13 @@ async def test_given_disk_disconnects_before_migration_reaches_final_checkpoint_
     # Verify migration marker still present (migration was not completed)
     async with project_opened_without_migrating(project_dirpath) as (_, project):
         assertEqual(3, project.major_version)
-        with project._db, closing(project._db.cursor()) as c:
-            assertEqual(2, project._get_major_version_old(c))
+        assertEqual(2, project._get_major_version_old(project._db))
 
     # Verify migration can resume successfully after disk reconnects
     async with (await OpenOrCreateDialog.wait_for()).open(
             project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
         assertEqual(3, project.major_version)
-        with project._db, closing(project._db.cursor()) as c:
-            assertEqual(None, project._get_major_version_old(c))
+        assertEqual(None, project._get_major_version_old(project._db))
 
         # Verify all revisions are readable
         for i in range(1, 33):
