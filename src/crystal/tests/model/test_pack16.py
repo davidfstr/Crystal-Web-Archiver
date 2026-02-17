@@ -8,6 +8,7 @@ from unittest import skip
 from crystal.model import Resource, ResourceRevision as RR, RevisionBodyMissingError
 from crystal.tests.util.asserts import assertEqual, assertRaises
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
+from crystal.tests.util.tasks import scheduler_disabled, scheduler_thread_context
 from crystal.tests.util.wait import wait_for, wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.xtyping import not_none
@@ -29,21 +30,22 @@ async def test_given_when_create_multiple_of_16_resource_revisions_then_creates_
 
             # Create 32 revisions, only IDs 15 and 31 have bodies
             revisions_with_bodies = []
-            for i in range(1, 33):
-                resource = Resource(project, f'http://example.com/case1/{i}')
-                if i == 15 or i == 31:
-                    # Create revision with body
-                    revision = RR.create_from_response(
-                        resource,
-                        metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                        body_stream=BytesIO(b'test body'),
-                    )
-                    revisions_with_bodies.append(revision)
-                else:
-                    # Create error-only revision (no body)
-                    RR.create_from_error(
-                        resource,
-                        Exception('Test error'))
+            with scheduler_thread_context():  # safe because no tasks running
+                for i in range(1, 33):
+                    resource = Resource(project, f'http://example.com/case1/{i}')
+                    if i == 15 or i == 31:
+                        # Create revision with body
+                        revision = RR.create_from_response(
+                            resource,
+                            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                            body_stream=BytesIO(b'test body'),
+                        )
+                        revisions_with_bodies.append(revision)
+                    else:
+                        # Create error-only revision (no body)
+                        RR.create_from_error(
+                            resource,
+                            Exception('Test error'))
 
             # Verify pack files exist
             pack_00_path = os.path.join(
@@ -72,20 +74,21 @@ async def test_given_when_create_multiple_of_16_resource_revisions_then_creates_
             project._set_major_version_for_test(3)
 
             # Create 32 revisions, all except IDs 15 and 31 have bodies
-            for i in range(1, 33):
-                resource = Resource(project, f'http://example.com/case2/{i}')
-                if i == 15 or i == 31:
-                    # Create error-only revision (no body)
-                    RR.create_from_error(
-                        resource,
-                        Exception('Test error'))
-                else:
-                    # Create revision with body
-                    RR.create_from_response(
-                        resource,
-                        metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                        body_stream=BytesIO(b'test body'),
-                    )
+            with scheduler_thread_context():  # safe because no tasks running
+                for i in range(1, 33):
+                    resource = Resource(project, f'http://example.com/case2/{i}')
+                    if i == 15 or i == 31:
+                        # Create error-only revision (no body)
+                        RR.create_from_error(
+                            resource,
+                            Exception('Test error'))
+                    else:
+                        # Create revision with body
+                        RR.create_from_response(
+                            resource,
+                            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                            body_stream=BytesIO(b'test body'),
+                        )
 
             # Verify pack files exist
             revisions_dir = os.path.join(project.path, 'revisions')
@@ -102,20 +105,21 @@ async def test_given_when_create_multiple_of_16_resource_revisions_then_creates_
             project._set_major_version_for_test(3)
 
             # Create 32 revisions, first 16 have no body, next 16 have body
-            for i in range(1, 33):
-                resource = Resource(project, f'http://example.com/case3/{i}')
-                if i <= 16:
-                    # Create error-only revision (no body)
-                    RR.create_from_error(
-                        resource,
-                        Exception('Test error'))
-                else:
-                    # Create revision with body
-                    RR.create_from_response(
-                        resource,
-                        metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                        body_stream=BytesIO(b'test body'),
-                    )
+            with scheduler_thread_context():  # safe because no tasks running
+                for i in range(1, 33):
+                    resource = Resource(project, f'http://example.com/case3/{i}')
+                    if i <= 16:
+                        # Create error-only revision (no body)
+                        RR.create_from_error(
+                            resource,
+                            Exception('Test error'))
+                    else:
+                        # Create revision with body
+                        RR.create_from_response(
+                            resource,
+                            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                            body_stream=BytesIO(b'test body'),
+                        )
 
             # Verify only one pack file exists (for second group)
             revisions_dir = os.path.join(project.path, 'revisions')
@@ -133,20 +137,21 @@ async def test_given_when_create_multiple_of_16_resource_revisions_then_creates_
             project._set_major_version_for_test(3)
 
             # Create 32 revisions, first 15 have body, rest have no body
-            for i in range(1, 33):
-                resource = Resource(project, f'http://example.com/case4/{i}')
-                if i <= 15:
-                    # Create revision with body
-                    RR.create_from_response(
-                        resource,
-                        metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                        body_stream=BytesIO(b'test body'),
-                    )
-                else:
-                    # Create error-only revision (no body)
-                    RR.create_from_error(
-                        resource,
-                        Exception('Test error'))
+            with scheduler_thread_context():  # safe because no tasks running
+                for i in range(1, 33):
+                    resource = Resource(project, f'http://example.com/case4/{i}')
+                    if i <= 15:
+                        # Create revision with body
+                        RR.create_from_response(
+                            resource,
+                            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                            body_stream=BytesIO(b'test body'),
+                        )
+                    else:
+                        # Create error-only revision (no body)
+                        RR.create_from_error(
+                            resource,
+                            Exception('Test error'))
 
             # Verify only one pack file exists (for first group)
             revisions_dir = os.path.join(project.path, 'revisions')
@@ -166,14 +171,15 @@ async def test_given_project_when_create_non_multiple_of_16_resource_revisions_t
 
         # Create 18 resources with bodies
         revisions = []
-        for i in range(1, 19):
-            resource = Resource(project, f'http://example.com/{i}')
-            revision = RR.create_from_response(
-                resource,
-                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                body_stream=BytesIO(b'test body'),
-            )
-            revisions.append(revision)
+        with scheduler_thread_context():  # safe because no tasks running
+            for i in range(1, 19):
+                resource = Resource(project, f'http://example.com/{i}')
+                revision = RR.create_from_response(
+                    resource,
+                    metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                    body_stream=BytesIO(b'test body'),
+                )
+                revisions.append(revision)
 
         # Verify pack file exists for first 16 revisions
         pack_00_path = os.path.join(
@@ -219,14 +225,15 @@ async def test_given_given_pack_file_missing_when_read_resource_revision_then_fa
 
         # Create 16 revisions with bodies (creates pack 00_)
         revisions = []
-        for i in range(1, 17):
-            resource = Resource(project, f'http://example.com/{i}')
-            revision = RR.create_from_response(
-                resource,
-                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                body_stream=BytesIO(b'test body'),
-            )
-            revisions.append(revision)
+        with scheduler_thread_context():  # safe because no tasks running
+            for i in range(1, 17):
+                resource = Resource(project, f'http://example.com/{i}')
+                revision = RR.create_from_response(
+                    resource,
+                    metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                    body_stream=BytesIO(b'test body'),
+                )
+                revisions.append(revision)
 
         # Verify pack file exists
         pack_00_path = os.path.join(
@@ -252,11 +259,12 @@ async def test_given_both_pack_and_hierarchical_missing_when_read_resource_revis
 
         # Create a revision with body
         resource = Resource(project, 'http://example.com/test')
-        revision = RR.create_from_response(
-            resource,
-            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-            body_stream=BytesIO(b'test body'),
-        )
+        with scheduler_thread_context():  # safe because no tasks running
+            revision = RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(b'test body'),
+            )
 
         # Verify revision file exists (as individual file, not in pack yet)
         revision_001_path = os.path.join(
@@ -299,13 +307,14 @@ async def test_given_individual_files_exist_for_last_missing_complete_pack_file_
         # NOTE: Stop at 31, not 32, because creating revision 32 would imply
         #       that pack 01_ was successfully and durably written. A crash during
         #       pack creation would occur before revision 32 could be created.
-        for i in range(1, 32):
-            resource = Resource(project, f'http://example.com/{i}')
-            RR.create_from_response(
-                resource,
-                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                body_stream=BytesIO(b'test body'),
-            )
+        with scheduler_thread_context():  # safe because no tasks running
+            for i in range(1, 32):
+                resource = Resource(project, f'http://example.com/{i}')
+                RR.create_from_response(
+                    resource,
+                    metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                    body_stream=BytesIO(b'test body'),
+                )
 
         # Verify both pack files were created
         pack_00_path = os.path.join(
@@ -359,13 +368,14 @@ async def test_given_individual_files_exist_for_last_missing_incomplete_pack_fil
         project._set_major_version_for_test(3)
 
         # Create 18 revisions with bodies (pack 00_, then files 010-011)
-        for i in range(1, 19):
-            resource = Resource(project, f'http://example.com/{i}')
-            RR.create_from_response(
-                resource,
-                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                body_stream=BytesIO(b'test body'),
-            )
+        with scheduler_thread_context():  # safe because no tasks running
+            for i in range(1, 19):
+                resource = Resource(project, f'http://example.com/{i}')
+                RR.create_from_response(
+                    resource,
+                    metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                    body_stream=BytesIO(b'test body'),
+                )
 
         # Verify pack file exists for first 16 revisions
         pack_00_path = os.path.join(
@@ -479,14 +489,15 @@ async def test_given_nonlast_resource_revision_in_pack_file_when_deleted_then_pa
         # Create 15 revisions to trigger pack file creation
         # (Revisions 1-15 go into pack 00_.zip)
         revisions = []
-        for i in range(1, 16):
-            resource = Resource(project, f'http://example.com/pack-delete/{i}')
-            revision = RR.create_from_response(
-                resource,
-                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                body_stream=BytesIO(f'body {i}'.encode()),
-            )
-            revisions.append(revision)
+        with scheduler_thread_context():  # safe because no tasks running
+            for i in range(1, 16):
+                resource = Resource(project, f'http://example.com/pack-delete/{i}')
+                revision = RR.create_from_response(
+                    resource,
+                    metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                    body_stream=BytesIO(f'body {i}'.encode()),
+                )
+                revisions.append(revision)
 
         # Verify pack file exists
         pack_path = os.path.join(
@@ -528,14 +539,15 @@ async def test_given_last_resource_revision_in_pack_file_when_deleted_then_pack_
         # Create 15 revisions to trigger pack file creation
         # (Revisions 1-15 go into pack 00_.zip)
         revisions = []
-        for i in range(1, 16):
-            resource = Resource(project, f'http://example.com/pack-delete-last/{i}')
-            revision = RR.create_from_response(
-                resource,
-                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-                body_stream=BytesIO(f'body {i}'.encode()),
-            )
-            revisions.append(revision)
+        with scheduler_thread_context():  # safe because no tasks running
+            for i in range(1, 16):
+                resource = Resource(project, f'http://example.com/pack-delete-last/{i}')
+                revision = RR.create_from_response(
+                    resource,
+                    metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                    body_stream=BytesIO(f'body {i}'.encode()),
+                )
+                revisions.append(revision)
 
         # Verify pack file exists
         pack_path = os.path.join(
@@ -572,11 +584,12 @@ async def test_when_resource_revision_deleted_but_result_of_returned_future_igno
         
         # Create a resource with a revision
         resource = Resource(project, 'http://example.com/test')
-        revision = RR.create_from_response(
-            resource,
-            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-            body_stream=BytesIO(b'test body'),
-        )
+        with scheduler_thread_context():  # safe because no tasks running
+            revision = RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(b'test body'),
+            )
         
         # NOTE: Do NOT call the real warn_if_result_not_read() to avoid printing
         #       warnings to stderr after this test finishes 
@@ -605,11 +618,12 @@ async def test_when_resource_deleted_but_result_of_returned_future_ignored_then_
         
         # Create a resource with a revision
         resource = Resource(project, 'http://example.com/test')
-        RR.create_from_response(
-            resource,
-            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
-            body_stream=BytesIO(b'test body'),
-        )
+        with scheduler_thread_context():  # safe because no tasks running
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(b'test body'),
+            )
         
         # NOTE: Do NOT call the real warn_if_result_not_read() to avoid printing
         #       warnings to stderr after this test finishes 
@@ -625,3 +639,65 @@ async def test_when_resource_deleted_but_result_of_returned_future_ignored_then_
         (delete_task,) = mock_add_task.call_args.args
         (future_warn_called_on, _) = mock_warn.call_args.args
         assert future_warn_called_on is delete_task.future
+
+
+async def test_given_older_flat_or_hierarchical_project_when_resource_revision_deleted_then_performs_delete_synchronously() -> None:
+    # NOTE: Prevent any improperly-created DeleteResourceRevisionTask from running and completing
+    with scheduler_disabled():
+        async with (await OpenOrCreateDialog.wait_for()).create() as (_, project):
+            assertEqual(2, project.major_version)
+
+            # Create a resource with a revision
+            resource = Resource(project, 'http://example.com/sync-delete-test')
+            revision = RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(b'delete me'),
+            )
+
+            # Verify _delete_now() is called synchronously (before delete() returns)
+            with patch.object(RR, '_delete_now', wraps=revision._delete_now) as spy_delete_now:
+                future = revision.delete()
+            # _delete_now() must have been called synchronously
+            assertEqual(1, spy_delete_now.call_count)
+            # 1. Ensure no error
+            # 2. Avoid the "result was never read" warning
+            await wait_for_future(future)
+
+            # Try deleting the same revision again, which should raise an exception
+            second_future = revision.delete()
+            # Verify that delete() returned a Future with the exception,
+            # rather than raising the exception directly
+            with assertRaises(AssertionError):
+                await wait_for_future(second_future)
+
+
+async def test_given_older_flat_or_hierarchical_project_when_resource_deleted_then_performs_delete_synchronously() -> None:
+    # NOTE: Prevent any improperly-created DeleteResourceTask from running and completing
+    with scheduler_disabled():
+        async with (await OpenOrCreateDialog.wait_for()).create() as (_, project):
+            assertEqual(2, project.major_version)
+
+            # Create a resource with a revision
+            resource = Resource(project, 'http://example.com/sync-delete-resource-test')
+            RR.create_from_response(
+                resource,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(b'test body'),
+            )
+
+            # Verify _delete_now() is called synchronously (before delete() returns)
+            with patch.object(Resource, '_delete_now', wraps=resource._delete_now) as spy_delete_now:
+                future = resource.delete()
+            # _delete_now() must have been called synchronously
+            assertEqual(1, spy_delete_now.call_count)
+            # 1. Ensure no error
+            # 2. Avoid the "result was never read" warning
+            await wait_for_future(future)
+
+            # Try deleting the same resource again, which should raise an exception
+            second_future = resource.delete()
+            # Verify that delete() returned a Future with the exception,
+            # rather than raising the exception directly
+            with assertRaises(KeyError):
+                await wait_for_future(second_future)

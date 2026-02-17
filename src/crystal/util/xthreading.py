@@ -150,7 +150,9 @@ def scheduler_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
         @wraps(func)
         def wrapper(*args, **kwargs):
             from crystal.task import is_synced_with_scheduler_thread
-            assert is_synced_with_scheduler_thread()
+            if not is_synced_with_scheduler_thread():
+                raise AssertionError(
+                    f'scheduler_affinity: Expected call on scheduler thread: {func}')
             return func(*args, **kwargs)  # cr-traceback: ignore
         return wrapper
     else:

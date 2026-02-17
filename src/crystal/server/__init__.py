@@ -1293,7 +1293,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             
             # Delete the error revision
             assert not is_foreground_thread()
-            default_revision.delete().result()
+            default_revision.delete(always_async=True).result()
             
             # Start a new download
             task = resource.download_with_task(interactive=True, needs_result=False)
