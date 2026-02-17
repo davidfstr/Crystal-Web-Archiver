@@ -857,13 +857,7 @@ class Project(ListenableMixin):
             else:
                 # Locate last revision ID.
                 # Flush all changes to its parent directory.
-                with self._db, closing(self._db.cursor()) as c:
-                    rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
-                if len(rows) == 1:
-                    [(max_revision_id,)] = rows
-                else:
-                    [] = rows
-                    max_revision_id = None
+                max_revision_id = self._max_revision_id()
                 if max_revision_id is not None:
                     (new_revision_filepath, _) = \
                         calculate_new_revision_filepath(max_revision_id)
@@ -917,13 +911,8 @@ class Project(ListenableMixin):
         assert self._get_major_version_old(self._db) == 2
 
         # Get max revision ID for progress reporting
-        with self._db, closing(self._db.cursor()) as c:
-            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
-        if len(rows) == 1:
-            [(max_revision_id,)] = rows
-        else:
-            max_revision_id = 0
-        approx_revision_count = max_revision_id or 0
+        max_revision_id = self._max_revision_id() or 0
+        approx_revision_count = max_revision_id
         
         with profiling_context(
                 'migrate_revisions_v2_to_v3.prof', enabled=_PROFILE_MIGRATE_REVISIONS_V2_TO_V3):
@@ -1038,11 +1027,8 @@ class Project(ListenableMixin):
         """
         
         # Locate last revision
-        with self._db, closing(self._db.cursor()) as c:
-            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
-        if len(rows) == 1:
-            [(max_revision_id,)] = rows
-        else:
+        max_revision_id = self._max_revision_id()
+        if max_revision_id is None:
             # No max revision exists to repair
             return
         try:
@@ -1166,11 +1152,8 @@ class Project(ListenableMixin):
         assert self.major_version >= 3
         
         # Locate last revision and related pack boundaries
-        with self._db, closing(self._db.cursor()) as c:
-            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
-        if len(rows) == 1:
-            [(max_revision_id,)] = rows
-        else:
+        max_revision_id = self._max_revision_id()
+        if max_revision_id is None:
             # No max revision exists to repair
             return
         if (max_revision_id % 16) != 15:
@@ -1202,6 +1185,8 @@ class Project(ListenableMixin):
         from crystal.tests.util.tasks import scheduler_thread_context
         with scheduler_thread_context():
             ResourceRevision._pack_revisions_for_id(self, pack_end_id)
+    
+    # --- Load: Utility ---
     
     @staticmethod
     def _get_major_version(db: DatabaseConnection | sqlite3.Connection) -> int:
@@ -1257,6 +1242,21 @@ class Project(ListenableMixin):
             c.execute(
                 'delete from project_property where name = ?',
                 ('major_version_old',))
+    
+    def _max_revision_id(self) -> int | None:
+        """Returns the maximum ResourceRevision ID in this project or None if there are none."""
+        return self._max_revision_id_with(self._db)
+    
+    @staticmethod
+    def _max_revision_id_with(db: DatabaseConnection | sqlite3.Connection) -> int | None:
+        with db, closing(db.cursor()) as c:
+            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+        if len(rows) == 1:
+            [(max_revision_id,)] = rows
+        else:
+            [] = rows
+            max_revision_id = None
+        return max_revision_id
 
     # --- Load: Create & Load ---
     
@@ -2676,7 +2676,7 @@ class Project(ListenableMixin):
             # Get IDs for random revision sample
             with db_raw, closing(db_raw.cursor()) as c:
                 # NOTE: This is much faster than count(1)
-                [(max_revision_id,)] = c.execute('select max(id) from resource_revision')
+                max_revision_id = Project._max_revision_id_with(db_raw)
                 approx_revision_count = max_revision_id or 0
                 
                 # Estimate total size of all resource revisions
