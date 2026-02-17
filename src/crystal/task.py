@@ -1931,7 +1931,6 @@ class DownloadResourceGroupTask(_PureContainerTask):
 class DeleteResourceTask(_LeafTask[None]):
     """
     Deletes a single resource and all its revisions.
-    Runs the actual deletion on the foreground thread via the scheduler.
     """
     icon_name = 'tasktree_delete'
 
@@ -1960,7 +1959,6 @@ class DeleteResourceTask(_LeafTask[None]):
 class DeleteResourceRevisionTask(_LeafTask[None]):
     """
     Deletes a single resource revision.
-    Runs the actual deletion on the foreground thread via the scheduler.
     """
     icon_name = 'tasktree_delete'
 

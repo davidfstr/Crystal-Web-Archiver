@@ -14,12 +14,12 @@ from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.util import http_date, xcgi, xshutil
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.filesystem import replace_and_flush
-from crystal.util.xtyping import not_none
 from crystal.util.urls import is_unrewritable_url
 from crystal.util.xfutures import warn_if_result_not_read
 from crystal.util.xthreading import (
     fg_affinity, fg_call_and_wait, fg_call_later, scheduler_affinity,
 )
+from crystal.util.xtyping import not_none
 import datetime
 import json
 import mimetypes
@@ -397,12 +397,12 @@ class ResourceRevision:
 
         # Calculate the pack boundaries
         assert (revision_id % 16) == 15
-        pack_base_id = revision_id - 15
+        pack_start_id = revision_id - 15
         pack_end_id = revision_id
 
         # Collect revision files that exist on disk
         revision_files = {}  # type: dict[str, str]
-        for rid in range(pack_base_id, pack_end_id + 1):
+        for rid in range(pack_start_id, pack_end_id + 1):
             body_filepath = cls._body_filepath_with(
                 project.path,
                 # NOTE: Always use major_version=2 paths: individual files are always stored
@@ -678,7 +678,8 @@ class ResourceRevision:
     @staticmethod
     def _entry_name_for_revision_id(revision_id: int) -> str:
         """
-        Computes the entry name within a pack zip for a given revision ID.
+        Computes the entry name within a pack zip for a given revision ID
+        in Pack16 format.
 
         For example, revision 0x01a (26) would have entry name '01a'.
 
@@ -968,10 +969,10 @@ class ResourceRevision:
                     return info.file_size
             except (FileNotFoundError, KeyError):
                 # Pack file doesn't exist or entry not in it.
-                # Fallback to Hierarchical file.
+                # Fallback to individual file.
                 pass
 
-        # Try Hierarchical file
+        # Try individual file
         try:
             return os.path.getsize(self._body_filepath)
         except FileNotFoundError:
@@ -1005,10 +1006,10 @@ class ResourceRevision:
                 return cast(BinaryIO, open_pack_entry(pack_filepath, entry_name))
             except (FileNotFoundError, ZipEntryNotFoundError):
                 # Pack file doesn't exist or entry not in it.
-                # Fallback to Hierarchical file.
+                # Fallback to individual file.
                 pass
 
-        # Try Hierarchical file
+        # Try individual file
         try:
             return open(self._body_filepath, 'rb')
         except FileNotFoundError:
@@ -1255,8 +1256,8 @@ class ResourceRevision:
         * OSError -- 
             if the delete partially failed, leaving behind a revision body file
         """
-        from crystal.model.project import ProjectReadOnlyError
         from crystal.model.pack16 import rewrite_pack_without_entry
+        from crystal.model.project import ProjectReadOnlyError
         
         project = self.project
         revision_id = not_none(self._id)  # capture

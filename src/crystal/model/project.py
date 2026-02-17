@@ -107,8 +107,8 @@ EntityTitleFormat: TypeAlias = Literal['url_name', 'name_url']
 
 
 class MigrationType(StrEnum):
-    FLAT_TO_HIERARCHICAL = auto()
-    HIERARCHICAL_TO_PACK16 = auto()
+    FLAT_TO_HIERARCHICAL = auto()  # v1 -> v2
+    HIERARCHICAL_TO_PACK16 = auto()  # v2 -> v3
 
 
 class Project(ListenableMixin):
@@ -986,9 +986,8 @@ class Project(ListenableMixin):
             revisions_processed = pack_start_id
             
             # Final disk health check after the last pack is processed
-            if pack_start_id > 0:
-                self._check_disk_health_during_migration(
-                    self.path, progress_listener)  # may raise CancelOpenProject
+            self._check_disk_health_during_migration(
+                self.path, progress_listener)  # may raise CancelOpenProject
 
         # Migration complete. Remove migration marker.
         self._delete_major_version_old(self._db)
@@ -1001,10 +1000,9 @@ class Project(ListenableMixin):
             progress_listener: OpenProjectProgressListener,
             ) -> None:
         """
-        Performs a lightweight disk health check during migration by listing
-        the project's top-level revisions directory.
+        Performs a lightweight disk health check during migration.
 
-        If the directory listing fails with an I/O error (e.g. due to disk
+        If the health check fails with an I/O error (e.g. due to disk
         disconnection), calls progress_listener.upgrade_revisions_disk_error()
         to display an error dialog and raises CancelOpenProject.
 
@@ -1150,9 +1148,6 @@ class Project(ListenableMixin):
         from crystal.tests.util.tasks import scheduler_thread_context
         with scheduler_thread_context():
             try:
-                # NOTE: Safe to call because scheduler thread is not running
-                #       and this thread has exclusive access to the project
-                #       while it is being created
                 last_revision._delete_now()
             except Exception as e:
                 # Repair failed. Continue opening the project anyway.
@@ -1179,7 +1174,7 @@ class Project(ListenableMixin):
         if (max_revision_id % 16) != 15:
             # No pack operation to repair
             return
-        pack_base_id = max_revision_id - 15
+        pack_start_id = max_revision_id - 15
         pack_end_id = max_revision_id
         
         # Check whether pack file is missing
@@ -1189,7 +1184,7 @@ class Project(ListenableMixin):
         
         # Check if there are any individual revision files that should be in the pack
         has_any_revision_files = False
-        for rid in range(pack_base_id, pack_end_id + 1):
+        for rid in range(pack_start_id, pack_end_id + 1):
             hierarchical_body_filepath = ResourceRevision._body_filepath_with(self.path, 2, rid)
             if os.path.exists(hierarchical_body_filepath):
                 has_any_revision_files = True
@@ -1576,14 +1571,6 @@ class Project(ListenableMixin):
         For testing purposes only.
         """
         self._set_property('major_version', str(version))
-
-    def _set_major_version_old_for_test(self, version: int) -> None:
-        """
-        Sets the major_version_old migration marker of this project.
-
-        For testing purposes only.
-        """
-        self._set_property('major_version_old', str(version))
 
     def _get_default_url_prefix(self) -> str | None:
         """
@@ -2867,6 +2854,10 @@ class Project(ListenableMixin):
         
         By default this method captures any exceptions that occur internally
         since the caller doesn't usually have a realistic way to handle them.
+        Specify capture_crashes=False to raise exceptions to the caller instead.
+        
+        If migrate_after_reopen is provided then the project will
+        perform the requested migration when it is reopened.
         
         Effects of this method are reversed by `reopen()`.
         

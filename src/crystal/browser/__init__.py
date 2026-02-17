@@ -1112,6 +1112,9 @@ class MainWindow(CloakMixin):
         
         In all other situations, the project is closed and returns True.
         
+        If migrate_after_reopen is provided then the project will
+        perform the requested migration when it is reopened.
+        
         It is safe to call this method multiple times, even after the project has closed.
         
         See also: MainWindow.close()
@@ -2135,11 +2138,12 @@ class MainWindow(CloakMixin):
     def _on_preferences_dialog_close(self, migration_type: MigrationType | None) -> None:
         # Update callout visibility if was reset in app preferences
         self._update_view_button_callout_visibility()
-
+        
+        # Start any requested migration
         if migration_type is not None:
             # NOTE: Defer migration to next event loop iteration so that the
             #       preferences dialog is fully destroyed before starting
-            #       the migration closes this window
+            #       the migration, which closes this window
             @capture_crashes_to_stderr
             def start_migration_soon() -> None:
                 # NOTE: On Windows/Linux it may be necessary to wait even longer

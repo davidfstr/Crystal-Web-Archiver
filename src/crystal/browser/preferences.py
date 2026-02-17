@@ -479,6 +479,8 @@ class PreferencesDialog:
                 if result != wx.ID_OK:
                     return  # user cancelled; leave Preferences open
                 self._migration_type = MigrationType.HIERARCHICAL_TO_PACK16
+            else:
+                raise AssertionError()
 
         self.dialog.Close()  # will call _on_close()
     
