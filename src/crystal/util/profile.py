@@ -124,6 +124,30 @@ def create_profiled_callable(title: str, max_duration: float, callable: Callable
     return profiled_callable
 
 
+@contextmanager
+def profiling_context(
+        stats_filepath: str,
+        *, enabled: bool=True,
+        ) -> 'Iterator[Optional[cProfile.Profile]]':
+    """
+    Context in which a cProfile profiler is running,
+    where all function calls are timed.
+    
+    When exiting the context, a .stats file is written to the specified
+    filepath. This file can be analyzed/visualized with the PyPI "flameprof"
+    module and the standard library "pstats" module.
+    """
+    if enabled:
+        profiler = cProfile.Profile()
+        try:
+            with profiler:
+                yield profiler
+        finally:
+            profiler.dump_stats(stats_filepath)
+    else:
+        yield None
+
+
 def create_profiling_context(
         stats_filepath: str,
         *, enabled: bool=True,
@@ -139,11 +163,11 @@ def create_profiling_context(
     """
     if enabled:
         profiling_context = cProfile.Profile()  # type: AbstractContextManager[Optional[cProfile.Profile]]
-        @atexit.register
-        def dump_stats() -> None:  # type: ignore[misc]
+        def dump_stats() -> None:
             profiler = profiling_context
             assert isinstance(profiler, cProfile.Profile)
             profiler.dump_stats(stats_filepath)
+        atexit.register(dump_stats)
     else:
         profiling_context = nullcontext(enter_result=None)
     return profiling_context

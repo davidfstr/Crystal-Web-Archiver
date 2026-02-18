@@ -49,11 +49,7 @@ if TYPE_CHECKING:
 
 
 # Whether to collect profiling information about the scheduler thread.
-# 
-# When True, a 'scheduler.prof' file is written to the current directory
-# after all projects have been closed. Such a file can be converted
-# into a visual flamegraph using the "flameprof" PyPI module,
-# or analyzed using the built-in "pstats" module.
+# See create_profiling_context() for more info.
 _PROFILE_SCHEDULER = False
 
 
@@ -918,12 +914,7 @@ def _get_abstract_resource_title(abstract_resource: Resource | RootResource) -> 
 
 
 # Whether to collect profiling information about Resource.default_revision()
-# as used by DownloadResourceBodyTask.
-# 
-# When True, a 'default_revision.prof' file is written to the current directory
-# after all projects have been closed. Such a file can be converted
-# into a visual flamegraph using the "flameprof" PyPI module,
-# or analyzed using the built-in "pstats" module.
+# as used by DownloadResourceBodyTask. See create_profiling_context() for more info.
 _PROFILE_READ_REVISION = False
 
 PROFILE_RECORD_LINKS = os.environ.get('CRYSTAL_NO_PROFILE_RECORD_LINKS', 'False') != 'True'

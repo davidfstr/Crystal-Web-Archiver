@@ -26,7 +26,7 @@ from crystal.util.db import (
 from crystal.util.ellipsis import Ellipsis
 from crystal.util.filesystem import replace_and_flush, flush_renames_in_directory
 from crystal.util.listenable import ListenableMixin
-from crystal.util.profile import create_profiling_context
+from crystal.util.profile import profiling_context
 from crystal.util.progress import DevNullFile
 from crystal.util.ssd import is_ssd
 from crystal.util.test_mode import tests_are_running
@@ -84,13 +84,13 @@ if TYPE_CHECKING:
 # ------------------------------------------------------------------------------
 # Constants + Type Utilities
 
-# Whether to collect profiling information about Project._apply_migrations().
-# 
-# When True, a 'migrate_revisions.prof' file is written to the current directory
-# after all projects have been closed. Such a file can be converted
-# into a visual flamegraph using the "flameprof" PyPI module,
-# or analyzed using the built-in "pstats" module.
-_PROFILE_MIGRATE_REVISIONS = False
+# Whether to collect profiling information about Project._migrate_v1_to_v2().
+# See profiling_context() for more info.
+_PROFILE_MIGRATE_REVISIONS_V1_TO_V2 = False
+
+# Whether to collect profiling information about Project._migrate_v2_to_v3().
+# See profiling_context() for more info.
+_PROFILE_MIGRATE_REVISIONS_V2_TO_V3 = False
 
 
 _OptionalStr = TypeVar('_OptionalStr', bound=Optional[str])
@@ -832,10 +832,8 @@ class Project(ListenableMixin):
                 flush_renames_in_directory(
                     os.path.dirname(new_revision_filepath)
                 )
-        # TODO: Dump profiling context immediately upon exit of context
-        #       rather then waiting for program to exit
-        with create_profiling_context(
-                'migrate_revisions.prof', enabled=_PROFILE_MIGRATE_REVISIONS):
+        with profiling_context(
+                'migrate_revisions_v1_to_v2.prof', enabled=_PROFILE_MIGRATE_REVISIONS_V1_TO_V2):
             try:
                 with self._db, closing(self._db.cursor()) as c:
                     self._process_table_rows(
@@ -926,73 +924,75 @@ class Project(ListenableMixin):
         else:
             max_revision_id = 0
         approx_revision_count = max_revision_id or 0
+        
+        with profiling_context(
+                'migrate_revisions_v2_to_v3.prof', enabled=_PROFILE_MIGRATE_REVISIONS_V2_TO_V3):
+            # Report that migration is starting/resuming
+            progress_listener.will_upgrade_revisions(
+                approx_revision_count,
+                # Disallow veto because migration already in progress
+                can_veto=False,
+            )  # may raise CancelOpenProject
 
-        # Report that migration is starting/resuming
-        progress_listener.will_upgrade_revisions(
-            approx_revision_count,
-            # Disallow veto because migration already in progress
-            can_veto=False,
-        )  # may raise CancelOpenProject
+            # Process complete packs: Scan pack groups 0-15, 16-31, 32-47, ...
+            # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
+            #       This thread has exclusive access to the project while it is being migrated.
+            # HACK: Uses scheduler_thread_context(), which is intended for testing only
+            from crystal.tests.util.tasks import scheduler_thread_context
+            with scheduler_thread_context():
+                start_time = time.monotonic()  # capture
+                last_report_time = start_time
+                pack_start_id = 0
+                while True:
+                    pack_end_id = pack_start_id + 15
+                    if pack_end_id > max_revision_id:
+                        # Incomplete last group. Leave as individual files.
+                        break
 
-        # Process complete packs: Scan pack groups 0-15, 16-31, 32-47, ...
-        # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
-        #       This thread has exclusive access to the project while it is being migrated.
-        # HACK: Uses scheduler_thread_context(), which is intended for testing only
-        from crystal.tests.util.tasks import scheduler_thread_context
-        with scheduler_thread_context():
-            start_time = time.monotonic()  # capture
-            last_report_time = start_time
-            pack_start_id = 0
-            while True:
-                pack_end_id = pack_start_id + 15
-                if pack_end_id > max_revision_id:
-                    # Incomplete last group. Leave as individual files.
-                    break
+                    # Pack revisions [pack_start_id, pack_end_id], if not already done
+                    pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
+                    if not os.path.exists(pack_filepath):
+                        ResourceRevision._pack_revisions_for_id(
+                            self,
+                            pack_end_id,
+                            project_major_version=3,
+                            # Leave empty pack file in place if all original
+                            # individual revision files have I/O errors so that
+                            # if the migration is restarted no attempt is made to
+                            # repack those bad revisions
+                            retain_empty_pack_file_if_errors=True,
+                        )
+                    pack_start_id += 16
 
-                # Pack revisions [pack_start_id, pack_end_id], if not already done
-                pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
-                if not os.path.exists(pack_filepath):
-                    ResourceRevision._pack_revisions_for_id(
-                        self,
-                        pack_end_id,
-                        project_major_version=3,
-                        # Leave empty pack file in place if all original
-                        # individual revision files have I/O errors so that
-                        # if the migration is restarted no attempt is made to
-                        # repack those bad revisions
-                        retain_empty_pack_file_if_errors=True,
-                    )
-                pack_start_id += 16
+                    # Periodic disk health check: Every 256 revisions (16 packs),
+                    # verify the project disk is still accessible.
+                    # This detects disk disconnection early rather than continuing
+                    # to silently skip all remaining packs.
+                    if pack_start_id % Project._revision_count_between_disk_health_checks == 0:
+                        self._check_disk_health_during_migration(
+                            self.path, progress_listener)  # may raise CancelOpenProject
 
-                # Periodic disk health check: Every 256 revisions (16 packs),
-                # verify the project disk is still accessible.
-                # This detects disk disconnection early rather than continuing
-                # to silently skip all remaining packs.
-                if pack_start_id % Project._revision_count_between_disk_health_checks == 0:
-                    self._check_disk_health_during_migration(
-                        self.path, progress_listener)  # may raise CancelOpenProject
+                    # Report progress approximately once per second
+                    current_time = time.monotonic()  # capture
+                    if current_time - last_report_time >= 1.0 or Project._report_progress_at_maximum_resolution:
+                        elapsed = current_time - start_time
+                        revisions_processed = pack_start_id
+                        revisions_per_second = revisions_processed / elapsed if elapsed > 0 else 0.0
+                        progress_listener.upgrading_revision(
+                            revisions_processed,
+                            revisions_per_second,
+                        )  # may raise CancelOpenProject
+                        last_report_time = current_time
+                revisions_processed = pack_start_id
+                
+                # Final disk health check after the last pack is processed
+                self._check_disk_health_during_migration(
+                    self.path, progress_listener)  # may raise CancelOpenProject
 
-                # Report progress approximately once per second
-                current_time = time.monotonic()  # capture
-                if current_time - last_report_time >= 1.0 or Project._report_progress_at_maximum_resolution:
-                    elapsed = current_time - start_time
-                    revisions_processed = pack_start_id
-                    revisions_per_second = revisions_processed / elapsed if elapsed > 0 else 0.0
-                    progress_listener.upgrading_revision(
-                        revisions_processed,
-                        revisions_per_second,
-                    )  # may raise CancelOpenProject
-                    last_report_time = current_time
-            revisions_processed = pack_start_id
-            
-            # Final disk health check after the last pack is processed
-            self._check_disk_health_during_migration(
-                self.path, progress_listener)  # may raise CancelOpenProject
+            # Migration complete. Remove migration marker.
+            self._delete_major_version_old(self._db)
 
-        # Migration complete. Remove migration marker.
-        self._delete_major_version_old(self._db)
-
-        progress_listener.did_upgrade_revisions(revisions_processed)
+            progress_listener.did_upgrade_revisions(revisions_processed)
 
     @staticmethod
     def _check_disk_health_during_migration(
