@@ -19,6 +19,7 @@ from crystal.progress import (
 )
 from crystal.util import gio
 from crystal.util.bulkheads import capture_crashes_to_stderr, run_bulkhead_call
+from crystal.util.caffeination import Caffeination
 from crystal.util.db import (
     DatabaseConnection, DatabaseCursor, get_column_names_of_table,
     get_index_names, get_table_names, is_no_such_column_error_for,
@@ -832,7 +833,7 @@ class Project(ListenableMixin):
                 flush_renames_in_directory(
                     os.path.dirname(new_revision_filepath)
                 )
-        with profiling_context(
+        with Caffeination.caffeinated(), profiling_context(
                 'migrate_revisions_v1_to_v2.prof', enabled=_PROFILE_MIGRATE_REVISIONS_V1_TO_V2):
             try:
                 with self._db, closing(self._db.cursor()) as c:
@@ -939,7 +940,7 @@ class Project(ListenableMixin):
             #       This thread has exclusive access to the project while it is being migrated.
             # HACK: Uses scheduler_thread_context(), which is intended for testing only
             from crystal.tests.util.tasks import scheduler_thread_context
-            with scheduler_thread_context():
+            with scheduler_thread_context(), Caffeination.caffeinated():
                 start_time = time.monotonic()  # capture
                 last_report_time = start_time
                 pack_start_id = 0
