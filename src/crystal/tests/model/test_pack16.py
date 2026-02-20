@@ -22,7 +22,9 @@ from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, scheduler_thread_context
 from crystal.tests.util.wait import wait_for, wait_for_future, wait_while
 from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.util.filesystem import fine_grained_mtimes_available, replace_and_flush
 from crystal.util.wx_dialog import mocked_show_modal
+from crystal.util.xos import is_windows
 from crystal.util.xtyping import not_none
 from io import BytesIO, StringIO
 import os
@@ -1228,7 +1230,492 @@ async def test_given_interrupted_migration_when_reopen_then_cleans_up_temp_pack_
     pass
 
 
-# --- Utility ---
+# === Concurrent Operations ===
+
+# At most 1 WRITE to resource revision data can be active within a project,
+# as enforced by the _revision_bodies_writable() context.
+#
+# An unlimited number of READS from revision revisiomn data can be concurrent
+# with each other and with up to 1 WRITE within a project.
+# 
+# Note that a READ can sometimes perform a READ-REPAIR which is a special
+# kind of write that can be performed concurrently with other READ-REPAIRS
+# and other WRITES. A READ-REPAIR uses replace_destination_locked() to 
+# ensure that only one repair (or conflicting WRITE) can happen at a time.
+
+async def test_when_read_packed_revision_and_concurrently_read_another_revision_from_same_pack_then_both_reads_succeed() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, revision_a, revision_b) = \
+            _create_pack_with_two_bodyful_revisions(project)
+        
+        # Precondition: Pack file exists with mtime T1
+        mtime_t1 = os.path.getmtime(pack_filepath)
+        
+        # Precondition: Pack file contains A and B
+        with zipfile.ZipFile(pack_filepath, 'r') as zf:
+            assertEqual({'00e', '00f'}, set(zf.namelist()))
+        
+        # Open revision body A. Read half of it.
+        file_a = revision_a.open()
+        body_a_half = file_a.read(len(_LARGE_BODY_A) // 2)
+        assertEqual(_LARGE_BODY_A[:len(_LARGE_BODY_A) // 2], body_a_half)
+        
+        # Open revision body B. Read half of it.
+        file_b = revision_b.open()
+        body_b_half = file_b.read(len(_LARGE_BODY_B) // 2)
+        assertEqual(_LARGE_BODY_B[:len(_LARGE_BODY_B) // 2], body_b_half)
+        
+        # Read remainder of revision body A. Close it.
+        body_a_remainder = file_a.read()
+        assertEqual(_LARGE_BODY_A[len(_LARGE_BODY_A) // 2:], body_a_remainder)
+        file_a.close()
+        
+        # Read remainder of revision body B. Close it.
+        body_b_remainder = file_b.read()
+        assertEqual(_LARGE_BODY_B[len(_LARGE_BODY_B) // 2:], body_b_remainder)
+        file_b.close()
+        
+        # Postcondition: Pack file exists with mtime T1 (unchanged)
+        if fine_grained_mtimes_available():
+            mtime_t1_after = os.path.getmtime(pack_filepath)
+            assertEqual(mtime_t1, mtime_t1_after)
+        
+        # Postcondition: Pack file contains A and B
+        with zipfile.ZipFile(pack_filepath, 'r') as zf:
+            assertEqual({'00e', '00f'}, set(zf.namelist()))
+
+
+async def test_when_read_packed_revision_and_concurrently_delete_another_revision_from_same_pack_then_both_operations_succeed() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, revision_a, revision_b) = \
+            _create_pack_with_two_bodyful_revisions(project)
+        
+        # Precondition: Pack file exists with mtime T1
+        mtime_t1 = os.path.getmtime(pack_filepath)
+        
+        # Precondition: Pack file contains A and B
+        with zipfile.ZipFile(pack_filepath, 'r') as zf:
+            assertEqual({'00e', '00f'}, set(zf.namelist()))
+        
+        # Open revision body A. Read half of it.
+        file_a = revision_a.open()
+        body_a_half = file_a.read(len(_LARGE_BODY_A) // 2)
+        assertEqual(_LARGE_BODY_A[:len(_LARGE_BODY_A) // 2], body_a_half)
+        
+        # Delete revision B.
+        await wait_for_future(revision_b.delete())
+        
+        # Read remainder of revision body A. Close it.
+        body_a_remainder = file_a.read()
+        assertEqual(_LARGE_BODY_A[len(_LARGE_BODY_A) // 2:], body_a_remainder)
+        file_a.close()
+        
+        # Postcondition: Pack file exists with mtime T2 (changed due to delete)
+        if fine_grained_mtimes_available():
+            mtime_t2 = os.path.getmtime(pack_filepath)
+            assert mtime_t2 != mtime_t1, 'Pack file mtime should have changed after delete'
+        
+        # Postcondition: Pack file contains A but not B
+        with zipfile.ZipFile(pack_filepath, 'r') as zf:
+            assertEqual({'00e'}, set(zf.namelist()))
+
+
+async def test_when_read_packed_revision_and_concurrently_delete_same_revision_then_both_operations_succeed() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, revision_a, revision_b) = \
+            _create_pack_with_two_bodyful_revisions(project)
+        
+        # Precondition: Pack file exists with mtime T1
+        mtime_t1 = os.path.getmtime(pack_filepath)
+        
+        # Precondition: Pack file contains A and B
+        with zipfile.ZipFile(pack_filepath, 'r') as zf:
+            assertEqual({'00e', '00f'}, set(zf.namelist()))
+        
+        # Open revision body A. Read half of it.
+        file_a = revision_a.open()
+        body_a_half = file_a.read(len(_LARGE_BODY_A) // 2)
+        assertEqual(_LARGE_BODY_A[:len(_LARGE_BODY_A) // 2], body_a_half)
+        
+        # Delete revision A (the same one being read).
+        await wait_for_future(revision_a.delete())
+        
+        # Read remainder of revision body A. Close it.
+        # (Should succeed because the file handle was opened before the delete)
+        body_a_remainder = file_a.read()
+        assertEqual(_LARGE_BODY_A[len(_LARGE_BODY_A) // 2:], body_a_remainder)
+        file_a.close()
+        
+        # Postcondition: Pack file exists with mtime T2 (changed due to delete)
+        if fine_grained_mtimes_available():
+            mtime_t2 = os.path.getmtime(pack_filepath)
+            assert mtime_t2 != mtime_t1, 'Pack file mtime should have changed after delete'
+        
+        # Postcondition: Pack file contains B but not A
+        with zipfile.ZipFile(pack_filepath, 'r') as zf:
+            assertEqual({'00f'}, set(zf.namelist()))
+
+
+async def test_when_read_packed_revision_and_pack_file_needs_repair_then_repair_performed_and_read_succeeds() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, revision_a, revision_b) = \
+            _create_pack_with_two_bodyful_revisions(project)
+        
+        # Precondition: Pack file exists
+        assert os.path.exists(pack_filepath), 'Pack file should exist'
+        
+        # Simulate crash during delete by renaming pack file to .replacing
+        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        os.rename(pack_filepath, replacing_filepath)
+        
+        # Precondition: Pack file does NOT exist, .replacing file exists
+        assert not os.path.exists(pack_filepath), 'Pack file should not exist'
+        assert os.path.exists(replacing_filepath), '.replacing file should exist'
+        
+        # Read revision A. Should trigger repair and succeed.
+        with revision_a.open() as f:
+            body = f.read()
+        assertEqual(_LARGE_BODY_A, body)
+        
+        # Postcondition: Pack file exists (repaired)
+        assert os.path.exists(pack_filepath), 'Pack file should be repaired'
+        
+        # Postcondition: .replacing file does NOT exist (cleaned up)
+        assert not os.path.exists(replacing_filepath), '.replacing file should be cleaned up'
+        
+        # Verify both revisions are still readable
+        with revision_a.open() as f:
+            assertEqual(_LARGE_BODY_A, f.read())
+        with revision_b.open() as f:
+            assertEqual(_LARGE_BODY_B, f.read())
+
+
+async def test_when_concurrent_reads_of_packed_revision_and_pack_file_needs_repair_then_one_repair_performed_and_both_reads_succeed() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, revision_a, revision_b) = \
+            _create_pack_with_two_bodyful_revisions(project)
+        
+        # Precondition: Pack file exists
+        assert os.path.exists(pack_filepath), 'Pack file should exist'
+        
+        # Simulate crash during delete by renaming pack file to .replacing
+        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        os.rename(pack_filepath, replacing_filepath)
+        
+        # Precondition: Pack file does NOT exist, .replacing file exists
+        assert not os.path.exists(pack_filepath), 'Pack file should not exist'
+        assert os.path.exists(replacing_filepath), '.replacing file should exist'
+        
+        # Track how many times replace_and_flush is called (indicating repair)
+        repair_count = 0
+        real_replace_and_flush = replace_and_flush
+        def mock_replace_and_flush(src, dst):
+            nonlocal repair_count
+            repair_count += 1
+            return real_replace_and_flush(src, dst)
+        # Copy the RENAME_SUFFIX attribute so the patched function behaves correctly
+        mock_replace_and_flush.RENAME_SUFFIX = replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        
+        # Read both revisions concurrently. Only one should trigger repair.
+        with patch('crystal.model.resource_revision.replace_and_flush', mock_replace_and_flush):
+            # Open revision A (will trigger repair)
+            file_a = revision_a.open()
+            body_a_half = file_a.read(len(_LARGE_BODY_A) // 2)
+            assertEqual(_LARGE_BODY_A[:len(_LARGE_BODY_A) // 2], body_a_half)
+            
+            # Open revision B (should NOT trigger repair since pack is now repaired)
+            file_b = revision_b.open()
+            body_b_half = file_b.read(len(_LARGE_BODY_B) // 2)
+            assertEqual(_LARGE_BODY_B[:len(_LARGE_BODY_B) // 2], body_b_half)
+            
+            # Finish reading both
+            body_a_remainder = file_a.read()
+            assertEqual(_LARGE_BODY_A[len(_LARGE_BODY_A) // 2:], body_a_remainder)
+            file_a.close()
+            
+            body_b_remainder = file_b.read()
+            assertEqual(_LARGE_BODY_B[len(_LARGE_BODY_B) // 2:], body_b_remainder)
+            file_b.close()
+        
+        # Postcondition: Only one repair was performed
+        assertEqual(1, repair_count)
+        
+        # Postcondition: Pack file exists (repaired)
+        assert os.path.exists(pack_filepath), 'Pack file should be repaired'
+        
+        # Postcondition: .replacing file does NOT exist (cleaned up)
+        assert not os.path.exists(replacing_filepath), '.replacing file should be cleaned up'
+
+
+async def test_when_read_packed_revision_and_stale_replacing_file_exists_then_read_on_newer_pack_succeeds_and_old_replacing_file_ignored() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, revision_a, revision_b) = \
+            _create_pack_with_two_bodyful_revisions(project)
+        
+        # Precondition: Pack file exists with mtime T1
+        mtime_t1 = os.path.getmtime(pack_filepath)
+        
+        # Create a stale .replacing file (simulating incomplete cleanup after a
+        # successful replacement that didn't finish deleting the old file)
+        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        with open(replacing_filepath, 'wb') as f:
+            # Write stale/different content to the .replacing file
+            f.write(b'stale pack content that should be ignored')
+        
+        # Precondition: Both pack file and .replacing file exist
+        assert os.path.exists(pack_filepath), 'Pack file should exist'
+        assert os.path.exists(replacing_filepath), '.replacing file should exist'
+        
+        # Read revision A. Should read from pack file, ignoring stale .replacing.
+        with revision_a.open() as f:
+            body = f.read()
+        assertEqual(_LARGE_BODY_A, body)
+        
+        # Postcondition: Pack file still exists with same mtime (not touched)
+        if fine_grained_mtimes_available():
+            mtime_t2 = os.path.getmtime(pack_filepath)
+            assertEqual(mtime_t1, mtime_t2)
+        
+        # Postcondition: .replacing file still exists (not cleaned up by read)
+        # NOTE: .replacing cleanup happens during delete operations, not reads
+        assert os.path.exists(replacing_filepath), '.replacing file should still exist'
+        
+        # Verify both revisions are readable from the pack file
+        with revision_a.open() as f:
+            assertEqual(_LARGE_BODY_A, f.read())
+        with revision_b.open() as f:
+            assertEqual(_LARGE_BODY_B, f.read())
+
+
+async def test_when_read_loose_revision_and_concurrently_pack_same_revision_then_both_operations_succeed() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, loose_filepath_a, revision_a) = \
+            _create_almost_complete_pack_with_one_bodyful_revision(project)
+        
+        # Precondition: Loose revision A exists
+        assert os.path.exists(loose_filepath_a), 'Loose revision A should exist'
+        
+        # Precondition: Pack file does not exist
+        assert not os.path.exists(pack_filepath), 'Pack file should not exist yet'
+        
+        # Open revision body A. Read half of it.
+        file_a = revision_a.open()
+        body_a_half = file_a.read(len(_LARGE_BODY_A) // 2)
+        assertEqual(_LARGE_BODY_A[:len(_LARGE_BODY_A) // 2], body_a_half)
+        
+        # Create bodyful revision B with ID 15. Completes a pack including revision A.
+        with scheduler_thread_context():  # safe because no tasks running
+            resource_b = Resource(project, 'http://example.com/loose-pack-test/15')
+            revision_b = RR.create_from_response(
+                resource_b,
+                metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                body_stream=BytesIO(_LARGE_BODY_B),
+            )
+        
+        # Read remainder of revision body A. Close it.
+        # (Should succeed because the file handle was opened before the pack operation)
+        body_a_remainder = file_a.read()
+        assertEqual(_LARGE_BODY_A[len(_LARGE_BODY_A) // 2:], body_a_remainder)
+        file_a.close()
+        
+        # Postcondition: Loose revision A does NOT exist
+        assert not os.path.exists(loose_filepath_a), 'Loose revision A should be packed'
+        
+        # Postcondition: Pack file exists, containing A and B
+        assert os.path.exists(pack_filepath), 'Pack file should exist after completing pack'
+        with zipfile.ZipFile(pack_filepath, 'r') as zf:
+            assertEqual({'00e', '00f'}, set(zf.namelist()))
+
+
+async def test_when_read_loose_revision_and_concurrently_delete_same_revision_then_both_operations_succeed() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, loose_filepath_a, revision_a) = \
+            _create_almost_complete_pack_with_one_bodyful_revision(project)
+        
+        # Precondition: Loose revision A exists
+        assert os.path.exists(loose_filepath_a), 'Loose revision A should exist'
+        
+        # Open revision body A. Read half of it.
+        file_a = revision_a.open()
+        body_a_half = file_a.read(len(_LARGE_BODY_A) // 2)
+        assertEqual(_LARGE_BODY_A[:len(_LARGE_BODY_A) // 2], body_a_half)
+        
+        # Delete revision A.
+        await wait_for_future(revision_a.delete())
+        
+        # Read remainder of revision body A. Close it.
+        # (Should succeed because the file handle was opened before the delete)
+        body_a_remainder = file_a.read()
+        assertEqual(_LARGE_BODY_A[len(_LARGE_BODY_A) // 2:], body_a_remainder)
+        file_a.close()
+        
+        # Postcondition: Loose revision A does NOT exist
+        assert not os.path.exists(loose_filepath_a), 'Loose revision A should be deleted'
+
+
+async def test_when_delete_packed_revision_during_concurrent_read_and_stale_replacing_file_exists_then_replacing_file_deleted_and_delete_succeeds() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, revision_a, revision_b) = \
+            _create_pack_with_two_bodyful_revisions(project)
+        
+        # Precondition: Pack file exists with mtime T1
+        mtime_t1 = os.path.getmtime(pack_filepath)
+        
+        # Create a stale .replacing file (simulating incomplete cleanup after a
+        # successful replacement that didn't finish deleting the old file)
+        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        with open(replacing_filepath, 'wb') as f:
+            # Write stale/different content to the .replacing file
+            f.write(b'stale pack content that should be cleaned up during delete')
+        
+        # Precondition: Both pack file and .replacing file exist
+        assert os.path.exists(pack_filepath), 'Pack file should exist'
+        assert os.path.exists(replacing_filepath), '.replacing file should exist'
+        
+        # Open revision body A. Read half of it.
+        # (This simulates a concurrent read, triggering cleanup logic in replace_and_flush())
+        file_a = revision_a.open()
+        body_a_half = file_a.read(len(_LARGE_BODY_A) // 2)
+        assertEqual(_LARGE_BODY_A[:len(_LARGE_BODY_A) // 2], body_a_half)
+        
+        # Delete revision B. Should clean up stale .replacing file during replace.
+        await wait_for_future(revision_b.delete())
+        
+        # Read remainder of revision body A. Close it.
+        # (Should succeed because the file handle was opened before the delete)
+        body_a_remainder = file_a.read()
+        assertEqual(_LARGE_BODY_A[len(_LARGE_BODY_A) // 2:], body_a_remainder)
+        file_a.close()
+        
+        # Postcondition: Pack file exists (rewritten without revision B)
+        assert os.path.exists(pack_filepath), 'Pack file should exist after delete'
+        
+        # Postcondition: Pack file has changed (new mtime)
+        if fine_grained_mtimes_available():
+            mtime_t2 = os.path.getmtime(pack_filepath)
+            assert mtime_t2 != mtime_t1, 'Pack file mtime should have changed'
+        
+        if is_windows():
+            # Postcondition: .replacing file was cleaned up during delete operation
+            assert not os.path.exists(replacing_filepath), \
+                '.replacing file should be cleaned up during delete'
+        else:
+            # Postcondition: Currently, non-Windows platform will not clean up
+            # a .replacing file during the delete operation. This behavior may
+            # be changed to match the Windows behavior in the future.
+            assert os.path.exists(replacing_filepath), \
+                '.replacing file expected to still exist on non-Windows platforms'
+        
+        # Postcondition: Pack file contains A but not B
+        with zipfile.ZipFile(pack_filepath, 'r') as zf:
+            assertEqual({'00e'}, set(zf.namelist()))
+        
+        # Verify revision A is still readable
+        with revision_a.open() as f:
+            assertEqual(_LARGE_BODY_A, f.read())
+
+
+# === Utility ===
+
+# Large body content used in concurrent tests (must be large enough to read in halves)
+_LARGE_BODY_A = b'A' * 1024 + b'Body content for revision A' + b'A' * 1024
+_LARGE_BODY_B = b'B' * 1024 + b'Body content for revision B' + b'B' * 1024
+
+
+def _create_pack_with_two_bodyful_revisions(
+        project: Project
+        ) -> tuple[str, RR, RR]:
+    """
+    Creates a project with 1 pack containing exactly 2 revision bodies.
+    
+    Creates:
+    - Bodyless error revisions for IDs 1-13
+    - Bodyful revisions for IDs 14-15, completing a pack with 2 revision bodies
+    
+    Returns:
+    - pack_filepath: Path to the pack file (00_.zip)
+    - revision_a: The revision with ID 14 (body: _LARGE_BODY_A)
+    - revision_b: The revision with ID 15 (body: _LARGE_BODY_B)
+    """
+    project._set_major_version_for_test(3)
+    
+    with scheduler_thread_context():  # safe because no tasks running
+        # Create 13 bodyless error revisions (IDs 1-13)
+        for i in range(1, 14):
+            resource = Resource(project, f'http://example.com/concurrent-test/{i}')
+            RR.create_from_error(resource, Exception('Test error'))
+        
+        # Create 2 bodyful revisions (IDs 14-15), completing the pack
+        resource_a = Resource(project, 'http://example.com/concurrent-test/14')
+        revision_a = RR.create_from_response(
+            resource_a,
+            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+            body_stream=BytesIO(_LARGE_BODY_A),
+        )
+        
+        resource_b = Resource(project, 'http://example.com/concurrent-test/15')
+        revision_b = RR.create_from_response(
+            resource_b,
+            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+            body_stream=BytesIO(_LARGE_BODY_B),
+        )
+    
+    pack_filepath = os.path.join(
+        project.path, 'revisions', '000', '000', '000', '000', '00_.zip')
+    
+    # Verify pack was created with exactly 2 entries
+    assert os.path.exists(pack_filepath), 'Pack file should exist after 15 revisions'
+    with zipfile.ZipFile(pack_filepath, 'r') as zf:
+        entries = zf.namelist()
+        assert len(entries) == 2, f'Expected 2 entries, got {len(entries)}: {entries}'
+    
+    return (pack_filepath, revision_a, revision_b)
+
+
+def _create_almost_complete_pack_with_one_bodyful_revision(
+        project: Project
+        ) -> tuple[str, str, RR]:
+    """
+    Creates a project with ALMOST 1 complete pack (missing 1 revision to complete).
+    
+    Creates:
+    - Bodyless error revisions for IDs 1-13
+    - Bodyful revision for ID 14 (as a loose/individual file, not yet packed)
+    
+    Returns:
+    - pack_filepath: Path where the pack file would be created (does not exist yet)
+    - loose_filepath_a: Path to the loose revision file for ID 14
+    - revision_a: The revision with ID 14 (body: _LARGE_BODY_A)
+    """
+    project._set_major_version_for_test(3)
+    
+    with scheduler_thread_context():  # safe because no tasks running
+        # Create 13 bodyless error revisions (IDs 1-13)
+        for i in range(1, 14):
+            resource = Resource(project, f'http://example.com/loose-pack-test/{i}')
+            RR.create_from_error(resource, Exception('Test error'))
+        
+        # Create 1 bodyful revision (ID 14), NOT completing the pack
+        resource_a = Resource(project, 'http://example.com/loose-pack-test/14')
+        revision_a = RR.create_from_response(
+            resource_a,
+            metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+            body_stream=BytesIO(_LARGE_BODY_A),
+        )
+    
+    pack_filepath = os.path.join(
+        project.path, 'revisions', '000', '000', '000', '000', '00_.zip')
+    loose_filepath_a = os.path.join(
+        project.path, 'revisions', '000', '000', '000', '000', '00e')
+    
+    # Verify pack was NOT created yet
+    assert not os.path.exists(pack_filepath), 'Pack file should not exist (incomplete pack)'
+    
+    # Verify loose revision A exists
+    assert os.path.exists(loose_filepath_a), 'Loose revision A should exist'
+    
+    return (pack_filepath, loose_filepath_a, revision_a)
+
 
 @contextmanager
 def _revision_count_between_disk_health_checks_set_to(count: int) -> Iterator[None]:

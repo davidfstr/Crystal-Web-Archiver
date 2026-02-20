@@ -13,7 +13,7 @@ from crystal.doc.xml import parse_xml_and_links
 from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.util import http_date, xcgi, xshutil
 from crystal.util.bulkheads import capture_crashes_to_stderr
-from crystal.util.filesystem import replace_and_flush
+from crystal.util.filesystem import open_nonexclusive, replace_and_flush, replace_destination_locked
 from crystal.util.urls import is_unrewritable_url
 from crystal.util.xfutures import warn_if_result_not_read
 from crystal.util.xthreading import (
@@ -435,8 +435,6 @@ class ResourceRevision:
             for (entry_name, body_filepath) in revision_files.items():
                 if entry_name not in packed_entry_names:
                     continue
-                # TODO: On Windows probably need to specially ignore concurrent
-                #       ResourceRevision.open() calls too
                 try:
                     os.remove(body_filepath)
                 except FileNotFoundError:
@@ -964,7 +962,8 @@ class ResourceRevision:
             pack_filepath = self._body_pack_filepath_with(self.project.path, self._id)
             entry_name = self._entry_name_for_revision_id(self._id)
             try:
-                with ZipFile(pack_filepath, 'r') as zf:
+                with open_nonexclusive(pack_filepath) as pack_fileobj, \
+                        ZipFile(pack_fileobj, 'r') as zf:
                     info = zf.getinfo(entry_name)
                     return info.file_size
             except (FileNotFoundError, KeyError):
@@ -999,20 +998,49 @@ class ResourceRevision:
         if self.project.major_version >= 3:
             from crystal.model.pack16 import open_pack_entry, ZipEntryNotFoundError
 
+            # Open the pack_fileobj, or set it to None if it does not exist.
+            # Repair the pack if necessary.
             assert self._id is not None  # ensured by _ensure_has_body()
             pack_filepath = self._body_pack_filepath_with(self.project.path, self._id)
             entry_name = self._entry_name_for_revision_id(self._id)
             try:
-                return cast(BinaryIO, open_pack_entry(pack_filepath, entry_name))
-            except (FileNotFoundError, ZipEntryNotFoundError):
-                # Pack file doesn't exist or entry not in it.
-                # Fallback to individual file.
-                pass
-
+                pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
+            except FileNotFoundError:
+                with replace_destination_locked(pack_filepath):
+                    try:
+                        # Retry open, because concurrent repair or replace
+                        # may have just moved it into place
+                        pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
+                    except FileNotFoundError:
+                        try:
+                            # Try to repair pack file
+                            movedaside_pack_filepath = (
+                                pack_filepath +
+                                replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+                            )
+                            replace_and_flush(
+                                movedaside_pack_filepath,
+                                pack_filepath)
+                        except FileNotFoundError:
+                            # No pack file found in any location
+                            pack_fileobj = None
+                        else:
+                            # Pack file repaired. Try to read from it.
+                            pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
+            
+            # If the pack_fileobj was opened, try to open the revision's entry in it
+            if pack_fileobj is not None:
+                try:
+                    return cast(BinaryIO, open_pack_entry(pack_fileobj, entry_name))
+                except ZipEntryNotFoundError:
+                    # (keep going)
+                    pass
+        
         # Try individual file
         try:
-            return open(self._body_filepath, 'rb')
+            return open_nonexclusive(self._body_filepath, 'rb')
         except FileNotFoundError:
+            # (keep going)
             pass
         
         # Give up

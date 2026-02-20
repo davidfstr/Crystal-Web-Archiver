@@ -6,13 +6,13 @@ uncompressed ZIP64 archives to improve storage efficiency on systems with
 large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
 """
 
-from crystal.util.filesystem import replace_and_flush
+from crystal.util.filesystem import open_nonexclusive, replace_and_flush
 from crystal.util.xio import Reader, Writer
 import os
 import shutil
 import sys
 import tempfile
-from typing import IO, Self
+from typing import IO, BinaryIO, Self
 from zipfile import ZipFile, ZipInfo, ZIP_STORED
 
 
@@ -184,14 +184,14 @@ class _DevNullWriter(Writer):
         pass
 
 
-def open_pack_entry(pack_path: str, entry_name: str) -> 'ZipEntryReader':
+def open_pack_entry(pack_file: str | BinaryIO, entry_name: str) -> 'ZipEntryReader':
     """
     Opens a specific entry from a pack zip file, returning a file-like object.
 
     The returned file-like object keeps the ZipFile open until the stream is closed.
 
     Arguments:
-    * pack_path -- path to the pack zip file
+    * pack_file -- path or a file-like object for the pack zip file
     * entry_name -- name of the entry to read (e.g., '01a')
 
     Returns:
@@ -201,17 +201,25 @@ def open_pack_entry(pack_path: str, entry_name: str) -> 'ZipEntryReader':
     * ZipEntryNotFoundError -- if entry is not found in the pack file
     * OSError -- if could not read pack file
     """
-    zip_file = ZipFile(pack_path, 'r')
+    if isinstance(pack_file, str):
+        pack_fileobj = open_nonexclusive(pack_file, 'rb')
+    else:
+        pack_fileobj = pack_file
     try:
+        zip_file = ZipFile(pack_fileobj, 'r')
         try:
-            entry_file = zip_file.open(entry_name, 'r')
-        except KeyError:
-            raise ZipEntryNotFoundError(
-                f'There is no item named {entry_name!r} in the archive'
-            ) from None
-        return ZipEntryReader(zip_file, entry_file)
+            try:
+                entry_file = zip_file.open(entry_name, 'r')
+            except KeyError:
+                raise ZipEntryNotFoundError(
+                    f'There is no item named {entry_name!r} in the archive'
+                ) from None
+            return ZipEntryReader(zip_file, entry_file, zip_fileobj=pack_fileobj)
+        except:
+            zip_file.close()
+            raise
     except:
-        zip_file.close()
+        pack_fileobj.close()
         raise
 
 
@@ -223,9 +231,14 @@ class ZipEntryReader:
     """
     A zip entry file-like object. Keeps its containing ZipFile open.
     """
-    def __init__(self, zip_file: ZipFile, entry_file: IO[bytes]) -> None:
+    def __init__(self,
+            zip_file: ZipFile,
+            entry_file: IO[bytes],
+            zip_fileobj: IO[bytes] | None = None,
+            ) -> None:
         self._zip_file = zip_file
         self._entry_file = entry_file
+        self._zip_fileobj = zip_fileobj
 
     def read(self, size: int = -1) -> bytes:
         return self._entry_file.read(size)
@@ -240,7 +253,11 @@ class ZipEntryReader:
         try:
             self._entry_file.close()
         finally:
-            self._zip_file.close()
+            try:
+                self._zip_file.close()
+            finally:
+                if self._zip_fileobj is not None:
+                    self._zip_fileobj.close()
 
     def __enter__(self) -> Self:
         return self
@@ -284,7 +301,8 @@ def rewrite_pack_without_entry(
             # Stream-copy each entry (except the deleted one)
             # from source zip to destination zip
             entry_count = 0
-            with ZipFile(pack_filepath, 'r') as source_zf, \
+            with open_nonexclusive(pack_filepath) as pack_fileobj, \
+                    ZipFile(pack_fileobj, 'r') as source_zf, \
                     ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as dest_zf:
                 for name in source_zf.namelist():
                     if name == entry_name:
@@ -305,7 +323,7 @@ def rewrite_pack_without_entry(
             os.remove(pack_filepath)
         else:
             # Move new pack file to final location, replacing old pack file
-            replace_and_flush(tmp_filepath, pack_filepath)
+            replace_and_flush(tmp_filepath, pack_filepath, nonatomic_ok=True)
     except:
         # Clean up temp file if operation failed
         if tmp_filepath is not None:
