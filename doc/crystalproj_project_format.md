@@ -7,7 +7,7 @@ ends in the `.crystalproj` extension. It may also temporarily have the
 A project partially-copied by Crystal's "Save As" operation will temporarily
 have a `.crystalproj-partial` extension.
 
-A typical .crystalproj in the most-recent major version (`2`)
+A typical .crystalproj in the Hierarchical format (`major_version == 2`)
 has the following **directory structure**:
 
 ```
@@ -119,16 +119,25 @@ From the docstring of `Project.major_version`:
 So far, different major versions differ only in how revision bodies
 are stored in the project. See §"Revisions Format" for details.
 
+Each major version has a shorthand name:
+- `major_version == 1`: **Flat**
+- `major_version == 2`: **Hierarchical**
+- `major_version == 3`: **Pack16**
+
 Before v1.7.0b, projects had no explicit `major_version` defined -
 effectively having `major_version == 1` - and did not enforce the prohibition
 on opening projects with unrecognized (high) major versions.
 
 ### Migrations
 
-Crystal will prompt the user whether to automatically migrate a project
-to the most recent major version when opening it as writable. The user may
-decline to upgrade and can still use any features that don't depend on the
+Crystal will prompt the user whether to migrate a Flat project to
+Hierarchical format when opening it as writable. The user may decline
+to upgrade and can still use any features that don't depend on the
 later major version, including writing to the project.
+
+Migration from Hierarchical to Pack16 is entirely voluntary and is
+initiated by the user in the Preferences dialog. Crystal will not
+prompt the user to upgrade a Hierarchical project to Pack16.
 
 If a migration is interrupted - by the user explicitly cancelling the project open,
 I/O error, disk disconnection, or sudden process termination - it will be
@@ -251,6 +260,12 @@ the project's behavior:
     - The major version of the project.
     - See §"Major Version" for more information.
     - Since v1.7.0b.
+* `major_version_old`: NotRequired[IntStr]
+    - Present only during a Hierarchical → Pack16 migration (v2 → v3).
+    - Stores the old major version so that the migration can be resumed
+      if interrupted.
+    - See §"Major Version > Migrations" for more information.
+    - Since v2.3.0.
 * `default_url_prefix`: NotRequired[str]
     - The root URL prefix to strip/shorten in the UI.
     - Since v1.0.0a.
@@ -272,7 +287,7 @@ Each ResourceRevision in a Project has:
 The structure of the `revisions` directory depends on the `major_version` of
 the project.
 
-### major_version == 1 (or undefined), since v1.0.0a
+### Flat: major_version == 1 (or undefined), since v1.0.0a
 
 The `revisions` directory has this format:
 
@@ -301,7 +316,7 @@ at 1 rather than 0.
 
 There is no limit on the number of revisions.
 
-### major_version == 2, since v1.7.0b
+### Hierarchical: major_version == 2, since v1.7.0b
 
 The `revisions` directory has this format:
 
@@ -370,6 +385,55 @@ be the new `revisions` directory.
 History: `major_version == 2` projects were introduced as part of downloading a
 website containing about 5.5 million revisions and 2.6 TB of data,
 the largest project ever downloaded by Crystal's author at the time.
+
+### Pack16: major_version == 3, since v2.3.0
+
+The Pack16 format bundles groups of 16 consecutive revisions together into
+uncompressed .zip files, increasing the average file size in the revisions
+directory from about 100 KB to about 1.5 MB. This is significantly more
+efficient for storage systems with a large minimum object size, such as
+AWS S3 Glacier (which has a minimum billable object size of 128 KB).
+
+The `revisions` directory has this format:
+
+```
+xkcd.crystalproj
+├── ...
+├── revisions
+│   ├── 000
+│   |   ├── 000
+│   |   |   ├── 000
+│   |   |   |   ├── 000
+│   |   |   |   |   ├── 00_.zip  -- Contains revisions 001..00f
+│   |   |   |   |   ├── 01_.zip  -- Contains revisions 010..01f
+|   |   |   |   |   ├── ...
+|   |   |   |   |   └── ff_.zip  -- Contains revisions ff0..fff
+|   |   |   |   ├── 001
+|   |   |   |   |   └── ...
+|   |   |   |   └── ...
+|   |   |   └── ...
+|   |   └── ...
+|   └── ...
+└── ...
+```
+
+The maximum number of files per leaf directory is 16^2 == 256.
+
+The maximum number of subdirectories per non-leaf directory is still
+16^3 == 4,096 (same as Hierarchical).
+
+Pack files are named with a 2-digit hex prefix followed by `_.zip`
+(e.g., `00_.zip` contains revisions `000`..`00f`). If a pack file is
+extracted in place, the extracted files match the Hierarchical format exactly.
+
+Revisions that don't complete a full pack of 16 remain as individual files,
+the same as in Hierarchical format. A partially-migrated project with a mix
+of pack files and loose files is a valid state.
+
+Migration from Hierarchical to Pack16 is user-initiated via the Preferences
+dialog. Migration from Flat to Pack16 requires first migrating to Hierarchical.
+
+For the full technical design, see `doc/tech_designs/pack16.md`.
 
 
 ## Additional Files
