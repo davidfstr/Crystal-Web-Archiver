@@ -4,6 +4,8 @@ Pack16 format utilities for bundling revision files into zip archives.
 The Pack16 format stores groups of 16 consecutive revisions together in
 uncompressed ZIP64 archives to improve storage efficiency on systems with
 large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
+
+See doc/tech_designs/pack16.md for more information.
 """
 
 from crystal.util.filesystem import open_nonexclusive, replace_and_flush

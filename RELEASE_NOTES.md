@@ -12,6 +12,18 @@ Release Notes ⋮
 
 ### main / v2.3.0
 
+* Workflow improvements
+    * Projects now support storing URL revisions in Pack16 format,
+      making them efficiently storable in storage systems with
+      a large minimum object size, such as AWS S3 Glacier
+        * The Pack16 format bundles groups of 16 consecutive revisions together into
+          uncompressed .zip files, increasing the average file size in the revisions
+          directory from about 100 KB to about 1.5 MB.
+        * The Pack16 format is significantly more efficient then Crystal's
+          default Hierarchical format when saving projects to storage systems
+          with a large minimum object size, such as AWS S3 Glacier
+          (which has a minimum billable object size of 128 KB).
+
 * Fidelity improvements
     * Improve resilience against exceptional error scenarios such as
       disk disconnection, disk full, bad blocks, filesystem corruption, and

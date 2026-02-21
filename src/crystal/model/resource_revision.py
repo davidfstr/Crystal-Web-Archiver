@@ -601,6 +601,13 @@ class ResourceRevision:
     @property
     def _body_filepath(self) -> str:
         """
+        Returns the path to the individual file containing
+        this revision's content.
+        
+        When the project's major version _uses_pack_files() then the returned
+        path corresponds to the path of the revision's individual file when
+        it appears outside a pack file.
+        
         Raises:
         * ProjectHasTooManyRevisionsError --
             if this revision's in-memory ID is higher than what the 
@@ -621,6 +628,13 @@ class ResourceRevision:
             revision_id: int,
             ) -> str:
         """
+        Returns the path to the individual file containing
+        the specified revision ID's content.
+        
+        When the project's major version _uses_pack_files() then the returned
+        path corresponds to the path of the revision's individual file when
+        it appears outside a pack file.
+        
         Raises:
         * ProjectHasTooManyRevisionsError --
             if this revision's in-memory ID is higher than what the 
@@ -658,7 +672,7 @@ class ResourceRevision:
             revision_id: int,
             ) -> str:
         """
-        Computes the pack zip file path for a given revision ID in Pack16 format.
+        Returns the path to the Pack16 pack file containing the specified revision ID.
 
         For example, revision 0x01a (26) would be in pack file:
             revisions/000/000/000/001/01_.zip
@@ -685,7 +699,7 @@ class ResourceRevision:
         * revision_id -- the revision ID
 
         Returns:
-        * The entry name (last 3 hex digits of the revision ID)
+        * The entry name
         """
         return f'{revision_id % 4096:03x}'
     

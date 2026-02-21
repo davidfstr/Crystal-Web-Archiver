@@ -3,6 +3,8 @@ Tests for Pack16 revision storage format (major_version == 3).
 
 All tests below implicitly include the condition:
 * given_project_in_pack16_format
+
+See doc/tech_designs/pack16.md for more information.
 """
 from collections.abc import Iterator
 from contextlib import closing, contextmanager, redirect_stderr

@@ -116,6 +116,9 @@ class Project(ListenableMixin):
     """
     Groups together a set of resources that are downloaded and any associated settings.
     Persisted and auto-saved.
+    
+    The on-disk format of a project is described in:
+    * doc/crystalproj_project_format.md
     """
     
     FILE_EXTENSION = '.crystalproj'
@@ -1564,6 +1567,9 @@ class Project(ListenableMixin):
         * _set_major_version -- Writes the major version before project properties are loaded
         * _set_major_version_for_test -- Writes the major version, for tests
         * _FORMAT_NAME_FOR_MAJOR_VERSION -- User-facing name for each major version
+        
+        For information about how the project format differs from version to version:
+        * doc/crystalproj_project_format.md
         """
         return int(self._get_property('major_version', '1'))
 
