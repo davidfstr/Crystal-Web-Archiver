@@ -10,7 +10,7 @@ from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
-from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
+from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog, PreferencesDialog
 from crystal.util.controls import click_button, click_radio_button
 from crystal.util.features import feature_enabled
 from crystal.util.wx_dialog import mocked_show_modal
@@ -42,6 +42,7 @@ async def test_preferences_dialog_shows_current_revision_storage_format(subtests
                 assert prefs.migrate_checkbox is not None
                 assert 'Hierarchical' in prefs.migrate_checkbox.Label
                 assert prefs.migrate_checkbox.Enabled == True
+                assert prefs.migrate_help_button is not None
                 await prefs.cancel()
 
     with subtests.test(major_version=2):  # Hierarchical
@@ -54,6 +55,7 @@ async def test_preferences_dialog_shows_current_revision_storage_format(subtests
                 assert prefs.migrate_checkbox is not None
                 assert 'Pack16' in prefs.migrate_checkbox.Label
                 assert prefs.migrate_checkbox.Enabled == True
+                assert prefs.migrate_help_button is not None
                 await prefs.cancel()
 
     with subtests.test(major_version=3):  # Pack16
@@ -63,7 +65,41 @@ async def test_preferences_dialog_shows_current_revision_storage_format(subtests
             prefs = await mw.open_preferences_with_menuitem()
             assertEqual('Pack16', prefs.revision_format_label.Label)
             assert prefs.migrate_checkbox is None
+            assert prefs.migrate_help_button is None
             await prefs.cancel()
+
+
+@awith_subtests
+async def test_given_migrate_checkbox_when_click_help_button_then_shows_help_for_target_format(subtests: SubtestsContext) -> None:
+    with subtests.test(major_version=1):  # Flat -> Hierarchical help
+        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+            async with project_opened_without_migrating(project_dirpath) as (mw, project):
+                assertEqual(1, project.major_version)
+
+                prefs = await mw.open_preferences_with_menuitem()
+                assert prefs.migrate_help_button is not None
+                with patch('crystal.browser.preferences.wx.MessageBox') as mock_msg_box:
+                    click_button(prefs.migrate_help_button)
+                    mock_msg_box.assert_called_once()
+                    args = mock_msg_box.call_args
+                    assert 'Hierarchical' in args[0][0]
+                    assert 'Migrate to Hierarchical' == args[0][1]
+                await prefs.cancel()
+
+    with subtests.test(major_version=2):  # Hierarchical -> Pack16 help
+        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+            async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+                assertEqual(2, project.major_version)
+
+                prefs = await mw.open_preferences_with_menuitem()
+                assert prefs.migrate_help_button is not None
+                with patch('crystal.browser.preferences.wx.MessageBox') as mock_msg_box:
+                    click_button(prefs.migrate_help_button)
+                    mock_msg_box.assert_called_once()
+                    args = mock_msg_box.call_args
+                    assert 'Pack16' in args[0][0]
+                    assert 'Migrate to Pack16' == args[0][1]
+                await prefs.cancel()
 
 
 @awith_subtests

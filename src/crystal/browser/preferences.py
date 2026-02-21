@@ -7,7 +7,7 @@ from crystal.util.wx_dialog import (
     ShowModal, ShowWindowModal,
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
-from crystal.util.xos import is_windows, preferences_are_called_settings_in_this_os
+from crystal.util.xos import is_linux, is_windows, preferences_are_called_settings_in_this_os
 import datetime
 from typing import Callable, Dict, TYPE_CHECKING, assert_never
 from tzlocal import get_localzone
@@ -140,7 +140,7 @@ class PreferencesDialog:
         # Revision Storage Format
         fields_sizer.Add(
             wx.StaticText(parent, label='Revision Storage Format:'),
-            flag=wx.EXPAND, pos=wx.GBPosition(2, 0))
+            flag=wx.ALIGN_CENTER_VERTICAL, pos=wx.GBPosition(2, 0))
         format_sizer = wx.BoxSizer(wx.HORIZONTAL)
         if True:
             major_version = self._project.major_version
@@ -171,6 +171,16 @@ class PreferencesDialog:
                 format_sizer.AddSpacer(_FORM_LABEL_INPUT_SPACING * 2)
                 format_sizer.Add(self._migrate_checkbox, flag=wx.CENTER)
                 self._migrate_checkbox.Enabled = not self._project.readonly
+
+                help_button_size = (36, 36) if is_linux() else (24, 24)
+                self._migrate_help_button = wx.Button(
+                    parent, label='?',
+                    name='cr-preferences-dialog__migrate-help-button',
+                    size=help_button_size)
+                bind(self._migrate_help_button, wx.EVT_BUTTON,
+                    self._on_migrate_help)
+                format_sizer.AddSpacer(_FORM_LABEL_INPUT_SPACING)
+                format_sizer.Add(self._migrate_help_button, flag=wx.CENTER)
         fields_sizer.Add(
             format_sizer,
             flag=wx.EXPAND, pos=wx.GBPosition(2, 1))
@@ -391,6 +401,39 @@ class PreferencesDialog:
         """Handle proxy type radio button selection changes."""
         self._update_proxy_fields_enabled()
     
+    def _on_migrate_help(self, event: wx.CommandEvent) -> None:
+        # On Windows, wx.MessageBox renders text before the first \n\n
+        # as a "main instruction" in a larger font (TaskDialog behavior).
+        # Use a space instead to keep uniform text size.
+        paragraph_sep = ' ' if is_windows() else '\n\n'
+
+        major_version = self._project.major_version
+        if major_version == 1:  # new_major_version == 2 (Hierarchical)
+            wx.MessageBox(
+                'Hierarchical format stores revisions in a tree '
+                    'instead of as one big flat directory.'
+                    + paragraph_sep +
+                    'Hierarchical projects are faster to read and write '
+                    'on most filesystems, especially when there are '
+                    'very many revisions (millions).',
+                'Migrate to Hierarchical',
+                wx.OK | wx.ICON_INFORMATION,
+                parent=self.dialog)
+        elif major_version == 2:  # new_major_version == 3 (Pack16)
+            wx.MessageBox(
+                'Pack16 bundles groups of 16 revisions into .zip files, '
+                    'increasing the average file size from about 100 KB '
+                    'to about 1.5 MB.'
+                    + paragraph_sep +
+                    'This is more efficient when saving the project to '
+                    'storage systems with a large minimum object size, '
+                    'such as AWS S3 Glacier.',
+                'Migrate to Pack16',
+                wx.OK | wx.ICON_INFORMATION,
+                parent=self.dialog)
+        else:
+            raise ValueError(f'Unknown {major_version=}')
+
     def _on_reset_callouts(self, event: wx.CommandEvent) -> None:
         # Reset all dismissed help callouts so they will appear again
         del app_prefs.view_button_callout_dismissed
