@@ -579,7 +579,7 @@ class ResourceRevision:
     # === Properties ===
     
     @property
-    def project(self) -> Project:
+    def project(self) -> Project: 
         return self.resource.project
     
     @property
@@ -952,33 +952,30 @@ class ResourceRevision:
         * OSError --
             if I/O error while reading revision body
         """
-        from crystal.model.project import RevisionBodyMissingError
-
-        self._ensure_has_body()
-
-        # For Pack16 format (major_version >= 3), try pack file first
-        if self.project.major_version >= 3:
-            assert self._id is not None  # ensured by _ensure_has_body()
-            pack_filepath = self._body_pack_filepath_with(self.project.path, self._id)
-            entry_name = self._entry_name_for_revision_id(self._id)
-            try:
-                with open_nonexclusive(pack_filepath) as pack_fileobj, \
-                        ZipFile(pack_fileobj, 'r') as zf:
-                    info = zf.getinfo(entry_name)
-                    return info.file_size
-            except (FileNotFoundError, KeyError):
-                # Pack file doesn't exist or entry not in it.
-                # Fallback to individual file.
-                pass
-
-        # Try individual file
-        try:
-            return os.path.getsize(self._body_filepath)
-        except FileNotFoundError:
-            pass
+        self._ensure_has_body()  # may raise NoRevisionBodyError
         
-        # Give up
-        raise RevisionBodyMissingError(self)
+        assert self._id is not None  # ensured by _ensure_has_body()
+        return self._size_with(
+            self.project.path, self.project.major_version, self._id)
+    
+    # NOTE: This method raises RevisionBodyMissingError in circumstances
+    #       where ResourceRevision.size() would raise NoRevisionBodyError.
+    @classmethod
+    def _size_with(cls,
+            project_path: str,
+            major_version: int,
+            revision_id: int,
+            ) -> int:
+        try:
+            cls._open_with(
+                project_path, major_version, revision_id, _raise_size=True)
+        except _ReturnSize as e:
+            return e.size
+        else:
+            raise AssertionError(  # pragma: no cover
+                'Expected _open_with(_raise_size=True) to '
+                'raise _ReturnSize or something else'
+            )
     
     def open(self) -> BinaryIO:
         """
@@ -990,19 +987,38 @@ class ResourceRevision:
         * OSError --
             if I/O error while opening revision body
         """
+        self._ensure_has_body()  # may raise NoRevisionBodyError
+        
+        assert self._id is not None  # ensured by _ensure_has_body()
+        return self._open_with(
+            self.project.path,
+            self.project.major_version,
+            self._id,
+        )
+    
+    # NOTE: This method raises RevisionBodyMissingError in circumstances
+    #       where ResourceRevision.open() would raise NoRevisionBodyError.
+    @classmethod
+    def _open_with(cls,
+            project_path: str,
+            major_version: int,
+            revision_id: int,
+            *, _raise_size: bool = False,
+            ) -> BinaryIO:
         from crystal.model.project import RevisionBodyMissingError
 
-        self._ensure_has_body()
-
         # For Pack16 format (major_version >= 3), try pack file first
-        if self.project.major_version >= 3:
-            from crystal.model.pack16 import open_pack_entry, ZipEntryNotFoundError
+        if major_version >= 3:
+            from crystal.model.pack16 import (
+                open_pack_entry,
+                size_pack_entry,
+                ZipEntryNotFoundError,
+            )
 
             # Open the pack_fileobj, or set it to None if it does not exist.
             # Repair the pack if necessary.
-            assert self._id is not None  # ensured by _ensure_has_body()
-            pack_filepath = self._body_pack_filepath_with(self.project.path, self._id)
-            entry_name = self._entry_name_for_revision_id(self._id)
+            pack_filepath = cls._body_pack_filepath_with(project_path, revision_id)
+            entry_name = cls._entry_name_for_revision_id(revision_id)
             try:
                 pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
             except FileNotFoundError:
@@ -1031,20 +1047,31 @@ class ResourceRevision:
             # If the pack_fileobj was opened, try to open the revision's entry in it
             if pack_fileobj is not None:
                 try:
-                    return cast(BinaryIO, open_pack_entry(pack_fileobj, entry_name))
+                    if _raise_size:
+                        raise _ReturnSize(size_pack_entry(pack_fileobj, entry_name))
+                    else:
+                        return cast(BinaryIO, open_pack_entry(pack_fileobj, entry_name))
                 except ZipEntryNotFoundError:
                     # (keep going)
                     pass
         
         # Try individual file
         try:
-            return open_nonexclusive(self._body_filepath, 'rb')
+            body_filepath = cls._body_filepath_with(
+                project_path,
+                major_version,
+                revision_id
+            )
+            if _raise_size:
+                raise _ReturnSize(os.path.getsize(body_filepath))
+            else:
+                return open_nonexclusive(body_filepath, 'rb')
         except FileNotFoundError:
             # (keep going)
             pass
         
         # Give up
-        raise RevisionBodyMissingError(self)
+        raise RevisionBodyMissingError(revision_id)
     
     def links(self) -> list[Link]:
         """
@@ -1284,7 +1311,6 @@ class ResourceRevision:
         * OSError -- 
             if the delete partially failed, leaving behind a revision body file
         """
-        from crystal.model.pack16 import rewrite_pack_without_entry
         from crystal.model.project import ProjectReadOnlyError
         
         project = self.project
@@ -1304,6 +1330,14 @@ class ResourceRevision:
         self._id = None  # type: ignore[assignment]  # intentionally leave exploding None
         
         self.resource.already_downloaded_this_session = False
+        
+        self._delete_body_now(revision_id, body_filepath)
+    
+    #@scheduler_affinity if _revision_bodies_writable() says so
+    def _delete_body_now(self, revision_id: int, body_filepath: str) -> None:
+        from crystal.model.pack16 import rewrite_pack_without_entry
+        
+        project = self.project
         
         # Delete revision's body file
         with self._revision_bodies_writable(self.project):
@@ -1376,6 +1410,11 @@ class _PersistedError(Exception):
     def __init__(self, message, type):
         self.message = message
         self.type = type
+
+
+class _ReturnSize(Exception):
+    def __init__(self, size: int) -> None:
+        self.size = size
 
 
 # ------------------------------------------------------------------------------

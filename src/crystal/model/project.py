@@ -1164,6 +1164,8 @@ class Project(ListenableMixin):
         Only applies to the highest-numbered pack that should exist based on the
         highest revision ID in the database.
         """
+        assert self.major_version >= 3
+        
         # Locate last revision and related pack boundaries
         with self._db, closing(self._db.cursor()) as c:
             rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
@@ -2692,19 +2694,13 @@ class Project(ListenableMixin):
             for revision_id in random_revision_ids:
                 if revision_id in size_for_revision_id:
                     continue
-                revision_body_filepath = ResourceRevision._body_filepath_with(
-                    project_path=src_project_dirpath,
-                    major_version=major_version,
-                    revision_id=revision_id)
                 try:
-                    size_for_revision_id[revision_id] = os.path.getsize(revision_body_filepath)
-                except OSError:
-                    # File doesn't exist or is inaccessible
-                    continue
-            if len(size_for_revision_id) == 0 and approx_revision_count > 0:
-                raise ProjectFormatError(
-                    f'Unable to locate any of {REVISIONS_SAMPLE_SIZE} resource revisions '
-                    f'for project {src_project_dirpath!r}')
+                    revision_size = ResourceRevision._size_with(
+                        src_project_dirpath, major_version, revision_id)
+                except (RevisionBodyMissingError, OSError):
+                    # Revision body is inaccessible
+                    revision_size = 0
+                size_for_revision_id[revision_id] = revision_size
             
             # Estimate total size of all resource revisions based on the sample
             approx_revision_data_size = math.ceil(
@@ -3091,9 +3087,15 @@ class ProjectFormatError(Exception):
 
 
 class RevisionBodyMissingError(ProjectFormatError):
-    def __init__(self, revision: ResourceRevision) -> None:
+    # NOTE: Support ResourceRevision argument for backward-compatibility
+    def __init__(self, revision: ResourceRevision | int) -> None:
+        revision_str = (
+            f'Revision ID {revision}'
+            if isinstance(revision, int)
+            else str(revision)
+        )
         super().__init__(
-            f'{revision!s} is missing its body on disk. '
+            f'{revision_str} is missing its body on disk. '
             f'Recommend delete and redownload it.')
 
 

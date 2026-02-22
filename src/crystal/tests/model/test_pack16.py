@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from contextlib import closing, contextmanager, redirect_stderr
 from unittest import skip
 from crystal import progress
-from crystal.model import Project, Resource, ResourceRevision as RR, RevisionBodyMissingError
+from crystal.model import Project, Resource, ResourceRevision as RR, NoRevisionBodyError, RevisionBodyMissingError
 from crystal.model.project import MigrationType
 from crystal.progress import CancelOpenProject
 from crystal.tests.model.test_project_migrate import (
@@ -1613,6 +1613,143 @@ async def test_when_delete_packed_revision_during_concurrent_read_and_stale_repl
         # Verify revision A is still readable
         with revision_a.open() as f:
             assertEqual(_LARGE_BODY_A, f.read())
+
+
+async def test_when_size_packed_or_loose_revision_then_correct_size_is_returned() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        with scheduler_thread_context():  # safe because will not create any running tasks
+            project._set_major_version_for_test(3)
+
+            # Create revisions
+            # - ID 13 (packed): "body missing" case
+            # - ID 14 (packed): "no body" case
+            # - ID 15 (packed): "has body" case
+            # - ID 16 (unpacked): "body missing" case
+            # - ID 17 (unpacked): "no body" case
+            # - ID 18 (unpacked): "has body" case
+            _PACKED_HAS_BODY_CONTENT = b'packed body'
+            _LOOSE_HAS_BODY_CONTENT = b'loose body'
+            if True:
+                # Create packed revisions (IDs 1-15)
+                if True:
+                    # Create 12 filler error revisions (IDs 1-12)
+                    for i in range(1, 13):
+                        resource = Resource(project, f'http://example.com/size-test/{i}')
+                        RR.create_from_error(resource, Exception('Test error'))
+
+                    # ID 13: bodyful (body will be deleted from pack later, for "body missing" case)
+                    resource_packed_missing = Resource(
+                        project, 'http://example.com/size-test/packed-body-missing')
+                    packed_body_missing_revision = RR.create_from_response(
+                        resource_packed_missing,
+                        metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                        body_stream=BytesIO(b'will be deleted from pack'),
+                    )
+
+                    # ID 14: error revision (no body) - "packed, no body" case
+                    resource_packed_no_body = Resource(
+                        project, 'http://example.com/size-test/packed-no-body')
+                    packed_no_body_revision = RR.create_from_error(
+                        resource_packed_no_body, Exception('Test error'))
+
+                    # ID 15: bodyful - "packed, has body" case. Triggers pack creation.
+                    resource_packed_has_body = Resource(
+                        project, 'http://example.com/size-test/packed-has-body')
+                    packed_has_body_revision = RR.create_from_response(
+                        resource_packed_has_body,
+                        metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                        body_stream=BytesIO(_PACKED_HAS_BODY_CONTENT),
+                    )
+
+                    # Verify pack was created (triggered by ID 15)
+                    pack_filepath = os.path.join(
+                        project.path, 'revisions', '000', '000', '000', '000', '00_.zip')
+                    assert os.path.exists(pack_filepath), 'Pack file should exist after 15 revisions'
+
+                    # Delete body of ID 13 from pack, leaving its DB row
+                    # (simulates "body missing" for a packed revision)
+                    with scheduler_thread_context():  # safe because no tasks running
+                        packed_body_missing_revision._delete_body_now(
+                            not_none(packed_body_missing_revision._id),
+                            packed_body_missing_revision._body_filepath)
+
+                # Create loose revisions (IDs 16-18; second pack not yet triggered)
+                if True:
+                    # ID 16: bodyful (body will be deleted later, for "body missing" loose case)
+                    resource_loose_missing = Resource(
+                        project, 'http://example.com/size-test/loose-body-missing')
+                    loose_body_missing_revision = RR.create_from_response(
+                        resource_loose_missing,
+                        metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                        body_stream=BytesIO(b'will be deleted loose'),
+                    )
+
+                    # ID 17: error revision (no body) - "loose, no body" case
+                    resource_loose_no_body = Resource(
+                        project, 'http://example.com/size-test/loose-no-body')
+                    loose_no_body_revision = RR.create_from_error(
+                        resource_loose_no_body, Exception('Test error'))
+
+                    # ID 18: bodyful - "loose, has body" case
+                    resource_loose_has_body = Resource(
+                        project, 'http://example.com/size-test/loose-has-body')
+                    loose_has_body_revision = RR.create_from_response(
+                        resource_loose_has_body,
+                        metadata={'http_version': 11, 'status_code': 200, 'reason_phrase': 'OK', 'headers': []},
+                        body_stream=BytesIO(_LOOSE_HAS_BODY_CONTENT),
+                    )
+
+                # Delete body of ID 16 (individual loose file), leaving its DB row
+                # (simulates "body missing" for a loose revision)
+                with scheduler_thread_context():  # safe because no tasks running
+                    loose_body_missing_revision._delete_body_now(
+                        not_none(loose_body_missing_revision._id),
+                        loose_body_missing_revision._body_filepath)
+
+            # Verify size() for packed revisions (IDs 13-15)
+            with assertRaises(NoRevisionBodyError):
+                packed_no_body_revision.size()
+            with assertRaises(RevisionBodyMissingError):
+                packed_body_missing_revision.size()
+            assertEqual(len(_PACKED_HAS_BODY_CONTENT), packed_has_body_revision.size())
+
+            # Verify size() for loose revisions (IDs 16-18)
+            with assertRaises(NoRevisionBodyError):
+                loose_no_body_revision.size()
+            with assertRaises(RevisionBodyMissingError):
+                loose_body_missing_revision.size()
+            assertEqual(len(_LOOSE_HAS_BODY_CONTENT), loose_has_body_revision.size())
+
+
+async def test_when_size_packed_revision_and_pack_file_needs_repair_then_repair_performed_and_size_succeeds() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, revision_a, revision_b) = \
+            _create_pack_with_two_bodyful_revisions(project)
+
+        # Precondition: Pack file exists
+        assert os.path.exists(pack_filepath), 'Pack file should exist'
+
+        # Simulate crash during delete by renaming pack file to .replacing
+        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        os.rename(pack_filepath, replacing_filepath)
+
+        # Precondition: Pack file does NOT exist, .replacing file exists
+        assert not os.path.exists(pack_filepath), 'Pack file should not exist'
+        assert os.path.exists(replacing_filepath), '.replacing file should exist'
+
+        # Size revision A. Should trigger repair and succeed.
+        size_a = revision_a.size()
+        assertEqual(len(_LARGE_BODY_A), size_a)
+
+        # Postcondition: Pack file exists (repaired)
+        assert os.path.exists(pack_filepath), 'Pack file should be repaired'
+
+        # Postcondition: .replacing file does NOT exist (cleaned up)
+        assert not os.path.exists(replacing_filepath), '.replacing file should be cleaned up'
+
+        # Verify both revisions are still size-able
+        assertEqual(len(_LARGE_BODY_A), revision_a.size())
+        assertEqual(len(_LARGE_BODY_B), revision_b.size())
 
 
 # === Utility ===

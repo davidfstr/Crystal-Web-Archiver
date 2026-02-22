@@ -16,6 +16,9 @@ from typing import IO, BinaryIO, Self
 from zipfile import ZipFile, ZipInfo, ZIP_STORED
 
 
+# ------------------------------------------------------------------------------
+# Create
+
 def create_pack_file(
         revision_files: dict[str, str],
         dest_filepath: str,
@@ -184,7 +187,14 @@ class _DevNullWriter(Writer):
         pass
 
 
-def open_pack_entry(pack_file: str | BinaryIO, entry_name: str) -> 'ZipEntryReader':
+# ------------------------------------------------------------------------------
+# Open
+
+def open_pack_entry(
+        pack_file: str | BinaryIO,
+        entry_name: str,
+        *, _raise_info: bool = False,
+        ) -> 'ZipEntryReader':
     """
     Opens a specific entry from a pack zip file, returning a file-like object.
 
@@ -209,7 +219,11 @@ def open_pack_entry(pack_file: str | BinaryIO, entry_name: str) -> 'ZipEntryRead
         zip_file = ZipFile(pack_fileobj, 'r')
         try:
             try:
-                entry_file = zip_file.open(entry_name, 'r')
+                entry_info = zip_file.getinfo(entry_name)
+                if _raise_info:
+                    # Return only the entry metadata from the .zip's Central Directory
+                    raise _ReturnZipInfo(entry_info)
+                entry_file = zip_file.open(entry_info, 'r')
             except KeyError:
                 raise ZipEntryNotFoundError(
                     f'There is no item named {entry_name!r} in the archive'
@@ -265,6 +279,45 @@ class ZipEntryReader:
     def __exit__(self, *_) -> None:
         self.close()
 
+
+# ------------------------------------------------------------------------------
+# Size
+
+def size_pack_entry(
+        pack_file: str | BinaryIO,
+        entry_name: str,
+        ) -> int:
+    """
+    Returns the uncompressed size of a specific entry from a pack zip file, in bytes.
+
+    Arguments:
+    * pack_file -- path or a file-like object for the pack zip file
+    * entry_name -- name of the entry to read (e.g., '01a')
+
+    Raises:
+    * ZipEntryNotFoundError -- if entry is not found in the pack file
+    * OSError -- if could not read pack file
+    """
+    try:
+        open_pack_entry(pack_file, entry_name, _raise_info=True)
+    except _ReturnZipInfo as e:
+        return e.info.file_size
+    except (ZipEntryNotFoundError, OSError):
+        raise
+    else:
+        raise AssertionError(  # pragma: no cover
+            'Expected open_pack_entry(_raise_info=True) to '
+            'raise _ReturnZipInfo or something else'
+        )
+
+
+class _ReturnZipInfo(Exception):
+    def __init__(self, info: ZipInfo) -> None:
+        self.info = info
+
+
+# ------------------------------------------------------------------------------
+# Delete
 
 def rewrite_pack_without_entry(
         pack_filepath: str,
@@ -332,3 +385,6 @@ def rewrite_pack_without_entry(
             except FileNotFoundError:
                 pass
         raise
+
+
+# ------------------------------------------------------------------------------
