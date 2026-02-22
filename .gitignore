@@ -1,39 +1,40 @@
-# OS X
-.DS_Store
+# AI Coding
+/plan
 
-# Python
-*.pyc
-*.pyo
+# Crystal: Profiling output (local)
+*.prof
+*.prof.svg
 
-# virtualenv
-venv*
+# Crystal: Screenshots captured by AI agents
+/.screenshots
 
-# Poetry
-/dist
-/.uwheels
+# Crystal: Startup file (local)
+/startup.py
 
 # GitHub Actions
 /setup/arguments.txt
 /*.wgn
 
-# PyCharm
-.idea
+# IDE: PyCharm
+/.idea
 
-# Profiling output
-*.prof
-*.prof.svg
+# Operating System: macOS
+.DS_Store
 
-# Local startup file
-startup.py
+# Python Ecosystem: Coverage
+/.coverage
 
-# Temporary directories not cleaned up correctly
-tmpdir_*
+# Python Ecosystem: Poetry
+/dist
+/.uwheels
 
-# AI Coding
-/plan
+# Python Ecosystem: Python
+*.pyc
+*.pyo
 
-# Coverage
-.coverage
+# Python Ecosystem: virtualenv
+venv*
 
-# Screenshots captured by AI agents
-.screenshots
+# Submodules: Wiki
+# Clone with: $ git clone git@github.com:davidfstr/Crystal-Web-Archiver.wiki.git doc/wiki
+/doc/wiki
