@@ -100,35 +100,18 @@ async def test_refuses_to_open_project_with_unknown_high_major_version() -> None
             assert UNKNOWN_HIGH_MAJOR_VERSION == project.major_version
         
         # Try to open that project
-        if True:
-            # Prepare to: OK
-            did_respond_to_project_too_new_modal = False
-            def click_ok_in_project_too_new_modal(dialog: wx.Dialog) -> int:
-                assert 'cr-project-too-new' == dialog.Name
-                
-                nonlocal did_respond_to_project_too_new_modal
-                did_respond_to_project_too_new_modal = True
-                
-                return wx.ID_OK
-            
-            load_project = crystal.main._load_project  # capture
-            def patched_load_project(*args, **kwargs) -> Project:
-                return load_project(
-                    *args,
-                    _show_modal_func=click_ok_in_project_too_new_modal,  # type: ignore[misc]
-                    **kwargs)
-            
-            with patch(f'crystal.main._load_project', patched_load_project):
-                ocd = await OpenOrCreateDialog.wait_for()
-                await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
-                
-                # HACK: Wait minimum duration to allow open to finish
-                await bg_sleep(0.5)
-                
-                # Wait for cancel and return to initial dialog
-                ocd = await OpenOrCreateDialog.wait_for()
-                
-                assert did_respond_to_project_too_new_modal
+        show_modal = mocked_show_modal('cr-project-too-new', wx.ID_OK)
+        with patch('crystal.util.wx_dialog.ShowModal', show_modal):
+            ocd = await OpenOrCreateDialog.wait_for()
+            await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
+
+            # HACK: Wait minimum duration to allow open to finish
+            await bg_sleep(0.5)
+
+            # Wait for cancel and return to initial dialog
+            ocd = await OpenOrCreateDialog.wait_for()
+
+            assert 1 == show_modal.call_count
 
 
 # --- 1 -> 2: Prompt to upgrade ---

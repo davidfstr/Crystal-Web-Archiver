@@ -1750,6 +1750,31 @@ async def test_when_size_packed_revision_and_pack_file_needs_repair_then_repair_
         assertEqual(len(_LARGE_BODY_B), revision_b.size())
 
 
+# === Misc ===
+
+# NOTE: See also: test_refuses_to_open_project_with_unknown_high_major_version
+async def test_given_project_with_major_version_3_when_opened_by_older_crystal_then_raises_project_too_new_error() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create(delete=False) as (mw, project):
+        project_dirpath = project.path
+        project._set_major_version_for_test(3)
+        assert 3 == project.major_version
+
+    # Try to open the v3 project as if we are an older Crystal that only supports up to v2
+    show_modal = mocked_show_modal('cr-project-too-new', wx.ID_OK)
+    with patch('crystal.util.wx_dialog.ShowModal', show_modal), \
+            patch.object(Project, '_LATEST_SUPPORTED_MAJOR_VERSION', 2):
+        ocd = await OpenOrCreateDialog.wait_for()
+        await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
+
+        # HACK: Wait minimum duration to allow open to finish
+        await bg_sleep(0.5)
+
+        # Wait for cancel and return to initial dialog
+        ocd = await OpenOrCreateDialog.wait_for()
+
+        assert 1 == show_modal.call_count
+
+
 # === Utility ===
 
 # Large body content used in concurrent tests (must be large enough to read in halves)

@@ -1296,11 +1296,7 @@ class Project(ListenableMixin):
         * sqlite3.DatabaseError, OSError
         """
         
-        # Upgrade database schema to latest version (unless is readonly)
-        if not self.readonly:
-            self._apply_migrations(progress_listener)  # may raise CancelOpenProject
-        
-        # Ensure major version is recognized
+        # Refuse to open projects with a major version that is too new
         major_version = self._get_major_version(self._db)
         if major_version > self._LATEST_SUPPORTED_MAJOR_VERSION:
             raise ProjectTooNewError(
@@ -1308,6 +1304,10 @@ class Project(ListenableMixin):
                 f'version of Crystal only knows how to open projects '
                 f'with major version {self._LATEST_SUPPORTED_MAJOR_VERSION} '
                 f'or less')
+
+        # Upgrade database schema to latest version (unless is readonly)
+        if not self.readonly:
+            self._apply_migrations(progress_listener)  # may raise CancelOpenProject
         
         # Cleanup any temporary files from last session (unless is readonly)
         if not self.readonly:
