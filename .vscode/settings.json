@@ -1,15 +1,21 @@
 {
     /* Exclusions */
     "search.exclude": {
+        "**/.venv": true,
+        "**/venv*": true,
+        "plan/macgarden/Crystal.app": true,
         "setup/build/**": true,
-        "setup/dist/**": true
+        "setup/dist/**": true,
     },
     "python.analysis.exclude": [
-        "**/__pycache__",
         ".git",
-        "*venv*/**",
+        "**/__pycache__",
+        "**/.*",
+        "**/.venv",
+        "**/node_modules",
+        "**/venv*",
         "setup/build",
-        "setup/dist"
+        "setup/dist",
     ],
     
     /* Terminal */
