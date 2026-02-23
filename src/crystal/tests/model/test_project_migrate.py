@@ -96,7 +96,7 @@ async def test_refuses_to_open_project_with_unknown_high_major_version() -> None
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Create project with unknown high major version
         async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
-            project._set_property('major_version', str(UNKNOWN_HIGH_MAJOR_VERSION))
+            project._set_major_version_for_test(UNKNOWN_HIGH_MAJOR_VERSION)
             assert UNKNOWN_HIGH_MAJOR_VERSION == project.major_version
         
         # Try to open that project
@@ -141,7 +141,7 @@ async def test_given_project_is_major_version_1_and_would_be_fast_to_upgrade_to_
 async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_can_continue_upgrade() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Create project with major version = 1 and at least one revision
-        async with _project_opened_without_migrating(project_dirpath) as (_, project):
+        async with project_opened_without_migrating(project_dirpath) as (_, project):
             assert 1 == project.major_version, (
                 'Expected project to not be upgraded'
             )  # not > 1
@@ -162,7 +162,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
                     mocked_show_modal('cr-upgrade-required', continue_button_id)
                     ) as show_modal_method:
             async with (await OpenOrCreateDialog.wait_for()).open(
-                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+                    project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
                 assert 1 == show_modal_method.call_count
                 
                 assert project.major_version >= 2, (
@@ -173,7 +173,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
 async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_can_defer_upgrade_to_later() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Create project with major version = 1 and at least one revision
-        async with _project_opened_without_migrating(project_dirpath) as (_, project):
+        async with project_opened_without_migrating(project_dirpath) as (_, project):
             assert 1 == project.major_version, (
                 'Expected project to not be upgraded'
             )  # not > 1
@@ -204,7 +204,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
 async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_can_cancel_open_project() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Create project with major version = 1 and at least one revision
-        async with _project_opened_without_migrating(project_dirpath) as (_, project):
+        async with project_opened_without_migrating(project_dirpath) as (_, project):
             assert 1 == project.major_version, (
                 'Expected project to not be upgraded'
             )  # not > 1
@@ -228,7 +228,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
 
 async def test_given_project_is_major_version_1_and_has_more_than_MAX_REVISION_ID_revisions_when_open_project_then_defers_upgrade_to_later() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-        async with _project_opened_without_migrating(project_dirpath) as (_, project):
+        async with project_opened_without_migrating(project_dirpath) as (_, project):
             assert 1 == project.major_version, (
                 'Expected project to not be upgraded'
             )  # not > 1
@@ -263,7 +263,7 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Create project with >=4,096 revisions, which is just over the number of
         # revisions that fit into a single subdirectory of the new hierarchy
-        async with _project_opened_without_migrating(project_dirpath) as (_, project):
+        async with project_opened_without_migrating(project_dirpath) as (_, project):
             assert 1 == project.major_version, (
                 'Expected project to not be upgraded'
             )  # not > 1
@@ -304,7 +304,7 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
         # Upgrade the project to major version >= 2.
         # Ensure revisions appear to be migrated correctly.
         async with (await OpenOrCreateDialog.wait_for()).open(
-                project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+                project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
             assert project.major_version >= 2, (
                 'Expected project to be upgraded'
             )  # not == 1
@@ -328,7 +328,7 @@ async def test_can_upgrade_project_from_major_version_1_to_2() -> None:
 async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_2() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         # Create project with major version = 1 and at least one revision
-        async with _project_opened_without_migrating(project_dirpath) as (_, project):
+        async with project_opened_without_migrating(project_dirpath) as (_, project):
             assert 1 == project.major_version, (
                 'Expected project to not be upgraded'
             )  # not > 1
@@ -354,7 +354,7 @@ async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_
                     raise CancelOpenProject()
             
             with patch.object(progress_listener, 'upgrading_revision', upgrading_revision), \
-                    _progress_reported_at_maximum_resolution():
+                    progress_reported_at_maximum_resolution():
                 await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')
                 
                 # HACK: Wait minimum duration to allow open to finish
@@ -375,7 +375,7 @@ async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_
         # Resume upgrading the project to major version >= 2. Allow to finish.
         if True:
             async with (await OpenOrCreateDialog.wait_for()).open(
-                    project_dirpath, wait_func=_wait_for_project_to_upgrade) as (mw, project):
+                    project_dirpath, wait_func=wait_for_project_to_upgrade) as (mw, project):
                 assert project.major_version >= 2, (
                     'Expected project to be upgraded'
                 )  # not == 1
@@ -393,7 +393,7 @@ async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_
 
 async def test_can_serve_revisions_from_project_with_major_version_1() -> None:
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-        async with _project_opened_without_migrating(project_dirpath) as (mw, project):
+        async with project_opened_without_migrating(project_dirpath) as (mw, project):
             assert 1 == project.major_version
             
             (server_page, _) = await serve_and_fetch_xkcd_home_page(mw)
@@ -412,18 +412,20 @@ async def test_can_serve_revisions_from_project_with_major_version_2() -> None:
 # --- Utility ---
 
 @asynccontextmanager
-async def _project_opened_without_migrating(
-        project_dirpath: str
+async def project_opened_without_migrating(
+        project_dirpath: str,
+        *, autoclose: bool=True,
         ) -> AsyncIterator[tuple[MainWindow, Project]]:
     class NonUpgradingProject(Project):
         @override
         def _apply_migrations(self, *args, **kwargs) -> None:
             pass
-    
+
     # Project imported inside by _prompt_to_open_project()
     with patch('crystal.model.Project', NonUpgradingProject), \
             patch('crystal.tests.util.windows.Project', NonUpgradingProject):
-        async with (await OpenOrCreateDialog.wait_for()).open(project_dirpath) as (mw, project):
+        async with (await OpenOrCreateDialog.wait_for()).open(
+                project_dirpath, autoclose=autoclose) as (mw, project):
             yield (mw, project)
 
 
@@ -438,7 +440,7 @@ def _upgrade_required_modal_always_shown() -> Iterator[None]:
 
 
 @contextmanager
-def _progress_reported_at_maximum_resolution() -> Iterator[None]:
+def progress_reported_at_maximum_resolution() -> Iterator[None]:
     was_enabled = Project._report_progress_at_maximum_resolution
     Project._report_progress_at_maximum_resolution = True
     try:
@@ -454,13 +456,13 @@ def _count_files_in(dirpath: str) -> int:
     return file_count
 
 
-async def _wait_for_project_to_upgrade() -> None:
+async def wait_for_project_to_upgrade() -> None:
     def progression_func() -> int | None:
         return OpenProjectProgressDialog._upgrading_revision_progress
     await wait_while(progression_func)
 
 def _wait_for_project_to_upgrade__before_open() -> None:
     OpenProjectProgressDialog._upgrading_revision_progress = 0
-_wait_for_project_to_upgrade.before_open = (  # type: ignore[attr-defined]
+wait_for_project_to_upgrade.before_open = (  # type: ignore[attr-defined]
     _wait_for_project_to_upgrade__before_open
 )

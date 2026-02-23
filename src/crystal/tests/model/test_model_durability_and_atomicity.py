@@ -29,7 +29,7 @@ from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.util.filesystem import flush_renames_in_directory, rename_and_flush
+from crystal.util.filesystem import flush_renames_in_directory, replace_and_flush
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xtyping import not_none
 import crystal.tests.util.xtempfile as xtempfile
@@ -274,7 +274,7 @@ async def test_create_resource_revision_is_durable() -> None:
     1. Exactly 1 database transaction is used
     2. Exactly 1 fsync is called on the downloaded file content
     3. On macOS/Linux, exactly 1 additional fsync is called on the parent directory
-       (via rename_and_flush)
+       (via replace_and_flush)
     """
     with served_project('testdata_xkcd.crystalproj.zip') as sp:
         home_url = sp.get_request_url('https://xkcd.com/')
@@ -309,17 +309,17 @@ async def test_create_resource_revision_is_durable() -> None:
                 opened_paths_and_fds[path] = fd
                 return fd
             
-            # Track rename_and_flush calls (only successful ones)
-            successful_rename_and_flush_dst = None  # dst_filepath of the successful call
-            original_rename_and_flush = rename_and_flush
-            def spy_rename_and_flush(src_filepath, dst_filepath):
-                nonlocal successful_rename_and_flush_dst
+            # Track replace_and_flush calls (only successful ones)
+            successful_replace_and_flush_dst = None  # dst_filepath of the successful call
+            original_replace_and_flush = replace_and_flush
+            def spy_replace_and_flush(src_filepath, dst_filepath):
+                nonlocal successful_replace_and_flush_dst
                 try:
-                    result = original_rename_and_flush(src_filepath, dst_filepath)
+                    result = original_replace_and_flush(src_filepath, dst_filepath)
                 except:
                     raise
                 else:
-                    successful_rename_and_flush_dst = dst_filepath
+                    successful_replace_and_flush_dst = dst_filepath
                     return result
             
             # Download the resource and count database operations and fsync calls
@@ -327,7 +327,7 @@ async def test_create_resource_revision_is_durable() -> None:
                     patch('os.fsync', side_effect=spy_fsync), \
                     patch('crystal.model.resource_revision.NamedTemporaryFile', side_effect=spy_named_temp_file), \
                     patch('os.open', side_effect=spy_os_open), \
-                    patch('crystal.model.resource_revision.rename_and_flush', side_effect=spy_rename_and_flush):
+                    patch('crystal.model.resource_revision.replace_and_flush', side_effect=spy_replace_and_flush):
                 # Internally calls download_resource_revision() on a background thread.
                 revision_future = r.download_body()
                 revision = await wait_for_future(revision_future)
@@ -348,8 +348,8 @@ async def test_create_resource_revision_is_durable() -> None:
             assert body_file_fd is not None, 'Expected to capture body_file.fileno()'
             assertIn(body_file_fd, fsync_fds)
             
-            # Verify rename_and_flush was used to move the body file to its final location
-            assertEqual(revision._body_filepath, successful_rename_and_flush_dst)
+            # Verify replace_and_flush was used to move the body file to its final location
+            assertEqual(revision._body_filepath, successful_replace_and_flush_dst)
             
             # Verify fsync was called the expected number of times
             if is_mac_os() or is_linux():
@@ -359,7 +359,7 @@ async def test_create_resource_revision_is_durable() -> None:
                 )
                 
                 # Verify the parent directory was opened and fsync'ed
-                # (by rename_and_flush)
+                # (by replace_and_flush)
                 if True:
                     revision_body_filepath = revision._body_filepath
                     parent_dirpath = os.path.dirname(revision_body_filepath)
@@ -377,7 +377,7 @@ async def test_create_resource_revision_is_durable() -> None:
                         f'Parent dir fd: {parent_dir_fd}, fsync\'ed fds: {fsync_fds}'
                     )
             elif is_windows():
-                # On Windows, rename_and_flush uses MoveFileExW with MOVEFILE_WRITE_THROUGH
+                # On Windows, replace_and_flush uses MoveFileExW with MOVEFILE_WRITE_THROUGH
                 # instead of fsync on the parent directory, so we expect only 1 fsync
                 assertEqual(1, len(fsync_fds),
                     f'Expected exactly 1 fsync call on Windows (on file content only)'
@@ -617,14 +617,14 @@ async def _test_orphaned_revision_repair(
             # If database_partially_corrupt_after_disk_reconnect is True, simulate corruption
             # during the deletion attempt.
             if database_partially_corrupt_after_disk_reconnect:
-                # Patch ResourceRevision.delete() to raise I/O error
+                # Patch ResourceRevision._delete_now() to raise I/O error
                 mock_delete_raised_error = False
                 def mock_delete_with_error(self):
                     nonlocal mock_delete_raised_error
                     mock_delete_raised_error = True
                     raise sqlite3.OperationalError('disk I/O error')  # SQLITE_IOERR
                 corruption_context = patch.object(
-                    ResourceRevision, 'delete', mock_delete_with_error
+                    ResourceRevision, '_delete_now', mock_delete_with_error
                 )  # type: AbstractContextManager
             else:
                 # No corruption simulation needed
@@ -802,11 +802,11 @@ async def test_given_resource_revision_exists_when_delete_and_database_succeeds_
     pass
 
 
-# === Test: filesystem: rename_and_flush ===
+# === Test: filesystem: replace_and_flush ===
 
-def test_given_macos_or_linux_when_rename_and_flush_then_calls_fsync_on_parent_directory() -> None:
+def test_given_macos_or_linux_when_replace_and_flush_then_calls_fsync_on_parent_directory() -> None:
     """
-    Verify that rename_and_flush calls fsync on the parent directory (via flush_renames_in_directory)
+    Verify that replace_and_flush calls fsync on the parent directory (via flush_renames_in_directory)
     to ensure the rename is flushed to disk on macOS and Linux.
     """
     if not (is_mac_os() or is_linux()):
@@ -833,7 +833,7 @@ def test_given_macos_or_linux_when_rename_and_flush_then_calls_fsync_on_parent_d
         # Spy on os.open and os.fsync
         with patch('os.open', side_effect=spy_open), \
                 patch('os.fsync', wraps=os.fsync) as spy_fsync:
-            rename_and_flush(src_path, dst_path)
+            replace_and_flush(src_path, dst_path)
             
             # Verify os.open was called to open the parent directory
             assert temp_dir_fd is not None, (
@@ -860,9 +860,9 @@ def test_given_macos_or_linux_when_rename_and_flush_then_calls_fsync_on_parent_d
         assert os.path.exists(dst_path), 'Destination file should exist'
 
 
-def test_given_windows_when_rename_and_flush_then_calls_movefile_with_writethrough() -> None:
+def test_given_windows_when_replace_and_flush_then_calls_movefile_with_writethrough() -> None:
     """
-    Verify that rename_and_flush calls MoveFileExW with MOVEFILE_WRITE_THROUGH flag
+    Verify that replace_and_flush calls MoveFileExW with MOVEFILE_WRITE_THROUGH flag
     to ensure the rename is flushed to disk on Windows.
     """
     if not is_windows():
@@ -901,7 +901,7 @@ def test_given_windows_when_rename_and_flush_then_calls_movefile_with_writethrou
                     return spy_MoveFileExW
                 return attr
         with patch('ctypes.WinDLL', SpyWinDLL):
-            rename_and_flush(src_path, dst_path)
+            replace_and_flush(src_path, dst_path)
         
         # Verify MoveFileExW was called
         (call,) = move_calls

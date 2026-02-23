@@ -10,7 +10,19 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main
+### main / v2.3.0
+
+* Workflow improvements
+    * Projects now support storing URL revisions in Pack16 format,
+      making them efficiently storable in storage systems with
+      a large minimum object size, such as AWS S3 Glacier
+        * The Pack16 format bundles groups of 16 consecutive revisions together into
+          uncompressed .zip files, increasing the average file size in the revisions
+          directory from about 100 KB to about 1.5 MB.
+        * The Pack16 format is significantly more efficient then Crystal's
+          default Hierarchical format when saving projects to storage systems
+          with a large minimum object size, such as AWS S3 Glacier
+          (which has a minimum billable object size of 128 KB).
 
 * Fidelity improvements
     * Improve resilience against exceptional error scenarios such as
@@ -19,6 +31,16 @@ Release Notes ⋮
         * All project operations are now fully atomic and durable unless documented
           otherwise. See <doc/model_durability_and_atomicity.md> for details.
         * Failed transactions are now explicitly rolled back correctly.
+
+* Shell changes
+    * `Resource.delete()` and `ResourceRevision.delete()` now are asynchronous
+      rather than synchronous, returning a `Future` to track completion.
+      **(Breaking Change)**
+        * This change is necessary to support safely deleting resources and
+          resource revisions in Pack16-format projects.
+        * To make it easier to identify callers that aren't expecting a future
+          to be returned, a warning will be printed to stderr if the result of
+          the returned future is never checked
 
 * Documentation improvements
     * Project format documented at: <doc/crystalproj_project_format.md>

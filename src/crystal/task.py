@@ -49,11 +49,7 @@ if TYPE_CHECKING:
 
 
 # Whether to collect profiling information about the scheduler thread.
-# 
-# When True, a 'scheduler.prof' file is written to the current directory
-# after all projects have been closed. Such a file can be converted
-# into a visual flamegraph using the "flameprof" PyPI module,
-# or analyzed using the built-in "pstats" module.
+# See create_profiling_context() for more info.
 _PROFILE_SCHEDULER = False
 
 
@@ -918,12 +914,7 @@ def _get_abstract_resource_title(abstract_resource: Resource | RootResource) -> 
 
 
 # Whether to collect profiling information about Resource.default_revision()
-# as used by DownloadResourceBodyTask.
-# 
-# When True, a 'default_revision.prof' file is written to the current directory
-# after all projects have been closed. Such a file can be converted
-# into a visual flamegraph using the "flameprof" PyPI module,
-# or analyzed using the built-in "pstats" module.
+# as used by DownloadResourceBodyTask. See create_profiling_context() for more info.
 _PROFILE_READ_REVISION = False
 
 PROFILE_RECORD_LINKS = os.environ.get('CRYSTAL_NO_PROFILE_RECORD_LINKS', 'False') != 'True'
@@ -1238,7 +1229,8 @@ class DownloadResourceTask(Task['ResourceRevision']):
                     file=sys.stderr)
                 
                 # Delete the malformed revision
-                fg_call_and_wait(lambda: body_revision.delete())
+                assert is_synced_with_scheduler_thread()
+                fg_call_and_wait(lambda: body_revision._delete_now())
                 
                 # Retry download of the revision
                 redownload_body_task = self.resource.create_download_body_task()
@@ -1922,6 +1914,62 @@ class DownloadResourceGroupTask(_PureContainerTask):
         # TODO: Consider including just the group pattern,
         #       and surrounding the result with <>.
         return f'DownloadResourceGroupTask({self.group!r})'
+
+
+# ------------------------------------------------------------------------------
+# DeleteResourceTask
+
+class DeleteResourceTask(_LeafTask[None]):
+    """
+    Deletes a single resource and all its revisions.
+    """
+    icon_name = 'tasktree_delete'
+
+    __slots__ = ('_resource',)
+
+    def __init__(self, resource: Resource) -> None:
+        super().__init__(title='Deleting resource: ' + resource.url)
+        self._resource = resource
+
+    @override
+    @property
+    def related_entity(self) -> Resource | ResourceGroup | None:
+        return self._resource
+
+    @scheduler_affinity
+    def __call__(self) -> None:
+        fg_call_and_wait(lambda: self._resource._delete_now())
+
+    def __repr__(self) -> str:
+        return f'<DeleteResourceTask for {self._resource.url!r}>'
+
+
+# ------------------------------------------------------------------------------
+# DeleteResourceRevisionTask
+
+class DeleteResourceRevisionTask(_LeafTask[None]):
+    """
+    Deletes a single resource revision.
+    """
+    icon_name = 'tasktree_delete'
+
+    __slots__ = ('_revision',)
+
+    def __init__(self, revision: ResourceRevision) -> None:
+        super().__init__(title='Deleting revision: ' + revision.resource.url)
+        self._revision = revision
+
+    @override
+    @property
+    def related_entity(self) -> Resource | ResourceGroup | None:
+        return self._revision.resource
+
+    @bg_affinity
+    def __call__(self) -> None:
+        fg_call_and_wait(lambda: self._revision._delete_now())
+
+    def __repr__(self) -> str:
+        return f'<DeleteResourceRevisionTask for {self._revision.resource.url!r}>'
 
 
 # ------------------------------------------------------------------------------

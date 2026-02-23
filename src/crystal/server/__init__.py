@@ -691,7 +691,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             return
         elif self.path == '/_/crystal/retry-download':
             yield SwitchToThread.BACKGROUND
-            self._handle_retry_download()
+            yield from self._handle_retry_download()
             return
         
         # For all other POST requests, return 405 Method Not Allowed
@@ -1247,7 +1247,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             })
 
     @bg_affinity
-    def _handle_retry_download(self) -> None:
+    def _handle_retry_download(self) -> Generator[SwitchToThread, None, None]:
         try:
             # Ensure project is not readonly
             if self.project.readonly:
@@ -1276,36 +1276,32 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 self._send_json_response(400, {'error': 'Invalid parameter type for url'})
                 return
             
-            @fg_affinity
-            def retry_download() -> dict:
-                resource = Resource(self.project, url)
-                default_revision = resource.default_revision()
-                if default_revision is None:
-                    return {
-                        'error': 'No revision found for this URL'
-                    }
-                if default_revision.error_dict is None:
-                    return {
-                        'error': 'Current revision is not an error - cannot retry'
-                    }
-                
-                # Delete the error revision
-                default_revision.delete()
-                
-                # Start a new download
-                task = resource.download_with_task(interactive=True, needs_result=False)
-                return {
-                    'status': 'success', 
-                    'message': 'Retry download started',
-                    'task_id': task.resource.url
-                }
-            result = fg_call_and_wait(retry_download)
+            yield SwitchToThread.FOREGROUND
+            resource = Resource(self.project, url)
+            default_revision = resource.default_revision()
+            yield SwitchToThread.BACKGROUND
+            if default_revision is None:
+                self._send_json_response(400, {
+                    'error': 'No revision found for this URL'
+                })
+                return
+            if default_revision.error_dict is None:
+                self._send_json_response(400, {
+                    'error': 'Current revision is not an error - cannot retry'
+                })
+                return
             
-            if 'error' in result:
-                self._send_json_response(400, result)
-            else:
-                self._send_json_response(200, result)
-
+            # Delete the error revision
+            assert not is_foreground_thread()
+            default_revision.delete(always_async=True).result()
+            
+            # Start a new download
+            task = resource.download_with_task(interactive=True, needs_result=False)
+            self._send_json_response(200, {
+                'status': 'success', 
+                'message': 'Retry download started',
+                'task_id': task.resource.url
+            })
         except Exception as e:
             self._print_error(f'Error handling retry download request: {str(e)}')
             self._send_json_response(500, {

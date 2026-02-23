@@ -32,7 +32,7 @@ from crystal.tests.util.tasks import (
     step_scheduler_until_done,
     ttn_for_task,
 )
-from crystal.tests.util.wait import wait_for
+from crystal.tests.util.wait import wait_for, wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
 from crystal.util.progress import ProgressBarCalculator
 from crystal.util.xcollections.lazy import AppendableLazySequence
@@ -225,7 +225,7 @@ async def test_given_project_on_disk_with_low_space_free_when_try_to_download_re
                     else:
                         assert False, f'Expected success but got ProjectFreeSpaceTooLowError when {du}'
             finally:
-                r.delete()
+                await wait_for_future(r.delete())
     
     with subtests.test('given project on small disk and less than 5 percent of disk free'):
         with served_project('testdata_xkcd.crystalproj.zip') as sp:

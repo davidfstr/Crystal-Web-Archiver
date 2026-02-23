@@ -1813,7 +1813,7 @@ async def _undownload_url(
         assert resource is not None
         revision = resource.default_revision()
         assert revision is not None
-        revision.delete(); del revision
+        await wait_for_future(revision.delete()); del revision
         assert resource.default_revision() is None
 
 
@@ -1830,7 +1830,7 @@ async def _undiscover_url(
     for url in url_or_urls:
         resource = project.get_resource(url)
         assert resource is not None
-        resource.delete(); del resource
+        await wait_for_future(resource.delete()); del resource
 
 
 # NOTE: Only for use with tree items in EntityTree

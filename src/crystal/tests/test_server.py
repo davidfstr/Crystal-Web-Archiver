@@ -1597,15 +1597,16 @@ async def test_given_fetch_error_page_visible_when_click_retry_button_then_retry
                 expect(fetch_error_page.progress_bar).not_to_be_visible()
                 
                 with reloads_paused(raw_page):
-                    # Click the retry button
-                    fetch_error_page.retry_button.click()
-                    
-                    # Verify button state changes during retry
-                    expect(fetch_error_page.retry_button).to_be_disabled()
-                    expect(fetch_error_page.retry_button).to_contain_text('⟳ Retrying...')
-                    
-                    # Verify progress bar becomes visible
-                    expect(fetch_error_page.progress_bar).to_be_visible()
+                    with fetch_paused(raw_page):
+                        # Click the retry button
+                        fetch_error_page.retry_button.click()
+                        
+                        # Verify button state changes during retry
+                        expect(fetch_error_page.retry_button).to_be_disabled()
+                        expect(fetch_error_page.retry_button).to_contain_text('⟳ Retrying...')
+                        
+                        # Verify progress bar becomes visible
+                        expect(fetch_error_page.progress_bar).to_be_visible()
                     
                     # (Wait for progress to complete. And reload.)
                 
@@ -3358,7 +3359,7 @@ async def _view_xkcd_home_page_when_embedded_image_is_undownloaded(
             assert embedded_image_r is not None, 'Embedded image should exist'
             embedded_image_rr = embedded_image_r.default_revision()
             assert embedded_image_rr is not None, 'Embedded image should have a revision'
-            embedded_image_rr.delete()
+            await wait_for_future(embedded_image_rr.delete())
             
             # Maybe: Create an entity matching the embedded_image_url
             before_view(embedded_image_r)

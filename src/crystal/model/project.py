@@ -19,14 +19,15 @@ from crystal.progress import (
 )
 from crystal.util import gio
 from crystal.util.bulkheads import capture_crashes_to_stderr, run_bulkhead_call
+from crystal.util.caffeination import Caffeination
 from crystal.util.db import (
     DatabaseConnection, DatabaseCursor, get_column_names_of_table,
     get_index_names, get_table_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis
-from crystal.util.filesystem import rename_and_flush, flush_renames_in_directory
+from crystal.util.filesystem import replace_and_flush, flush_renames_in_directory
 from crystal.util.listenable import ListenableMixin
-from crystal.util.profile import create_profiling_context
+from crystal.util.profile import profiling_context
 from crystal.util.progress import DevNullFile
 from crystal.util.ssd import is_ssd
 from crystal.util.test_mode import tests_are_running
@@ -47,7 +48,7 @@ from crystal.util.xthreading import (
     SwitchToThread, bg_affinity, bg_call_later, fg_affinity, fg_wait_for, start_thread_switching_coroutine,
 )
 import datetime
-from enum import Enum
+from enum import Enum, StrEnum, auto
 import json
 import math
 import os
@@ -65,7 +66,8 @@ import time
 from tqdm import tqdm
 import traceback
 from typing import (
-    Any, cast, Dict, Literal, List, Optional, Self, Tuple, TYPE_CHECKING, TypeAlias, TypeVar, Union,
+    assert_never, cast, Dict, Literal, List, Optional, Self, Tuple,
+    TYPE_CHECKING, TypeAlias, TypeVar, Union,
 )
 from typing_extensions import override
 import threading
@@ -83,13 +85,13 @@ if TYPE_CHECKING:
 # ------------------------------------------------------------------------------
 # Constants + Type Utilities
 
-# Whether to collect profiling information about Project._apply_migrations().
-# 
-# When True, a 'migrate_revisions.prof' file is written to the current directory
-# after all projects have been closed. Such a file can be converted
-# into a visual flamegraph using the "flameprof" PyPI module,
-# or analyzed using the built-in "pstats" module.
-_PROFILE_MIGRATE_REVISIONS = False
+# Whether to collect profiling information about Project._migrate_v1_to_v2().
+# See profiling_context() for more info.
+_PROFILE_MIGRATE_REVISIONS_V1_TO_V2 = False
+
+# Whether to collect profiling information about Project._migrate_v2_to_v3().
+# See profiling_context() for more info.
+_PROFILE_MIGRATE_REVISIONS_V2_TO_V3 = False
 
 
 _OptionalStr = TypeVar('_OptionalStr', bound=Optional[str])
@@ -105,10 +107,18 @@ class _Missing(Enum):
 EntityTitleFormat: TypeAlias = Literal['url_name', 'name_url']
 
 
+class MigrationType(StrEnum):
+    FLAT_TO_HIERARCHICAL = auto()  # v1 -> v2
+    HIERARCHICAL_TO_PACK16 = auto()  # v2 -> v3
+
+
 class Project(ListenableMixin):
     """
     Groups together a set of resources that are downloaded and any associated settings.
     Persisted and auto-saved.
+    
+    The on-disk format of a project is described in:
+    * doc/crystalproj_project_format.md
     """
     
     FILE_EXTENSION = '.crystalproj'
@@ -117,7 +127,7 @@ class Project(ListenableMixin):
     
     # Project structure constants
     _DB_FILENAME = 'database.sqlite'
-    _LATEST_SUPPORTED_MAJOR_VERSION = 2
+    _LATEST_SUPPORTED_MAJOR_VERSION = 3
     _REVISIONS_DIRNAME = 'revisions'
     _IN_PROGRESS_REVISIONS_DIRNAME = 'revisions.inprogress'
     _TEMPORARY_DIRNAME = 'tmp'
@@ -174,6 +184,7 @@ class Project(ListenableMixin):
     # NOTE: Only changed when tests are running
     _last_opened_project: Project | None=None
     _report_progress_at_maximum_resolution: bool=False
+    _revision_count_between_disk_health_checks: int=256
     
     # === Load ===
     
@@ -306,7 +317,10 @@ class Project(ListenableMixin):
                     self._load(load_progress_listener)
         
                     # Apply repairs
-                    self._repair_incomplete_rollback_of_resource_revision_create()
+                    if not self.readonly:
+                        self._repair_incomplete_rollback_of_resource_revision_create()
+                        if self.major_version >= 3:
+                            self._repair_missing_pack_of_resource_revision_create()
                     
                     # Reset dirty state after loading
                     self._is_dirty = is_dirty
@@ -685,9 +699,9 @@ class Project(ListenableMixin):
             
             # Upgrade major version 1 -> 2
             if major_version == 1:
-                self._migrate_v1_to_v2(progress_listener)
+                self._migrate_v1_to_v2(progress_listener)  # may raise CancelOpenProject
             
-            # At latest major version 2
+            # At major version 2
             if major_version == 2:
                 # If did not finish commit of "Upgrade major version 1 -> 2",
                 # resume the commit
@@ -695,9 +709,19 @@ class Project(ListenableMixin):
                     self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
                 if os.path.exists(ip_revisions_dirpath):
                     self._commit_migrate_v1_to_v2()
-                
+
                 # Nothing to do
-            assert self._LATEST_SUPPORTED_MAJOR_VERSION == 2
+                pass
+            
+            # At major version 3
+            if major_version == 3:
+                # Check if migration from v2 is in progress
+                with self._db, closing(self._db.cursor()) as c:
+                    major_version_old = self._get_major_version_old(c)
+                if major_version_old == 2:
+                    self._migrate_v2_to_v3(progress_listener)  # may raise CancelOpenProject
+
+            assert self._LATEST_SUPPORTED_MAJOR_VERSION == 3
     
     def _migrate_v1_to_v2(self,
             progress_listener: OpenProjectProgressListener,
@@ -812,10 +836,8 @@ class Project(ListenableMixin):
                 flush_renames_in_directory(
                     os.path.dirname(new_revision_filepath)
                 )
-        # TODO: Dump profiling context immediately upon exit of context
-        #       rather then waiting for program to exit
-        with create_profiling_context(
-                'migrate_revisions.prof', enabled=_PROFILE_MIGRATE_REVISIONS):
+        with Caffeination.caffeinated(), profiling_context(
+                'migrate_revisions_v1_to_v2.prof', enabled=_PROFILE_MIGRATE_REVISIONS_V1_TO_V2):
             try:
                 with self._db, closing(self._db.cursor()) as c:
                     self._process_table_rows(
@@ -879,8 +901,125 @@ class Project(ListenableMixin):
         
         # 1. Move new revisions directory to final location
         # 2. Finish commit
-        rename_and_flush(ip_revisions_dirpath, revisions_dirpath)
+        replace_and_flush(ip_revisions_dirpath, revisions_dirpath)
     
+    def _migrate_v2_to_v3(self,
+            progress_listener: OpenProjectProgressListener,
+            ) -> None:
+        """
+        Migrates a project from major version 2 (Hierarchical) to major version 3 (Pack16).
+
+        Packs all existing hierarchical revision files into groups of 16 (pack zip files).
+        Incomplete packs (fewer than 16 revisions) remain as individual files.
+
+        Raises:
+        * CancelOpenProject
+        * sqlite3.DatabaseError, OSError
+        """
+        with self._db, closing(self._db.cursor()) as c:
+            assert self._get_major_version(c) == 3
+            assert self._get_major_version_old(c) == 2
+
+        # Get max revision ID for progress reporting
+        with self._db, closing(self._db.cursor()) as c:
+            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+        if len(rows) == 1:
+            [(max_revision_id,)] = rows
+        else:
+            max_revision_id = 0
+        approx_revision_count = max_revision_id or 0
+        
+        with profiling_context(
+                'migrate_revisions_v2_to_v3.prof', enabled=_PROFILE_MIGRATE_REVISIONS_V2_TO_V3):
+            # Report that migration is starting/resuming
+            progress_listener.will_upgrade_revisions(
+                approx_revision_count,
+                # Disallow veto because migration already in progress
+                can_veto=False,
+            )  # may raise CancelOpenProject
+
+            # Process complete packs: Scan pack groups 0-15, 16-31, 32-47, ...
+            # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
+            #       This thread has exclusive access to the project while it is being migrated.
+            # HACK: Uses scheduler_thread_context(), which is intended for testing only
+            from crystal.tests.util.tasks import scheduler_thread_context
+            with scheduler_thread_context(), Caffeination.caffeinated():
+                start_time = time.monotonic()  # capture
+                last_report_time = start_time
+                pack_start_id = 0
+                while True:
+                    pack_end_id = pack_start_id + 15
+                    if pack_end_id > max_revision_id:
+                        # Incomplete last group. Leave as individual files.
+                        break
+
+                    # Pack revisions [pack_start_id, pack_end_id], if not already done
+                    pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
+                    if not os.path.exists(pack_filepath):
+                        ResourceRevision._pack_revisions_for_id(
+                            self,
+                            pack_end_id,
+                            project_major_version=3,
+                            # Leave empty pack file in place if all original
+                            # individual revision files have I/O errors so that
+                            # if the migration is restarted no attempt is made to
+                            # repack those bad revisions
+                            retain_empty_pack_file_if_errors=True,
+                        )
+                    pack_start_id += 16
+
+                    # Periodic disk health check: Every 256 revisions (16 packs),
+                    # verify the project disk is still accessible.
+                    # This detects disk disconnection early rather than continuing
+                    # to silently skip all remaining packs.
+                    if pack_start_id % Project._revision_count_between_disk_health_checks == 0:
+                        self._check_disk_health_during_migration(
+                            self.path, progress_listener)  # may raise CancelOpenProject
+
+                    # Report progress approximately once per second
+                    current_time = time.monotonic()  # capture
+                    if current_time - last_report_time >= 1.0 or Project._report_progress_at_maximum_resolution:
+                        elapsed = current_time - start_time
+                        revisions_processed = pack_start_id
+                        revisions_per_second = revisions_processed / elapsed if elapsed > 0 else 0.0
+                        progress_listener.upgrading_revision(
+                            revisions_processed,
+                            revisions_per_second,
+                        )  # may raise CancelOpenProject
+                        last_report_time = current_time
+                revisions_processed = pack_start_id
+                
+                # Final disk health check after the last pack is processed
+                self._check_disk_health_during_migration(
+                    self.path, progress_listener)  # may raise CancelOpenProject
+
+            # Migration complete. Remove migration marker.
+            self._delete_major_version_old(self._db)
+
+            progress_listener.did_upgrade_revisions(revisions_processed)
+
+    @staticmethod
+    def _check_disk_health_during_migration(
+            project_path: str,
+            progress_listener: OpenProjectProgressListener,
+            ) -> None:
+        """
+        Performs a lightweight disk health check during migration.
+
+        If the health check fails with an I/O error (e.g. due to disk
+        disconnection), calls progress_listener.upgrade_revisions_disk_error()
+        to display an error dialog and raises CancelOpenProject.
+
+        Raises:
+        * CancelOpenProject
+        """
+        revisions_dir = os.path.join(project_path, Project._REVISIONS_DIRNAME)
+        try:
+            os.listdir(revisions_dir)
+        except OSError:
+            progress_listener.upgrade_revisions_disk_error()
+            raise CancelOpenProject()
+
     def _repair_incomplete_rollback_of_resource_revision_create(self) -> None:
         """
         If the last revision was likely intended to be deleted by a
@@ -908,10 +1047,7 @@ class Project(ListenableMixin):
         if len(rows) == 1:
             [(max_revision_id,)] = rows
         else:
-            [] = rows
-            max_revision_id = None
-        if max_revision_id is None:
-            # No max revision exists to repair rollback for
+            # No max revision exists to repair
             return
         try:
             last_revision = ResourceRevision.load(self, max_revision_id)
@@ -1010,11 +1146,66 @@ class Project(ListenableMixin):
             file=sys.stderr,
         )
         # Delete database row. Ignore the missing body file.
-        try:
-            last_revision.delete()
-        except Exception as e:
-            # Repair failed. Continue opening the project anyway.
+        # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
+        #       This thread has exclusive access to the project while it is being created.
+        # HACK: Uses scheduler_thread_context(), which is intended for testing only
+        from crystal.tests.util.tasks import scheduler_thread_context
+        with scheduler_thread_context():
+            try:
+                last_revision._delete_now()
+            except Exception as e:
+                # Repair failed. Continue opening the project anyway.
+                return
+    
+    def _repair_missing_pack_of_resource_revision_create(self) -> None:
+        """
+        Detects and completes any incomplete pack files on project open.
+
+        This is a recovery mechanism for Pack16 format projects that may have
+        had incomplete packs due to disk-full errors or crashes during previous sessions.
+
+        Only applies to the highest-numbered pack that should exist based on the
+        highest revision ID in the database.
+        """
+        assert self.major_version >= 3
+        
+        # Locate last revision and related pack boundaries
+        with self._db, closing(self._db.cursor()) as c:
+            rows = list(c.execute(ResourceRevision._MAX_REVISION_ID_QUERY))
+        if len(rows) == 1:
+            [(max_revision_id,)] = rows
+        else:
+            # No max revision exists to repair
             return
+        if (max_revision_id % 16) != 15:
+            # No pack operation to repair
+            return
+        pack_start_id = max_revision_id - 15
+        pack_end_id = max_revision_id
+        
+        # Check whether pack file is missing
+        pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, max_revision_id)
+        if os.path.exists(pack_filepath):
+            return
+        
+        # Check if there are any individual revision files that should be in the pack
+        has_any_revision_files = False
+        for rid in range(pack_start_id, pack_end_id + 1):
+            hierarchical_body_filepath = ResourceRevision._body_filepath_with(self.path, 2, rid)
+            if os.path.exists(hierarchical_body_filepath):
+                has_any_revision_files = True
+                break
+        if not has_any_revision_files:
+            # No individual files exist. Nothing to pack.
+            return
+        
+        # Create the pack file from the individual revision files
+        # NOTE: Safe to assert sync'ed with scheduler thread because that thread is not running.
+        #       This thread has exclusive access to the project while it is being created.
+        # HACK: Uses scheduler_thread_context(), which is intended for testing only
+        from crystal.tests.util.tasks import scheduler_thread_context
+        with scheduler_thread_context():
+            ResourceRevision._pack_revisions_for_id(self, pack_end_id)
     
     # TODO: Consider accepting `db: DatabaseConnection` rather than `c: DatabaseCursor`
     @staticmethod
@@ -1037,7 +1228,39 @@ class Project(ListenableMixin):
             c.execute(
                 'insert or replace into project_property (name, value) values (?, ?)',
                 ('major_version', major_version))
-    
+
+    @staticmethod
+    def _get_major_version_old(c: DatabaseCursor | sqlite3.Cursor) -> int | None:
+        """
+        Gets the major_version_old migration marker, or None if not set.
+
+        This marker is set when a migration is in progress (e.g., v2 -> v3).
+        It records the old major version before the migration started.
+        """
+        rows = list(c.execute(
+            'select value from project_property where name = ?',
+            ('major_version_old',)))
+        if len(rows) == 0:
+            return None
+        [(value,)] = rows
+        return int(value)
+
+    @staticmethod
+    def _set_major_version_old(major_version_old: int, db: DatabaseConnection) -> None:
+        """Sets the major_version_old migration marker."""
+        with db, closing(db.cursor()) as c:
+            c.execute(
+                'insert or replace into project_property (name, value) values (?, ?)',
+                ('major_version_old', major_version_old))
+
+    @staticmethod
+    def _delete_major_version_old(db: DatabaseConnection) -> None:
+        """Removes the major_version_old migration marker (signals migration complete)."""
+        with db, closing(db.cursor()) as c:
+            c.execute(
+                'delete from project_property where name = ?',
+                ('major_version_old',))
+
     # --- Load: Create & Load ---
     
     def _create(self) -> None:
@@ -1072,12 +1295,13 @@ class Project(ListenableMixin):
             progress_listener: OpenProjectProgressListener) -> None:
         """
         Raises:
+        * CancelOpenProject
         * sqlite3.DatabaseError, OSError
         """
         
         # Upgrade database schema to latest version (unless is readonly)
         if not self.readonly:
-            self._apply_migrations(progress_listener)
+            self._apply_migrations(progress_listener)  # may raise CancelOpenProject
         
         # Ensure major version is recognized
         with self._db, closing(self._db.cursor()) as c:
@@ -1342,6 +1566,10 @@ class Project(ListenableMixin):
         * _get_major_version -- Reads the major version before project properties are loaded
         * _set_major_version -- Writes the major version before project properties are loaded
         * _set_major_version_for_test -- Writes the major version, for tests
+        * _FORMAT_NAME_FOR_MAJOR_VERSION -- User-facing name for each major version
+        
+        For information about how the project format differs from version to version:
+        * doc/crystalproj_project_format.md
         """
         return int(self._get_property('major_version', '1'))
 
@@ -2472,19 +2700,13 @@ class Project(ListenableMixin):
             for revision_id in random_revision_ids:
                 if revision_id in size_for_revision_id:
                     continue
-                revision_body_filepath = ResourceRevision._body_filepath_with(
-                    project_path=src_project_dirpath,
-                    major_version=major_version,
-                    revision_id=revision_id)
                 try:
-                    size_for_revision_id[revision_id] = os.path.getsize(revision_body_filepath)
-                except OSError:
-                    # File doesn't exist or is inaccessible
-                    continue
-            if len(size_for_revision_id) == 0 and approx_revision_count > 0:
-                raise ProjectFormatError(
-                    f'Unable to locate any of {REVISIONS_SAMPLE_SIZE} resource revisions '
-                    f'for project {src_project_dirpath!r}')
+                    revision_size = ResourceRevision._size_with(
+                        src_project_dirpath, major_version, revision_id)
+                except (RevisionBodyMissingError, OSError):
+                    # Revision body is inaccessible
+                    revision_size = 0
+                size_for_revision_id[revision_id] = revision_size
             
             # Estimate total size of all resource revisions based on the sample
             approx_revision_data_size = math.ceil(
@@ -2625,12 +2847,20 @@ class Project(ListenableMixin):
     # === Close & Reopen ===
     
     @fg_affinity
-    def close(self, *, capture_crashes: bool=True, _will_reopen: bool=False) -> None:
+    def close(self,
+            *, capture_crashes: bool = True,
+            migrate_after_reopen: MigrationType | None = None,
+            _will_reopen: bool = False
+            ) -> None:
         """
         Closes this project soon, stopping any tasks and closing all files.
         
         By default this method captures any exceptions that occur internally
         since the caller doesn't usually have a realistic way to handle them.
+        Specify capture_crashes=False to raise exceptions to the caller instead.
+        
+        If migrate_after_reopen is provided then the project will
+        perform the requested migration when it is reopened.
         
         Effects of this method are reversed by `reopen()`.
         
@@ -2653,36 +2883,40 @@ class Project(ListenableMixin):
                     self._stop_scheduler()
                 finally:
                     try:
-                        self._close_database(self._db, self.readonly)
+                        if migrate_after_reopen is not None:
+                            self._queue_migration_after_reopen(migrate_after_reopen)
                     finally:
                         try:
-                            if self.is_untitled and not _will_reopen:
-                                # Forget the untitled project during a normal close operation
-                                # so that Crystal does not attempt to reopen it later
-                                del app_prefs.unsaved_untitled_project_path
-                                
-                                try:
-                                    # Try to send the untitled project to the trash,
-                                    # where the user can easily recover it if they change
-                                    # their mind about not saving it
-                                    send2trash(self.path)
-                                except:
-                                    try:
-                                        # Try to send the untitled project to the
-                                        # OS temporary directory, where it will
-                                        # be deleted when the computer restarts
-                                        temp_dirpath = tempfile.gettempdir()
-                                        os.rename(
-                                            self.path,
-                                            os.path.join(temp_dirpath, os.path.basename(self.path)))
-                                    except:
-                                        # Give up
-                                        pass
+                            self._close_database(self._db, self.readonly)
                         finally:
-                            # Unexport reference to self, if running tests
-                            if tests_are_running():
-                                if Project._last_opened_project is self:
-                                    Project._last_opened_project = None
+                            try:
+                                if self.is_untitled and not _will_reopen:
+                                    # Forget the untitled project during a normal close operation
+                                    # so that Crystal does not attempt to reopen it later
+                                    del app_prefs.unsaved_untitled_project_path
+                                    
+                                    try:
+                                        # Try to send the untitled project to the trash,
+                                        # where the user can easily recover it if they change
+                                        # their mind about not saving it
+                                        send2trash(self.path)
+                                    except:
+                                        try:
+                                            # Try to send the untitled project to the
+                                            # OS temporary directory, where it will
+                                            # be deleted when the computer restarts
+                                            temp_dirpath = tempfile.gettempdir()
+                                            os.rename(
+                                                self.path,
+                                                os.path.join(temp_dirpath, os.path.basename(self.path)))
+                                        except:
+                                            # Give up
+                                            pass
+                            finally:
+                                # Unexport reference to self, if running tests
+                                if tests_are_running():
+                                    if Project._last_opened_project is self:
+                                        Project._last_opened_project = None
             do_close()
         finally:
             self._closed = True
@@ -2753,6 +2987,24 @@ class Project(ListenableMixin):
                             print(
                                 f'*** Incomplete task cleanup: Task in task tree was not completed: '
                                 f'{r=!r}, {task_ref=!r}', file=sys.stderr)
+    
+    @fg_affinity
+    def _queue_migration_after_reopen(self, migration_type: MigrationType) -> None:
+        """Marks this project to be migrated when it is next reopened."""
+        if migration_type == MigrationType.FLAT_TO_HIERARCHICAL:  # v1 -> v2
+            if self.major_version != 1:
+                raise ValueError()
+            
+            os.mkdir(os.path.join(
+                self.path, self._IN_PROGRESS_REVISIONS_DIRNAME))
+        elif migration_type == MigrationType.HIERARCHICAL_TO_PACK16:  # v2 -> v3
+            if self.major_version != 2:
+                raise ValueError()
+            
+            self._set_major_version_old(2, self._db)
+            self._set_major_version(3, self._db)
+        else:
+            assert_never(migration_type)
     
     @staticmethod
     @fg_affinity
@@ -2841,9 +3093,15 @@ class ProjectFormatError(Exception):
 
 
 class RevisionBodyMissingError(ProjectFormatError):
-    def __init__(self, revision: ResourceRevision) -> None:
+    # NOTE: Support ResourceRevision argument for backward-compatibility
+    def __init__(self, revision: ResourceRevision | int) -> None:
+        revision_str = (
+            f'Revision ID {revision}'
+            if isinstance(revision, int)
+            else str(revision)
+        )
         super().__init__(
-            f'{revision!s} is missing its body on disk. '
+            f'{revision_str} is missing its body on disk. '
             f'Recommend delete and redownload it.')
 
 

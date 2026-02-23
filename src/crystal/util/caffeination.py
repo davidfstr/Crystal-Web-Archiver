@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 import contextlib
 import threading
 from typing import Any, Optional
@@ -16,6 +17,16 @@ class Caffeination:
     _caffeinated = False
     _wakepy_keeper = None  # type: Optional[Any]
     _caffeination_unavailable = False
+    
+    @classmethod
+    @contextlib.contextmanager
+    def caffeinated(cls) -> Iterator[None]:
+        """Context in which the system is prevented from idle sleeping."""
+        cls.add_caffeine()
+        try:
+            yield
+        finally:
+            cls.remove_caffeine()
     
     @classmethod
     def add_caffeine(cls) -> None:

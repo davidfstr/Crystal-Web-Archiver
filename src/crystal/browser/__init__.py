@@ -14,6 +14,7 @@ from crystal.browser.tasktree import TaskTree, TaskTreeNode
 from crystal.model import (
     Alias, Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
+from crystal.model.project import MigrationType
 from crystal.progress import (
     CancelLoadUrls, CancelSaveAs, DummyOpenProjectProgressListener,
     OpenProjectProgressListener, SaveAsProgressDialog,
@@ -64,7 +65,7 @@ import os
 import sqlite3
 import time
 import traceback
-from typing import Optional
+from typing import Optional, assert_never, assert_type
 import webbrowser
 import wx
 
@@ -1100,6 +1101,8 @@ class MainWindow(CloakMixin):
     def try_close(self,
             *, prompt_to_save_untitled: bool = True,
             will_prompt_to_save: Callable[[], None] | None = None,
+            migrate_after_reopen: MigrationType | None = None,
+            _will_reopen: bool = False,
             ) -> bool:
         """
         Tries to close this window, disposing any related resources.
@@ -1108,6 +1111,9 @@ class MainWindow(CloakMixin):
         If the user cancels the prompt, the window is not closed, and returns False.
         
         In all other situations, the project is closed and returns True.
+        
+        If migrate_after_reopen is provided then the project will
+        perform the requested migration when it is reopened.
         
         It is safe to call this method multiple times, even after the project has closed.
         
@@ -1119,7 +1125,9 @@ class MainWindow(CloakMixin):
         try:
             did_not_cancel = self._do_try_close(
                 prompt_to_save_untitled=prompt_to_save_untitled,
-                will_prompt_to_save=will_prompt_to_save)
+                will_prompt_to_save=will_prompt_to_save,
+                migrate_after_reopen=migrate_after_reopen,
+                _will_reopen=_will_reopen)
             return did_not_cancel
         except:
             did_not_cancel = True
@@ -1131,6 +1139,8 @@ class MainWindow(CloakMixin):
     def _do_try_close(self,
             *, prompt_to_save_untitled: bool = True,
             will_prompt_to_save: Callable[[], None] | None = None,
+            migrate_after_reopen: MigrationType | None = None,
+            _will_reopen: bool = False,
             ) -> bool:
         # If the project is untitled and dirty, prompt to save it
         if self.project.is_untitled and self.project.is_dirty and prompt_to_save_untitled:
@@ -1220,7 +1230,10 @@ class MainWindow(CloakMixin):
                 a.dispose()
             
             self.project.listeners.remove(self)
-            self.project.close()
+            self.project.close(
+                migrate_after_reopen=migrate_after_reopen,
+                _will_reopen=_will_reopen,
+            )
         
         # Destroy self, since we did not Veto() the close event
         self._frame.Destroy()
@@ -1569,8 +1582,13 @@ class MainWindow(CloakMixin):
     def _on_forget_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
         assert selected_entity is not None
+        assert isinstance(selected_entity, (Alias, ResourceGroup, RootResource))
         
-        selected_entity.delete()
+        # NOTE: In the future we may add support for entities that only support
+        #       asynchronous deletion, like Resource or ResourceRevision.
+        #       When that happens assert_type() will flag any unhandled Future result.
+        result = selected_entity.delete()
+        assert_type(result, None)
     
     def _on_download_entity(self, event) -> None:
         selected_entity = self.entity_tree.selected_entity
@@ -2106,15 +2124,52 @@ class MainWindow(CloakMixin):
     def _on_preferences(self, event: wx.MenuEvent | wx.CommandEvent) -> None:
         if event.Id == wx.ID_PREFERENCES or isinstance(event.EventObject, wx.Button):
             restore_menuitems = self._disable_menus_during_showwindowmodal()
-            def on_preferences_dialog_close() -> None:
+            def on_preferences_dialog_close(migration_type: MigrationType | None) -> None:
                 restore_menuitems()
-                self._on_preferences_dialog_close()
-            
+                self._on_preferences_dialog_close(migration_type)
+
+            self._showing_preferences_dialog = True
             PreferencesDialog(self._frame, self.project, on_preferences_dialog_close)
+            self._showing_preferences_dialog = False
         else:
             event.Skip()
-    
+
     @fg_affinity
-    def _on_preferences_dialog_close(self) -> None:
+    def _on_preferences_dialog_close(self, migration_type: MigrationType | None) -> None:
         # Update callout visibility if was reset in app preferences
         self._update_view_button_callout_visibility()
+        
+        # Start any requested migration
+        if migration_type is not None:
+            # NOTE: Defer migration to next event loop iteration so that the
+            #       preferences dialog is fully destroyed before starting
+            #       the migration, which closes this window
+            @capture_crashes_to_stderr
+            def start_migration_soon() -> None:
+                # NOTE: On Windows/Linux it may be necessary to wait even longer
+                #       for the preferences dialog fully finish because
+                #       ShowWindowModal on those platforms is blocking
+                #       rather than asynchronous. A full Timer() is needed,
+                #       not just fg_call_later(..., force_later=True).
+                if self._showing_preferences_dialog:
+                    Timer(start_migration_soon, 5, one_shot=True)
+                    return
+                self._start_migration(migration_type)
+            fg_call_later(start_migration_soon, force_later=True)
+
+    def _start_migration(self, migration_type: MigrationType) -> None:
+        """Starts migrating the project to a different major version."""
+        # Mark the project to be migrated.
+        from crystal.main import queue_project_to_open_next
+        queue_project_to_open_next(self.project.path, self.project.is_untitled)
+        
+        # Close/reopen this window and its project to start the migration process
+        success = self.try_close(
+            prompt_to_save_untitled=False,
+            migrate_after_reopen=migration_type,
+            _will_reopen=True,
+        )
+        assert success, (
+            'Expected try_close to always return success=True '
+            'when prompt_to_save_untitled=False'
+        )
