@@ -281,6 +281,12 @@ class ZipEntryReader:
     def __exit__(self, *_) -> None:
         self.close()
 
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
 
 # ------------------------------------------------------------------------------
 # Size
