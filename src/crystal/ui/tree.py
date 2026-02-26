@@ -18,6 +18,7 @@ from crystal.util.wx_error import (
     wrapped_object_deleted_error_ignored, wrapped_object_deleted_error_raising,
 )
 from crystal.util.xthreading import fg_affinity
+from functools import cache
 from typing import cast, Dict, List, NewType, NoReturn, Optional, TypeAlias
 import wx
 
@@ -47,15 +48,19 @@ def _DEFAULT_FILE_ICON_SET() -> IconSet:
 
 # Maps wx.EVT_TREE_ITEM_* events to names of methods on `NodeView.delegate`
 # that will be called (if they exist) upon the reception of such an event.
-_EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR = {
-    wx.EVT_TREE_ITEM_EXPANDED: 'on_expanded',
-    wx.EVT_TREE_ITEM_RIGHT_CLICK: 'on_right_click',
-    # TODO: Consider adding support for additional wx.EVT_TREE_ITEM_* event types
-}
-_EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR = dict(zip(
-    [et.typeId for et in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR],
-    _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR.values()
-))
+@cache
+def _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR():
+    return {
+        wx.EVT_TREE_ITEM_EXPANDED: 'on_expanded',
+        wx.EVT_TREE_ITEM_RIGHT_CLICK: 'on_right_click',
+        # TODO: Consider adding support for additional wx.EVT_TREE_ITEM_* event types
+    }
+@cache
+def _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR():
+    return dict(zip(
+        [et.typeId for et in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR()],
+        _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR().values()
+    ))
 
 
 class TreeView:
@@ -92,7 +97,7 @@ class TreeView:
         self.root = NodeView()
         
         # Listen for events on peer
-        for event_type in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR:
+        for event_type in _EVENT_TYPE_2_DELEGATE_CALLABLE_ATTR():
             bind(self.peer, event_type, self._dispatch_event, self.peer)
     
     # === Properties ===
@@ -151,7 +156,7 @@ class TreeView:
         # Dispatch event to my delegate
         if self.delegate:
             event_type_id = event.GetEventType()
-            delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
+            delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR().get(event_type_id, None)
             if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
                 run_bulkhead_call(
                     getattr(self.delegate, delegate_callable_attr),
@@ -192,7 +197,7 @@ class NodeView:
     * The `event` object passed to this method is a wx.Event object that can be inspected for more
       information about the event.
     * The full list of supported event names is given by
-      `_EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.values()`.
+      `_EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR().values()`.
     """
     DEFAULT_TEXT_COLOR = wx.Colour(0, 0, 0)  # black
     
@@ -443,7 +448,7 @@ class NodeView:
         # Dispatch event to my delegate
         if self.delegate:
             event_type_id = event.GetEventType()
-            delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR.get(event_type_id, None)
+            delegate_callable_attr = _EVENT_TYPE_ID_2_DELEGATE_CALLABLE_ATTR().get(event_type_id, None)
             if delegate_callable_attr and hasattr(self.delegate, delegate_callable_attr):
                 run_bulkhead_call(
                     getattr(self.delegate, delegate_callable_attr),

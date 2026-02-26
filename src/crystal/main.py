@@ -474,14 +474,22 @@ def _main2(args: list[str]) -> None:
         exit_code = 0 if is_ok else 1
         sys.exit(exit_code)
     
-    # Start GUI subsystem
-    if 'wx' in sys.modules:
-        raise AssertionError('wx was imported earlier than intended')
-    import wx
-    import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
-    import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
-    assert 'wx' in sys.modules
+    # Set headless mode, before anybody tries to call fg_call_later or access the wx module
+    from crystal.util.headless import set_headless_mode
+    set_headless_mode(parsed_args.headless)
     
+    # Start GUI subsystem (or fake in --headless mode)
+    if parsed_args.headless:
+        from crystal.util.wx_fake import install_fake_wx
+        install_fake_wx()
+    else:
+        if 'wx' in sys.modules:
+            raise AssertionError('wx was imported earlier than intended')
+        import wx
+        import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
+        import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
+        assert 'wx' in sys.modules
+
     def on_atexit() -> None:
         """Called when the main thread and all non-daemon threads have exited."""
 
@@ -508,10 +516,6 @@ def _main2(args: list[str]) -> None:
         #    was executed, avoid segfault on process exit
         os._exit(exit_code)
     atexit.register(on_atexit)
-    
-    # Set headless mode, before anybody tries to call fg_call_later
-    from crystal.util.headless import set_headless_mode
-    set_headless_mode(parsed_args.headless)
     
     # Create shell if requested. But don't start it yet.
     if parsed_args.shell:

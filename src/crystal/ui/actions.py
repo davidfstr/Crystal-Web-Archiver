@@ -15,7 +15,7 @@ class Action:
     """
     
     def __init__(self,
-            menuitem_id: int=wx.ID_ANY,
+            menuitem_id: int | None=None,
             # You can prefix a letter in the label with & to underline it
             # and make it triggerable with Alt-<Letter> on Windows.
             # Linux and macOS will ignore & prefixes.
@@ -25,6 +25,8 @@ class Action:
             enabled: bool=True,
             button_bitmap: wx.Bitmap | None=None,
             button_label: str=''):
+        if menuitem_id is None:
+            menuitem_id = wx.ID_ANY
         self._menuitem_id = menuitem_id
         self._label = label
         self._accel = accel

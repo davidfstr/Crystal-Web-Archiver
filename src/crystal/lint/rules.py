@@ -5,6 +5,7 @@ Pylint plugin to ban specific API patterns in Crystal.
 from astroid import nodes
 import os
 from pylint.checkers import BaseChecker
+import re
 import sys
 from typing import List, Tuple, Optional
 
@@ -103,6 +104,11 @@ class CrystalLintRules(BaseChecker):
             "Don't call project._db.rollback() directly; use `with project._db()` to manage transactions instead",
             'no-direct-database-rollback',
             'Direct rollback() call on database is not allowed. Use `with project._db()` to manage transactions instead.',
+        ),
+        'C9016': (
+            "Don't use wx.CONSTANT at declaration time (outside function/method bodies)",
+            'no-wx-constant-at-declaration-time',
+            'wx.UPPER_CASE constants at declaration time are not compatible with --headless mode.',
         ),
     }
     
@@ -286,6 +292,47 @@ class CrystalLintRules(BaseChecker):
         if node.modname == 'asyncio':
             self.add_message('no-asyncio', node=node)
     
+    # === Visit Attribute (wx constants) ===
+
+    def visit_attribute(self, node: nodes.Attribute) -> None:
+        """Check for wx.CONSTANT usage outside function/method bodies."""
+        if not self._is_wx_constant_at_declaration_time(node):
+            return
+        self.add_message('no-wx-constant-at-declaration-time', node=node)
+
+    def _is_wx_constant_at_declaration_time(self, node: nodes.Attribute) -> bool:
+        """
+        Check if this is a wx.UPPER_CASE attribute access outside a
+        function/method body.
+        """
+        # Must be wx.SOMETHING
+        if not isinstance(node.expr, nodes.Name) or node.expr.name != 'wx':
+            return False
+        # Must be UPPER_CASE
+        name = node.attrname
+        if not self._is_wx_constant_name(name):
+            return False
+        # Must be outside a function/method body
+        if self._is_inside_function_body(node):
+            return False
+        return True
+
+    _WX_CONSTANT_RE = re.compile(r'^[A-Z][A-Z0-9_]+$')
+
+    @classmethod
+    def _is_wx_constant_name(cls, name: str) -> bool:
+        """Check if name matches a wx constant pattern like ID_ANY, EVT_BUTTON, etc."""
+        return cls._WX_CONSTANT_RE.fullmatch(name) is not None
+    
+    def _is_inside_function_body(self, node: nodes.NodeNG) -> bool:
+        """Check if the node is inside a FunctionDef or AsyncFunctionDef body."""
+        current = node.parent
+        while current is not None:
+            if isinstance(current, (nodes.FunctionDef, nodes.AsyncFunctionDef)):
+                return True
+            current = current.parent
+        return False
+
     # === Visit Tuple ===
     
     def visit_tuple(self, node: nodes.Tuple) -> None:
