@@ -2154,7 +2154,38 @@ async def test_when_size_packed_or_loose_revision_then_correct_size_is_returned(
             assertEqual(len(_LOOSE_HAS_BODY_CONTENT), loose_has_body_revision.size())
 
 
-async def test_when_size_packed_revision_and_pack_file_needs_repair_then_repair_performed_and_size_succeeds() -> None:
+async def test_when_size_packed_revision_with_default_readonly_true_and_pack_file_needs_repair_then_repair_not_performed_and_size_succeeds() -> None:
+    async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
+        (pack_filepath, revision_a, revision_b) = \
+            _create_pack_with_two_bodyful_revisions(project)
+
+        # Precondition: Pack file exists
+        assert os.path.exists(pack_filepath), 'Pack file should exist'
+
+        # Simulate crash during delete by renaming pack file to .replacing
+        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        os.rename(pack_filepath, replacing_filepath)
+
+        # Precondition: Pack file does NOT exist, .replacing file exists
+        assert not os.path.exists(pack_filepath), 'Pack file should not exist'
+        assert os.path.exists(replacing_filepath), '.replacing file should exist'
+
+        # Size revision A with default readonly=True. Should NOT trigger repair but should succeed.
+        size_a = revision_a.size()
+        assertEqual(len(_LARGE_BODY_A), size_a)
+
+        # Postcondition: Pack file still does NOT exist (repair was NOT performed)
+        assert not os.path.exists(pack_filepath), 'Pack file should not be repaired'
+
+        # Postcondition: .replacing file still exists (not cleaned up)
+        assert os.path.exists(replacing_filepath), '.replacing file should still exist'
+
+        # Verify both revisions are still size-able (via the .replacing file)
+        assertEqual(len(_LARGE_BODY_A), revision_a.size())
+        assertEqual(len(_LARGE_BODY_B), revision_b.size())
+
+
+async def test_when_size_packed_revision_with_readonly_false_and_pack_file_needs_repair_then_repair_performed_and_size_succeeds() -> None:
     async with (await OpenOrCreateDialog.wait_for()).create() as (mw, project):
         (pack_filepath, revision_a, revision_b) = \
             _create_pack_with_two_bodyful_revisions(project)
@@ -2171,7 +2202,7 @@ async def test_when_size_packed_revision_and_pack_file_needs_repair_then_repair_
         assert os.path.exists(replacing_filepath), '.replacing file should exist'
 
         # Size revision A. Should trigger repair and succeed.
-        size_a = revision_a.size()
+        size_a = revision_a.size(readonly=False)
         assertEqual(len(_LARGE_BODY_A), size_a)
 
         # Postcondition: Pack file exists (repaired)

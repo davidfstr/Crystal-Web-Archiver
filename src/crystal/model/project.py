@@ -2695,12 +2695,17 @@ class Project(ListenableMixin):
             # Get sizes for random revision sample
             size_for_revision_id: dict[int, int] = {}
             progress_listener.calculating_total_size(f'Sizing sample of {REVISIONS_SAMPLE_SIZE:,} revisions...')
+            READONLY_DURING_SAMPLING = True
             for revision_id in random_revision_ids:
                 if revision_id in size_for_revision_id:
                     continue
                 try:
                     revision_size = ResourceRevision._size_with(
-                        src_project_dirpath, major_version, revision_id)
+                        src_project_dirpath,
+                        major_version,
+                        revision_id,
+                        READONLY_DURING_SAMPLING,
+                    )
                 except (RevisionBodyMissingError, OSError):
                     # Revision body is inaccessible
                     revision_size = 0

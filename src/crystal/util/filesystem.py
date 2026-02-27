@@ -217,8 +217,12 @@ _mutex_for_replace_destination = WeakValueDictionary()  # type: WeakValueDiction
 @contextmanager
 def replace_destination_locked(dst_filepath: str) -> Iterator[None]:
     """
-    Context in which either (1) a non-atomic replace_and_flush() operation or
-    (2) a repair of one, is allowed
+    Context in which either 
+    (1) a non-atomic replace_and_flush() operation or
+    (2) a repair of one, is allowed.
+    
+    See also:
+    * ResourceRevision._revision_bodies_writable
     """
     with _mutex_for_replace_destination_lock:
         mutex = _mutex_for_replace_destination.get(dst_filepath)
