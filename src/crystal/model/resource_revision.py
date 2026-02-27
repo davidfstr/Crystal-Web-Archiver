@@ -454,10 +454,16 @@ class ResourceRevision:
         Any code that WRITES to the Project._REVISIONS_DIRNAME ('revisions')
         directory of a project should use this context manager to block
         other concurrent write operations.
-
+        
+        Exception: A READ-REPAIR, which is a special kind of write,
+        should be performed in a replace_destination_locked() context instead.
+        
         Arguments:
         * project_major_version -- if provided, use this value instead of
           project.major_version (useful when properties are not yet loaded)
+        
+        See also:
+        * replace_destination_locked
         """
         if cls._uses_pack_files(project, project_major_version):
             # Enforce @scheduler_affinity:
@@ -956,10 +962,17 @@ class ResourceRevision:
     
     # === Body ===
     
-    def size(self) -> int:
+    def size(self, *, readonly: bool = True) -> int:
         """
         Returns the size of this resource's body.
-
+        
+        Arguments:
+        * readonly --
+            Whether to disallow a read-repair (a special kind of write)
+            during sizing. Default True, since the average caller likely
+            expects sizing operations to be as cheap as possible and never
+            involve any kind of write.
+        
         Raises:
         * NoRevisionBodyError
         * RevisionBodyMissingError
@@ -970,7 +983,11 @@ class ResourceRevision:
         
         assert self._id is not None  # ensured by _ensure_has_body()
         return self._size_with(
-            self.project.path, self.project.major_version, self._id)
+            self.project.path,
+            self.project.major_version,
+            self._id,
+            readonly or self.project.readonly
+        )
     
     # NOTE: This method raises RevisionBodyMissingError in circumstances
     #       where ResourceRevision.size() would raise NoRevisionBodyError.
@@ -979,10 +996,11 @@ class ResourceRevision:
             project_path: str,
             major_version: int,
             revision_id: int,
+            readonly: bool,
             ) -> int:
         try:
             cls._open_with(
-                project_path, major_version, revision_id, _raise_size=True)
+                project_path, major_version, revision_id, readonly, _raise_size=True)
         except _ReturnSize as e:
             return e.size
         else:
@@ -991,9 +1009,17 @@ class ResourceRevision:
                 'raise _ReturnSize or something else'
             )
     
-    def open(self) -> BinaryIO:
+    def open(self, *, readonly: bool = False) -> BinaryIO:
         """
         Opens the body of this resource for reading, returning a file-like object.
+        
+        Arguments:
+        * readonly -- 
+            Whether to disallow a read-repair (a special kind of write)
+            during sizing. Default False, so that read-repairs are eventually
+            performed on revisions being accessed and because the caller
+            is probably willing to tolerate some I/O overhead since it is
+            already asking to perform a read.
 
         Raises:
         * NoRevisionBodyError
@@ -1008,15 +1034,18 @@ class ResourceRevision:
             self.project.path,
             self.project.major_version,
             self._id,
+            readonly or self.project.readonly,
         )
     
     # NOTE: This method raises RevisionBodyMissingError in circumstances
     #       where ResourceRevision.open() would raise NoRevisionBodyError.
+    # NOTE: May perform a READ-REPAIR (a special kind of write) if readonly=False.
     @classmethod
     def _open_with(cls,
             project_path: str,
             major_version: int,
             revision_id: int,
+            readonly: bool,
             *, _raise_size: bool = False,
             ) -> BinaryIO:
         from crystal.model.project import RevisionBodyMissingError
@@ -1042,21 +1071,29 @@ class ResourceRevision:
                         # may have just moved it into place
                         pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
                     except FileNotFoundError:
-                        try:
-                            # Try to repair pack file
-                            movedaside_pack_filepath = (
-                                pack_filepath +
-                                replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
-                            )
-                            replace_and_flush(
-                                movedaside_pack_filepath,
-                                pack_filepath)
-                        except FileNotFoundError:
-                            # No pack file found in any location
-                            pack_fileobj = None
+                        movedaside_pack_filepath = (
+                            pack_filepath +
+                            replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+                        )
+                        if readonly:
+                            # Try to read from unrepaired pack file
+                            try:
+                                pack_fileobj = open_nonexclusive(movedaside_pack_filepath, 'rb')
+                            except FileNotFoundError:
+                                # No pack file found in any location
+                                pack_fileobj = None
                         else:
-                            # Pack file repaired. Try to read from it.
-                            pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
+                            try:
+                                # Try to repair pack file
+                                replace_and_flush(
+                                    movedaside_pack_filepath,
+                                    pack_filepath)
+                            except FileNotFoundError:
+                                # No pack file found in any location
+                                pack_fileobj = None
+                            else:
+                                # Pack file repaired. Try to read from it.
+                                pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
             
             # If the pack_fileobj was opened, try to open the revision's entry in it
             if pack_fileobj is not None:
