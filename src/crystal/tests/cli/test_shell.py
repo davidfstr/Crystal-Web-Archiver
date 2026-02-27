@@ -174,6 +174,18 @@ def test_builtin_globals_have_stable_public_api(subtests: SubtestsContext) -> No
                 'Public API of MainWindow class has changed')
 
 
+def test_from_crystal_model_import_star_imports_model_classes_only() -> None:
+    from crystal.model import __all__ as model_class_names
+    assertEqual(set([
+        'Alias',
+        'Project',
+        'Resource',
+        'ResourceGroup',
+        'ResourceRevision',
+        'RootResource',
+    ]), set(model_class_names))
+
+
 # ------------------------------------------------------------------------------
 # Tests: Shell Messages
 

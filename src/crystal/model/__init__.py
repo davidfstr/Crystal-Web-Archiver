@@ -11,6 +11,18 @@ the first 10 years of its history and you may still see some references
 to "model.py" that haven't been updated.
 """
 
+# Define what `from crystal.model import *` gets.
+# NOTE: Intentionally excludes the `project` submodule so that it does not
+#       override the `project` built-in that Crystal's shell defines
+__all__ = [
+    'Project',
+    'Resource',
+    'RootResource',
+    'ResourceRevision',
+    'ResourceGroup',
+    'Alias',
+]
+
 # ------------------------------------------------------------------------------
 # Project
 
