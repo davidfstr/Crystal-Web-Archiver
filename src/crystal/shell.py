@@ -6,7 +6,6 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from contextlib import closing
 from crystal import __version__ as crystal_version
-from crystal.browser import MainWindow
 from crystal.model import Project
 from crystal.tests.util.runner import run_test_coro
 from crystal.util.ai_agents import ai_agent_detected, mcp_shell_server_detected
@@ -32,8 +31,14 @@ import sys
 from threading import Lock, Thread
 import time
 import types
-from typing import IO, Any, Literal, Optional, TextIO, TypeAlias, TypeVar, assert_never
+from typing import (
+    Any, IO, Literal, Optional, TextIO, TypeAlias, TYPE_CHECKING,
+    TypeVar, assert_never,
+)
 from typing_extensions import override
+
+if TYPE_CHECKING:
+    from crystal.browser import MainWindow
 
 
 _R = TypeVar('_R')
@@ -60,8 +65,8 @@ class Shell:
         
         # Setup proxy variables for shell
         _Proxy._patch_help()
-        self._project_proxy = _Proxy(f'<unset {Project.__module__}.{Project.__name__} proxy>')
-        self._window_proxy = _Proxy(f'<unset {MainWindow.__module__}.{MainWindow.__name__} proxy>')
+        self._project_proxy = _Proxy(f'<unset Project proxy>')
+        self._window_proxy = _Proxy(f'<unset MainWindow proxy>')
         
         # Ensure help(), exit(), and quit() are available,
         # even when running as a frozen .app or .exe
@@ -167,7 +172,7 @@ class Shell:
             eof = 'Ctrl-D (i.e. EOF)'
         exit_instructions = 'Use {}() or {} to exit'.format('exit', eof)
         
-        if ai_agent_detected():
+        if ai_agent_detected() and not is_headless_mode():
             from crystal.ui.nav import T
             from crystal.util.controls import click, screenshot, TreeItem
             from crystal.tests.util.wait import wait_for
