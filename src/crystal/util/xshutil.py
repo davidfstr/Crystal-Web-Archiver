@@ -50,5 +50,10 @@ def walkzip(
         # NOTE: Equivalent to os.path.relpath(src_dirpath, src_top_dirpath)
         #       but avoids a slower call to os.path.relpath()
         parent_rel_dirpath = src_parent_dirpath[len(src_top_dirpath) + 1:]
-        dst_parent_dirpath = os.path.join(dst_top_dirpath, parent_rel_dirpath)
+        if parent_rel_dirpath:
+            dst_parent_dirpath = os.path.join(dst_top_dirpath, parent_rel_dirpath)
+        else:
+            # NOTE: Don't join because it would result in a path with a trailing /,
+            #       which the LocalFilesystem abstraction does not like
+            dst_parent_dirpath = dst_top_dirpath
         yield (src_parent_dirpath, dst_parent_dirpath, dirnames, filenames)

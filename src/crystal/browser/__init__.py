@@ -11,10 +11,11 @@ from crystal.browser.new_group import NewGroupDialog
 from crystal.browser.new_root_url import ChangePrefixCommand, NewRootUrlDialog
 from crystal.browser.preferences import PreferencesDialog
 from crystal.browser.tasktree import TaskTree, TaskTreeNode
+from crystal.filesystem import LocalFilesystem, S3Filesystem
 from crystal.model import (
     Alias, Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
-from crystal.model.project import MigrationType
+from crystal.model.project import MigrationType, NonLocalFilesystemNotSupported, NonLocalFilesystemReadOnlyError
 from crystal.progress.interface import (
     CancelLoadUrls, CancelSaveAs, DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
@@ -123,8 +124,16 @@ class MainWindow(CloakMixin):
             #               frame -> frame_content
             raw_frame = wx.Frame(None, title=frame_title, name='cr-main-window')
             try:
-                # macOS: Define proxy icon beside the filename in the titlebar
-                raw_frame.SetRepresentedFilename(project.path)
+                # HACK: Uses internal API for path manipulation
+                fs = project._fs
+                if isinstance(fs, LocalFilesystem):
+                    # macOS: Define proxy icon beside the filename in the titlebar
+                    raw_frame.SetRepresentedFilename(project.path)
+                elif isinstance(fs, S3Filesystem):
+                    # macOS: Cannot define proxy icon for file on remote filesystem
+                    pass
+                else:
+                    assert_never(fs)
                 # Define frame icon, if appropriate
                 set_dialog_or_frame_icon_if_appropriate(raw_frame)
                 # macOS: Show initial dirty state
@@ -205,10 +214,14 @@ class MainWindow(CloakMixin):
             raise
     
     @staticmethod
-    def _calculate_frame_title(project) -> str:
+    def _calculate_frame_title(project: Project) -> str:
+        # HACK: Uses internal API for path manipulation
+        fs = project._fs
+        
         frame_title: str
-        filename_with_ext = os.path.basename(project.path)
-        (filename_without_ext, filename_ext) = os.path.splitext(filename_with_ext)
+        (_, filename_with_ext) = fs.split(project.path)
+        # NOTE: Calculation is valid even for non-local filesystems
+        (filename_without_ext, _) = os.path.splitext(filename_with_ext)
         if project.is_untitled:
             filename_without_ext = 'Untitled Project'  # reinterpret
         if is_windows() or is_kde_or_non_gnome():
@@ -217,14 +230,21 @@ class MainWindow(CloakMixin):
             if project.is_untitled:
                 # Never show extension for untitled projects
                 extension_visible = False
-            elif not os.path.exists(project.path):
-                print(f'*** Tried to calculate frame title for project not on disk: {project.path}', file=sys.stderr)
-                extension_visible = False
             else:
-                extension_visible = (
-                    not get_hide_file_extension(project.path) if is_mac_os()
-                    else True
-                )
+                if isinstance(fs, LocalFilesystem):
+                    if not os.path.exists(project.path):
+                        print(f'*** Tried to calculate frame title for project not on disk: {project.path}', file=sys.stderr)
+                        extension_visible = False
+                    else:
+                        extension_visible = (
+                            not get_hide_file_extension(project.path) if is_mac_os()
+                            else True  # is_windows() or is_linux() 
+                        )
+                elif isinstance(fs, S3Filesystem):
+                    # Project is not on local disk
+                    extension_visible = False
+                else:
+                    assert_never(fs)
             if extension_visible:
                 frame_title = filename_with_ext
             else:
@@ -1037,9 +1057,9 @@ class MainWindow(CloakMixin):
                 raise AssertionError()
             except CancelSaveAs:
                 return
-            # TODO: Handle ProjectReadOnlyError more gracefully,
-            #       by providing a more-targeted error message
-            except (ProjectReadOnlyError, Exception) as e:
+            # TODO: Handle {ProjectReadOnlyError, NonLocalFilesystemNotSupported}
+            #       more gracefully, by providing a more-targeted error message
+            except (ProjectReadOnlyError, NonLocalFilesystemNotSupported, Exception) as e:
                 self._show_save_error_dialog(e)
                 # TODO: Introduce public read-only `project.is_closed` property
                 if self.project._closed:
@@ -2160,6 +2180,10 @@ class MainWindow(CloakMixin):
 
     def _start_migration(self, migration_type: MigrationType) -> None:
         """Starts migrating the project to a different major version."""
+        if self.project.readonly:
+            raise ProjectReadOnlyError()
+        assert isinstance(self.project._fs, LocalFilesystem)
+        
         # Mark the project to be migrated.
         from crystal.main import queue_project_to_open_next
         queue_project_to_open_next(self.project.path, self.project.is_untitled)
