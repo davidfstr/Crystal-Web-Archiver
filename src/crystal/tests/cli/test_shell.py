@@ -1281,7 +1281,8 @@ def test_given_shell_running_when_all_windows_closed_then_shell_exits_and_app_ex
             
             wait_for_crystal_to_exit(
                 crystal,
-                timeout=DEFAULT_WAIT_TIMEOUT)
+                # 2.0s isn't long enough for Linux test runners on GitHub Actions
+                timeout=4.0)
     
     with subtests.test(case='A project is opened & closed, then the Open Or Create Dialog reappears and is closed'):
         with crystal_shell(kill=False) as (crystal, _):
