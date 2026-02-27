@@ -10,10 +10,12 @@ from crystal.doc.html import parse_html_and_links
 from crystal.doc.html.soup import FAVICON_TYPE_TITLE, HtmlDocument
 from crystal.doc.json import parse_json_and_links
 from crystal.doc.xml import parse_xml_and_links
+from crystal.filesystem import Filesystem, LocalFilesystem, S3Filesystem
 from crystal.plugins import minimalist_baker as plugins_minbaker
 from crystal.util import http_date, xcgi, xshutil
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.filesystem import open_nonexclusive, replace_and_flush, replace_destination_locked
+from crystal.util.netzipfile import NetZipFile
 from crystal.util.urls import is_unrewritable_url
 from crystal.util.xfutures import warn_if_result_not_read
 from crystal.util.xthreading import (
@@ -28,10 +30,9 @@ import sys
 from tempfile import NamedTemporaryFile
 import threading
 from typing import (
-    BinaryIO, IO, Optional, TYPE_CHECKING, TypedDict, cast,
+    BinaryIO, IO, Optional, TYPE_CHECKING, TypedDict, assert_never, cast,
 )
 from urllib.parse import urlparse
-from zipfile import ZipFile
 
 if TYPE_CHECKING:
     from crystal.doc.generic import Document, Link
@@ -227,6 +228,10 @@ class ResourceRevision:
         
         project = self.project
         
+        if project.readonly:
+            raise ProjectReadOnlyError()
+        assert isinstance(project._fs, LocalFilesystem)
+        
         # Associated Resource will have at least one ResourceRevision
         # 
         # NOTE: Set this bit BEFORE finishing the download.
@@ -248,8 +253,6 @@ class ResourceRevision:
             try:
                 RR = ResourceRevision
                 
-                if project.readonly:
-                    raise ProjectReadOnlyError()
                 with project._db, closing(project._db.cursor()) as c:
                     c.execute(
                         'insert into resource_revision '
@@ -389,7 +392,11 @@ class ResourceRevision:
           migration skip-marker; default False
         """
         from crystal.model.pack16 import create_pack_file
-        from crystal.model.project import Project
+        from crystal.model.project import Project, ProjectReadOnlyError
+        
+        if project.readonly:
+            raise ProjectReadOnlyError()
+        assert isinstance(project._fs, LocalFilesystem)
 
         if project_major_version is None:
             project_major_version = project.major_version
@@ -404,6 +411,7 @@ class ResourceRevision:
         revision_files = {}  # type: dict[str, str]
         for rid in range(pack_start_id, pack_end_id + 1):
             body_filepath = cls._body_filepath_with(
+                project._fs,
                 project.path,
                 # NOTE: Always use major_version=2 paths: individual files are always stored
                 #       in the Hierarchical format, even in Pack16 (major_version==3) projects
@@ -419,7 +427,7 @@ class ResourceRevision:
 
         with cls._revision_bodies_writable(project, project_major_version):
             # Create the pack file
-            pack_filepath = cls._body_pack_filepath_with(project.path, revision_id)
+            pack_filepath = cls._body_pack_filepath_with(project._fs, project.path, revision_id)
             tmp_dir = os.path.join(project.path, Project._TEMPORARY_DIRNAME)
             try:
                 packed_entry_names = create_pack_file(
@@ -623,12 +631,14 @@ class ResourceRevision:
             raise RevisionDeletedError()
         
         return self._body_filepath_with(
-            project_path=self.project.path,
-            major_version=self.project.major_version,
-            revision_id=self._id)
+            self.project._fs,
+            self.project.path,
+            self.project.major_version,
+            self._id)
     
     @staticmethod
     def _body_filepath_with(
+            fs: Filesystem,
             project_path: str,
             major_version: int,
             revision_id: int,
@@ -649,31 +659,30 @@ class ResourceRevision:
         from crystal.model.project import Project
         
         if major_version >= 2:
-            os_path_sep = os.path.sep  # cache
-            
-            revision_relpath_parts = f'{revision_id:015x}'
-            if len(revision_relpath_parts) != 15:
+            revision_relpath_parts_nosep = f'{revision_id:015x}'
+            if len(revision_relpath_parts_nosep) != 15:
                 assert revision_id > Project._MAX_REVISION_ID
                 raise ProjectHasTooManyRevisionsError(
                     f'Revision ID {id} is too high to store in the '
                     'major version 2 project format')
-            revision_relpath = (
-                revision_relpath_parts[0:3] + os_path_sep +
-                revision_relpath_parts[3:6] + os_path_sep +
-                revision_relpath_parts[6:9] + os_path_sep +
-                revision_relpath_parts[9:12] + os_path_sep +
-                revision_relpath_parts[12:15]
-            )
+            revision_relpath_parts = [
+                revision_relpath_parts_nosep[0:3],
+                revision_relpath_parts_nosep[3:6],
+                revision_relpath_parts_nosep[6:9],
+                revision_relpath_parts_nosep[9:12],
+                revision_relpath_parts_nosep[12:15],
+            ]
         elif major_version == 1:
-            revision_relpath = str(revision_id)
+            revision_relpath_parts = [str(revision_id)]
         else:
             raise AssertionError()
         
-        return os.path.join(
-            project_path, Project._REVISIONS_DIRNAME, revision_relpath)
+        return fs.join(
+            project_path, Project._REVISIONS_DIRNAME, *revision_relpath_parts)
 
     @classmethod
     def _body_pack_filepath_with(cls,
+            fs: Filesystem,
             project_path: str,
             revision_id: int,
             ) -> str:
@@ -690,8 +699,11 @@ class ResourceRevision:
         Returns:
         * The full path to the pack file that should contain this revision
         """
-        hierarchical_path = cls._body_filepath_with(project_path, 2, revision_id)
-        return hierarchical_path[:-1] + '_.zip'
+        hierarchical_path = cls._body_filepath_with(fs, project_path, 2, revision_id)
+        
+        (parent_dirpath, itemname) = fs.split(hierarchical_path)
+        new_itemname = itemname[:-1] + '_.zip'
+        return fs.join(parent_dirpath, new_itemname)
 
     @staticmethod
     def _entry_name_for_revision_id(revision_id: int) -> str:
@@ -983,6 +995,7 @@ class ResourceRevision:
         
         assert self._id is not None  # ensured by _ensure_has_body()
         return self._size_with(
+            self.project._fs,
             self.project.path,
             self.project.major_version,
             self._id,
@@ -993,6 +1006,7 @@ class ResourceRevision:
     #       where ResourceRevision.size() would raise NoRevisionBodyError.
     @classmethod
     def _size_with(cls,
+            project_fs: Filesystem,
             project_path: str,
             major_version: int,
             revision_id: int,
@@ -1000,7 +1014,7 @@ class ResourceRevision:
             ) -> int:
         try:
             cls._open_with(
-                project_path, major_version, revision_id, readonly, _raise_size=True)
+                project_fs, project_path, major_version, revision_id, readonly, _raise_size=True)
         except _ReturnSize as e:
             return e.size
         else:
@@ -1031,6 +1045,7 @@ class ResourceRevision:
         
         assert self._id is not None  # ensured by _ensure_has_body()
         return self._open_with(
+            self.project._fs,
             self.project.path,
             self.project.major_version,
             self._id,
@@ -1042,6 +1057,7 @@ class ResourceRevision:
     # NOTE: May perform a READ-REPAIR (a special kind of write) if readonly=False.
     @classmethod
     def _open_with(cls,
+            fs: Filesystem,
             project_path: str,
             major_version: int,
             revision_id: int,
@@ -1060,63 +1076,94 @@ class ResourceRevision:
 
             # Open the pack_fileobj, or set it to None if it does not exist.
             # Repair the pack if necessary.
-            pack_filepath = cls._body_pack_filepath_with(project_path, revision_id)
+            pack_filepath = cls._body_pack_filepath_with(fs, project_path, revision_id)
             entry_name = cls._entry_name_for_revision_id(revision_id)
-            try:
-                pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
-            except FileNotFoundError:
-                with replace_destination_locked(pack_filepath):
-                    try:
-                        # Retry open, because concurrent repair or replace
-                        # may have just moved it into place
-                        pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
-                    except FileNotFoundError:
-                        movedaside_pack_filepath = (
-                            pack_filepath +
-                            replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
-                        )
-                        if readonly:
-                            # Try to read from unrepaired pack file
-                            try:
-                                pack_fileobj = open_nonexclusive(movedaside_pack_filepath, 'rb')
-                            except FileNotFoundError:
-                                # No pack file found in any location
-                                pack_fileobj = None
-                        else:
-                            try:
-                                # Try to repair pack file
-                                replace_and_flush(
-                                    movedaside_pack_filepath,
-                                    pack_filepath)
-                            except FileNotFoundError:
-                                # No pack file found in any location
-                                pack_fileobj = None
-                            else:
-                                # Pack file repaired. Try to read from it.
-                                pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
-            
-            # If the pack_fileobj was opened, try to open the revision's entry in it
-            if pack_fileobj is not None:
+            if isinstance(fs, LocalFilesystem):
                 try:
-                    if _raise_size:
-                        raise _ReturnSize(size_pack_entry(pack_fileobj, entry_name))
-                    else:
-                        return cast(BinaryIO, open_pack_entry(pack_fileobj, entry_name))
-                except ZipEntryNotFoundError:
-                    # (keep going)
-                    pass
+                    pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
+                except FileNotFoundError:
+                    with replace_destination_locked(pack_filepath):
+                        try:
+                            # Retry open, because concurrent repair or replace
+                            # may have just moved it into place
+                            pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
+                        except FileNotFoundError:
+                            movedaside_pack_filepath = (
+                                pack_filepath +
+                                replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+                            )
+                            if readonly:
+                                # Try to read from unrepaired pack file
+                                try:
+                                    pack_fileobj = open_nonexclusive(movedaside_pack_filepath, 'rb')
+                                except FileNotFoundError:
+                                    # No pack file found in any location
+                                    pack_fileobj = None
+                            else:
+                                try:
+                                    # Try to repair pack file
+                                    replace_and_flush(
+                                        movedaside_pack_filepath,
+                                        pack_filepath)
+                                except FileNotFoundError:
+                                    # No pack file found in any location
+                                    pack_fileobj = None
+                                else:
+                                    # Pack file repaired. Try to read from it.
+                                    pack_fileobj = open_nonexclusive(pack_filepath, 'rb')
+                
+                # If the pack_fileobj was opened, try to open the revision's entry in it
+                if pack_fileobj is not None:
+                    try:
+                        if _raise_size:
+                            raise _ReturnSize(size_pack_entry(pack_fileobj, entry_name))
+                        else:
+                            return cast(BinaryIO, open_pack_entry(pack_fileobj, entry_name))
+                    except ZipEntryNotFoundError:
+                        # (keep going)
+                        pass
+            elif isinstance(fs, S3Filesystem):
+                def open_pack_filepath(start: int, end: int | None = None) -> BinaryIO:
+                    return fs.open(pack_filepath, 'rb', start=start, end=end)
+                try:
+                    nzf = NetZipFile(open_pack_filepath)
+                except FileNotFoundError:
+                    movedaside_pack_filepath = (
+                        pack_filepath +
+                        replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+                    )
+                    assert readonly
+                    
+                    # Try to read from unrepaired pack file
+                    def open_movedaside_pack_filepath(start: int, end: int | None = None) -> BinaryIO:
+                        return fs.open(movedaside_pack_filepath, 'rb', start=start, end=end)
+                    try:
+                        nzf = NetZipFile(open_movedaside_pack_filepath)
+                    except FileNotFoundError:
+                        # No pack file found in any location
+                        nzf = None
+                
+                if nzf is not None:
+                    try:
+                        return nzf.open(entry_name) 
+                    except KeyError:  # ZipEntryNotFoundError analogue
+                        # (keep going)
+                        pass
+            else:
+                assert_never(fs)
         
         # Try individual file
+        body_filepath = cls._body_filepath_with(
+            fs,
+            project_path,
+            major_version,
+            revision_id
+        )
         try:
-            body_filepath = cls._body_filepath_with(
-                project_path,
-                major_version,
-                revision_id
-            )
             if _raise_size:
-                raise _ReturnSize(os.path.getsize(body_filepath))
+                raise _ReturnSize(fs.getsize(body_filepath))
             else:
-                return open_nonexclusive(body_filepath, 'rb')
+                return fs.open(body_filepath, 'rb')
         except FileNotFoundError:
             # (keep going)
             pass
@@ -1396,7 +1443,7 @@ class ResourceRevision:
             if project.major_version >= 3:
                 try:
                     rewrite_pack_without_entry(
-                        pack_filepath=self._body_pack_filepath_with(project.path, revision_id),
+                        pack_filepath=self._body_pack_filepath_with(project._fs, project.path, revision_id),
                         entry_name=self._entry_name_for_revision_id(revision_id),
                         tmp_dirpath=os.path.join(project.path, project._TEMPORARY_DIRNAME))
                     delete_individual_file = False

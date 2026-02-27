@@ -1214,6 +1214,7 @@ def _create_untitled_project(
     )
 
 
+# TODO: Provide way to open a project from an s3:// URL from the UI
 def _prompt_to_open_project(
         parent: wx.Window,
         progress_listener: OpenProjectProgressListener,
@@ -1223,6 +1224,7 @@ def _prompt_to_open_project(
     Raises:
     * CancelOpenProject -- if the user cancels the prompt early
     """
+    from crystal.filesystem import LocalFilesystem
     from crystal.model import Project
     from crystal.progress.interface import CancelOpenProject
     from crystal.util.wx_bind import bind
@@ -1292,7 +1294,7 @@ def _prompt_to_open_project(
     
     if not os.path.exists(project_path):
         raise AssertionError()
-    if not Project.is_valid(project_path):
+    if not Project.is_valid(project_path, fs=LocalFilesystem()):
         _show_invalid_project_dialog()
         raise CancelOpenProject()
     

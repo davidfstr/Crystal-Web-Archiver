@@ -572,7 +572,7 @@ async def _test_orphaned_revision_repair(
                     assertEqual(4, project._revision_count(), 
                         'Orphaned revision should exist in database after failed rollback')
                     assert False == os.path.exists(ResourceRevision._body_filepath_with(
-                        project.path, project.major_version, revision_id=4,
+                        project._fs, project.path, project.major_version, revision_id=4,
                     ))
                 
                 elif last_revision_error_type == 'bad_block':
@@ -728,7 +728,7 @@ async def test_given_last_revision_body_missing_and_other_revision_bodies_also_m
     def before_reopen(project_dirpath: str, project: Project) -> None:
         # Delete revision 3's body file to simulate filesystem issues
         revision3_filepath = ResourceRevision._body_filepath_with(
-            project_dirpath, project.major_version, revision_id=3)
+            project._fs, project_dirpath, project.major_version, revision_id=3)
         if os.path.exists(revision3_filepath):
             os.remove(revision3_filepath)
     

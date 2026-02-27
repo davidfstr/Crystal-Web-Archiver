@@ -4,6 +4,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Generator, Iterable, Iterator
 from concurrent.futures import Future
 from contextlib import closing, contextmanager
+from crystal.filesystem import Filesystem, LocalFilesystem, S3Filesystem
 from crystal import resources as resources_
 from crystal.model.alias import Alias
 from crystal.model.resource import Resource
@@ -66,7 +67,7 @@ import time
 from tqdm import tqdm
 import traceback
 from typing import (
-    assert_never, cast, Dict, Literal, List, Optional, Self, Tuple,
+    assert_never, cast, Dict, IO, Literal, List, Optional, Self, Tuple,
     TYPE_CHECKING, TypeAlias, TypeVar, Union,
 )
 from typing_extensions import override
@@ -254,16 +255,40 @@ class Project(ListenableMixin):
             path = untitled_project_dirpath  # reinterpret
             is_untitled = True  # reinterpret
         
-        # Remove any trailing slash from the path
-        (head, tail) = os.path.split(path)
-        if len(tail) == 0:
-            path = head  # reinterpret
+        if S3Filesystem.recognizes_path(path):
+            (s3_credentials, plain_path) = S3Filesystem.split_credentials_if_present(path)
+            fs: Filesystem = S3Filesystem(s3_credentials)
+            path = plain_path  # reinterpret
+        elif LocalFilesystem.recognizes_path(path):
+            fs = LocalFilesystem()
+        else:
+            raise AssertionError(f'Unknown kind of path: {path}')
+        self._fs = fs
         
-        # Normalize path
-        normalized_path = self._normalize_project_path(path)  # reinterpret
-        if normalized_path is None:
-            raise ProjectFormatError(f'Project does not end with {self.FILE_EXTENSION}')
-        path = normalized_path  # reinterpret
+        # Normalize the project path, to end with .crystalproj and not /
+        if isinstance(fs, LocalFilesystem):
+            # Remove any trailing slash from the path
+            (head, tail) = os.path.split(path)
+            if len(tail) == 0:
+                path = head  # reinterpret
+            
+            # Normalize path
+            normalized_path = self._normalize_project_path(path)  # reinterpret
+            if normalized_path is None:
+                raise ProjectFormatError(f'Project does not end with {self.FILE_EXTENSION}')
+            path = normalized_path  # reinterpret
+        elif isinstance(fs, S3Filesystem):
+            # Remove any trailing slash from the key
+            (bucket_name, key, region) = fs.parse_url(path)
+            if key.endswith('/'):
+                key = key.removesuffix('/')  # reinterpret
+            path = fs.format_url(bucket_name, key, region)  # reinterpret
+            
+            # Normalize path
+            # (TODO: Call _normalize_project_path here, after adapting it to
+            #        use the Filesystem interface to manipulate paths)
+        else:
+            assert_never(fs)
         
         self.path = path
         
@@ -285,11 +310,18 @@ class Project(ListenableMixin):
         
         progress_listener.opening_project()
         
-        create = not os.path.exists(path)
-        if create and readonly_requested:
-            # Can't create a project if cannot write to disk
-            raise ProjectReadOnlyError(
-                f'Cannot create new project at {path!r} when readonly=True')
+        if isinstance(fs, LocalFilesystem):
+            create = not os.path.exists(path)
+            if create and readonly_requested:
+                # Can't create a project if cannot write to disk
+                raise ProjectReadOnlyError(
+                    f'Cannot create new project at {path!r} when readonly=True')
+        elif isinstance(fs, S3Filesystem):
+            if not readonly_requested:
+                raise NonLocalFilesystemReadOnlyError()
+            create = False
+        else:
+            assert_never(fs)
         # NOTE: Currently used by MainWindow only. Omitting from public API for now.
         self._created_this_session = create
         
@@ -297,13 +329,14 @@ class Project(ListenableMixin):
         try:
             # Create/verify project structure
             if create:
+                assert isinstance(fs, LocalFilesystem)
                 cls._create_directory_structure(path)
             else:
-                cls._ensure_directory_structure_valid(path)
+                cls._ensure_directory_structure_valid(fs, path)
             try:
                 # NOTE: May raise ProjectReadOnlyError if the database cannot be opened as writable
-                with cls._open_database_but_close_if_raises(path, readonly_requested, self._mark_dirty_if_untitled, expect_writable=create) as (
-                            self._db, self._readonly, self._database_is_on_ssd):
+                with cls._open_database_but_close_if_raises(fs, path, readonly_requested, self._mark_dirty_if_untitled, expect_writable=create) as (
+                            self._db, self._readonly, self._database_is_on_ssd, self._db_tmp_file):
                     # Create new project content, if missing
                     if create:
                         self._create()
@@ -326,6 +359,7 @@ class Project(ListenableMixin):
                     self._is_dirty = is_dirty
             except:
                 if create:
+                    assert isinstance(fs, LocalFilesystem)
                     shutil.rmtree(path, ignore_errors=True)
                 raise
         finally:
@@ -371,16 +405,17 @@ class Project(ListenableMixin):
     @contextmanager
     def _open_database_but_close_if_raises(
             cls,
+            fs: Filesystem,
             project_path: str,
             readonly_requested: bool,
             mark_dirty_func: Callable[[], None],
             expect_writable: bool
-            ) -> Iterator[Tuple[DatabaseConnection, bool, bool]]:
+            ) -> Iterator[Tuple[DatabaseConnection, bool, bool, IO[bytes] | None]]:
         """
         Opens the project database before entering the context,
         but closes it if an exception is raised in the context.
-        
-        Yields (db, readonly_actual, database_is_on_ssd).
+
+        Yields (db, readonly_actual, database_is_on_ssd, db_tmp_file).
 
         Effects of this method are reversed by `_close_database()`.
         
@@ -388,19 +423,45 @@ class Project(ListenableMixin):
         * ProjectReadOnlyError -- 
             if expect_writable is True but the project database cannot be opened as writable
         """
+        tmp_db_file = None  # type: IO[bytes] | None
+        if isinstance(fs, LocalFilesystem):
+            db_filepath = os.path.join(project_path, cls._DB_FILENAME)  # cache
+            can_write_db = (
+                # Can write to *.crystalproj
+                # (is not Locked on macOS, is not on read-only volume)
+                os.access(project_path, os.W_OK) and (
+                    not os.path.exists(db_filepath) or
+                    # Can write to database
+                    # (is not Locked on macOS, is not Read Only on Windows, is not on read-only volume)
+                    os.access(db_filepath, os.W_OK)
+                )
+            )
+        elif isinstance(fs, S3Filesystem):
+            if not readonly_requested:
+                raise NonLocalFilesystemReadOnlyError()
+
+            # Download the remote database locally
+            # TODO: Show progress bar while copying database locally
+            local_db_file = tempfile.NamedTemporaryFile(
+                'wb',
+                suffix='.sqlite',
+                delete=False,  # required on Windows: avoids FILE_FLAG_DELETE_ON_CLOSE which prevents sqlite3.connect()
+            )
+            try:
+                with fs.open(fs.join(project_path, cls._DB_FILENAME), 'rb') as remote_db_file:
+                    shutil.copyfileobj(remote_db_file, local_db_file)
+                local_db_file.flush()
+            except:
+                local_db_file.close()
+                raise
+
+            db_filepath = local_db_file.name
+            can_write_db = False
+            tmp_db_file = local_db_file  # reinterpret
+        else:
+            assert_never(fs)
         
         # Open database
-        db_filepath = os.path.join(project_path, cls._DB_FILENAME)  # cache
-        can_write_db = (
-            # Can write to *.crystalproj
-            # (is not Locked on macOS, is not on read-only volume)
-            os.access(project_path, os.W_OK) and (
-                not os.path.exists(db_filepath) or
-                # Can write to database
-                # (is not Locked on macOS, is not Read Only on Windows, is not on read-only volume)
-                os.access(db_filepath, os.W_OK)
-            )
-        )
         db_connect_query = (
             '?immutable=1'
             if not can_write_db
@@ -460,9 +521,19 @@ class Project(ListenableMixin):
                                 'Downloads may be slower.',
                             file=sys.stderr)
             
-            yield (db, readonly_actual, database_is_on_ssd)
+            yield (db, readonly_actual, database_is_on_ssd, tmp_db_file)
         except:
-            cls._close_database(db, readonly_actual)
+            try:
+                cls._close_database(db, readonly_actual)
+            finally:
+                if tmp_db_file is not None:
+                    tmp_db_file.close()
+                    try:
+                        # NOTE: Safe to do outside the Filesystem interface
+                        #       because always targets a local file
+                        os.remove(tmp_db_file.name)  # pylint: disable=no-direct-filesystem-access-in-model
+                    except FileNotFoundError:
+                        pass
             raise
     
     def _start_scheduler(self) -> None:
@@ -489,17 +560,30 @@ class Project(ListenableMixin):
     
     # --- Load: Validity ---
     
+    # NOTE: fs is only optional to support backward-compatibility.
+    #       It is a strongly recommended parameter.
     @classmethod
-    def is_valid(cls, path: str) -> bool:
+    def is_valid(cls, path: str, fs: Filesystem | None = None) -> bool:
         """
         Returns whether there appears to be a minimally valid project
         at the specified path.
         """
-        normalized_path = cls._normalize_project_path(path)
-        if normalized_path is None:
-            return False
+        if fs is None:
+            fs = LocalFilesystem()
+        
+        if isinstance(fs, LocalFilesystem):
+            assert LocalFilesystem.recognizes_path(path)
+            
+            normalized_path = cls._normalize_project_path(path)
+            if normalized_path is None:
+                return False
+        else:
+            # TODO: Add support for non-local filesystem to _normalize_project_path
+            #       so that it can be used here
+            normalized_path = path
+        
         try:
-            Project._ensure_directory_structure_valid(normalized_path)
+            Project._ensure_directory_structure_valid(fs, normalized_path)
         except ProjectFormatError:
             return False
         else:
@@ -507,6 +591,9 @@ class Project(ListenableMixin):
     
     @classmethod
     def _normalize_project_path(cls, path: str) -> str | None:
+        if not LocalFilesystem.recognizes_path(path):
+            raise NonLocalFilesystemNotSupported()
+        
         if os.path.exists(path):
             # Try to alter existing path to point to item ending with FILE_EXTENSION
             if path.endswith(cls.FILE_EXTENSION):
@@ -523,22 +610,56 @@ class Project(ListenableMixin):
                 return path + cls.FILE_EXTENSION
         return None  # invalid
     
-    @staticmethod
-    def _ensure_directory_structure_valid(path: str) -> None:
+    @classmethod
+    def _ensure_directory_structure_valid(cls, fs: Filesystem, path: str) -> None:
         """
         Raises:
         * ProjectFormatError -- if the project at the specified path is invalid
         """
-        if not os.path.isdir(path):
-            raise ProjectFormatError(f'Project is missing outermost directory: {path}')
-        
-        db_filepath = os.path.join(path, Project._DB_FILENAME)
-        if not os.path.isfile(db_filepath):
-            raise ProjectFormatError(f'Project is missing database: {db_filepath}')
-        
-        revision_dirpath = os.path.join(path, Project._REVISIONS_DIRNAME)
-        if not os.path.isdir(revision_dirpath):
-            raise ProjectFormatError(f'Project is missing revisions directory: {revision_dirpath}')
+        db_path = fs.join(path, Project._DB_FILENAME)
+        if isinstance(fs, LocalFilesystem):
+            if not os.path.isdir(path):
+                raise ProjectFormatError(f'Project is missing outermost directory: {path}')
+            
+            # Ensure database exists
+            if not os.path.isfile(db_path):
+                raise ProjectFormatError(f'Project is missing database: {db_path}')
+            
+            revision_dirpath = fs.join(path, Project._REVISIONS_DIRNAME)
+            if not os.path.isdir(revision_dirpath):
+                raise ProjectFormatError(f'Project is missing revisions directory: {revision_dirpath}')
+        elif isinstance(fs, S3Filesystem):
+            import botocore.exceptions
+            
+            # 1. Ensure database exists and is accessible
+            # 2. Detect early common access issues like:
+            #     - PermissionError: Unable to locate AWS S3 credentials.
+            #     - PermissionError: An error occurred (403) when calling the HeadObject operation: Forbidden
+            try:
+                fs.getsize(db_path)
+            except botocore.exceptions.NoCredentialsError as e:
+                if is_windows():
+                    credentials_path = '%USERPROFILE%\\.aws\\credentials'
+                    custom_var = '%CUSTOM%'
+                else:
+                    credentials_path = '~/.aws/credentials'
+                    custom_var = '$CUSTOM'
+                raise PermissionError(
+                    'Unable to locate AWS S3 credentials.\n'
+                    '\n'
+                    'Add AWS credentials to one of:\n'
+                    '- AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY environment variables\n'
+                    f'- the "default" profile in {credentials_path}, as set by "aws configure"\n'
+                    f'- a {custom_var} profile in {credentials_path}, as set by "aws configure --profile {custom_var}"\n'
+                    '- the s3:// URL for the project, e.g. "s3://AKIA***OO:XP***@my-bucket/My Project.crystalproj?region=us-east-1"'
+                ) from e
+            except FileNotFoundError as e:
+                raise ProjectFormatError(f'Project is missing database: {db_path}') from e
+            else:
+                # Database exists and is accessible
+                pass
+        else:
+            assert_never(fs)
     
     # --- Load: Migrations ---
     
@@ -556,6 +677,10 @@ class Project(ListenableMixin):
         * CancelOpenProject
         * sqlite3.DatabaseError, OSError
         """
+        if self.readonly:
+            raise ProjectReadOnlyError()
+        assert isinstance(self._fs, LocalFilesystem)
+        
         # Add missing database columns and indexes
         with self._db, closing(self._db.cursor()) as c:
             index_names = get_index_names(c)  # cache
@@ -728,6 +853,10 @@ class Project(ListenableMixin):
         Raises:
         * sqlite3.DatabaseError, OSError
         """
+        if self.readonly:
+            raise ProjectReadOnlyError()
+        assert isinstance(self._fs, LocalFilesystem)
+        
         revisions_dirpath = os.path.join(
             self.path, self._REVISIONS_DIRNAME)  # cache
         ip_revisions_dirpath = os.path.join(
@@ -872,6 +1001,10 @@ class Project(ListenableMixin):
         Raises:
         * sqlite3.DatabaseError, OSError
         """
+        if self.readonly:
+            raise ProjectReadOnlyError()
+        assert isinstance(self._fs, LocalFilesystem)
+        
         assert self._get_major_version(self._db) in [1, 2]
         
         revisions_dirpath = os.path.join(
@@ -907,6 +1040,10 @@ class Project(ListenableMixin):
         * CancelOpenProject
         * sqlite3.DatabaseError, OSError
         """
+        if self.readonly:
+            raise ProjectReadOnlyError()
+        assert isinstance(self._fs, LocalFilesystem)
+        
         assert self._get_major_version(self._db) == 3
         assert self._get_major_version_old(self._db) == 2
 
@@ -939,7 +1076,8 @@ class Project(ListenableMixin):
                         break
 
                     # Pack revisions [pack_start_id, pack_end_id], if not already done
-                    pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, pack_end_id)
+                    pack_filepath = ResourceRevision._body_pack_filepath_with(
+                        self._fs, self.path, pack_end_id)
                     if not os.path.exists(pack_filepath):
                         ResourceRevision._pack_revisions_for_id(
                             self,
@@ -1149,6 +1287,10 @@ class Project(ListenableMixin):
         Only applies to the highest-numbered pack that should exist based on the
         highest revision ID in the database.
         """
+        if self.readonly:
+            raise ProjectReadOnlyError()
+        assert isinstance(self._fs, LocalFilesystem)
+        
         assert self.major_version >= 3
         
         # Locate last revision and related pack boundaries
@@ -1163,14 +1305,16 @@ class Project(ListenableMixin):
         pack_end_id = max_revision_id
         
         # Check whether pack file is missing
-        pack_filepath = ResourceRevision._body_pack_filepath_with(self.path, max_revision_id)
+        pack_filepath = ResourceRevision._body_pack_filepath_with(
+            self._fs, self.path, max_revision_id)
         if os.path.exists(pack_filepath):
             return
         
         # Check if there are any individual revision files that should be in the pack
         has_any_revision_files = False
         for rid in range(pack_start_id, pack_end_id + 1):
-            hierarchical_body_filepath = ResourceRevision._body_filepath_with(self.path, 2, rid)
+            hierarchical_body_filepath = ResourceRevision._body_filepath_with(
+                self._fs, self.path, 2, rid)
             if os.path.exists(hierarchical_body_filepath):
                 has_any_revision_files = True
                 break
@@ -1311,6 +1455,8 @@ class Project(ListenableMixin):
         
         # Cleanup any temporary files from last session (unless is readonly)
         if not self.readonly:
+            assert isinstance(self._fs, LocalFilesystem)
+            
             tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
             if os.path.exists(tmp_dirpath):
                 for tmp_filename in os.listdir(tmp_dirpath):
@@ -2487,6 +2633,8 @@ class Project(ListenableMixin):
             if a file or directory exists at the specified path
         * ProjectReadOnlyError --
             the specified path is not writable
+        * NonLocalFilesystemNotSupported --
+            if this project resides on a non-local filesystem
         * CancelSaveAs --
             if the user cancels the save operation
         """
@@ -2502,6 +2650,12 @@ class Project(ListenableMixin):
             new_path: str, 
             progress_listener: Optional['SaveAsProgressListener'] = None
             ) -> Generator[SwitchToThread, None, None]:
+        # TODO: Add support for non-local filesystems to 
+        #       {_save_as_coro, _copytree_of_project_with_progress}
+        if not isinstance(self._fs, LocalFilesystem):
+            raise NonLocalFilesystemNotSupported(
+                'Save As does not support non-local filesystems yet')
+        
         if os.path.exists(new_path):
             raise FileExistsError(
                 f'Cannot save project to {new_path!r} because a file or '
@@ -2552,7 +2706,7 @@ class Project(ListenableMixin):
                         
                         # Copy
                         self._copytree_of_project_with_progress(
-                            old_path, new_partial_path, progress_listener)
+                            self._fs, old_path, new_partial_path, progress_listener)
                         os.rename(new_partial_path, new_path)
                         
                         # Delete
@@ -2563,7 +2717,7 @@ class Project(ListenableMixin):
                 else:
                     # Copy the project directory to the new path
                     self._copytree_of_project_with_progress(
-                        self.path, new_partial_path, progress_listener)
+                        self._fs, self.path, new_partial_path, progress_listener)
                     os.rename(new_partial_path, new_path)
             except:
                 # Clean up partial copy if an error occurs
@@ -2625,6 +2779,7 @@ class Project(ListenableMixin):
     @staticmethod
     @bg_affinity
     def _copytree_of_project_with_progress(
+            src_fs: Filesystem,
             src_project_dirpath: str,
             dst_project_dirpath: str,
             progress_listener: 'SaveAsProgressListener | None' = None
@@ -2636,6 +2791,7 @@ class Project(ListenableMixin):
         * CancelSaveAs -- if the user cancels the operation
         * ProjectFormatError -- if the project format appears to be invalid
         """
+        
         # Sample size chosen to be large enough to provide a reasonable estimate
         # of project size without taking too much time to collect.
         # 
@@ -2650,6 +2806,9 @@ class Project(ListenableMixin):
         
         # Ensure at least 1 report will be made during each 1-second interval
         TARGET_MAX_DELAY_BETWEEN_REPORTS = 0.5  # seconds
+        
+        if not isinstance(src_fs, LocalFilesystem):
+            raise NonLocalFilesystemNotSupported()
         
         if progress_listener is None:
             from crystal.progress.interface import DummySaveAsProgressListener
@@ -2701,6 +2860,7 @@ class Project(ListenableMixin):
                     continue
                 try:
                     revision_size = ResourceRevision._size_with(
+                        src_fs,
                         src_project_dirpath,
                         major_version,
                         revision_id,
@@ -2890,7 +3050,17 @@ class Project(ListenableMixin):
                             self._queue_migration_after_reopen(migrate_after_reopen)
                     finally:
                         try:
-                            self._close_database(self._db, self.readonly)
+                            try:
+                                self._close_database(self._db, self.readonly)
+                            finally:
+                                if self._db_tmp_file is not None:
+                                    self._db_tmp_file.close()
+                                    try:
+                                        # NOTE: Safe to do outside the Filesystem interface
+                                        #       because always targets a local file
+                                        os.remove(self._db_tmp_file.name)  # pylint: disable=no-direct-filesystem-access-in-model
+                                    except FileNotFoundError:
+                                        pass
                         finally:
                             try:
                                 if self.is_untitled and not _will_reopen:
@@ -2898,6 +3068,9 @@ class Project(ListenableMixin):
                                     # so that Crystal does not attempt to reopen it later
                                     del app_prefs.unsaved_untitled_project_path
                                     
+                                    if not isinstance(self._fs, LocalFilesystem):
+                                        raise NonLocalFilesystemNotSupported(
+                                            'Untitled projects are only supported on local filesystems')
                                     try:
                                         # Try to send the untitled project to the trash,
                                         # where the user can easily recover it if they change
@@ -2994,6 +3167,10 @@ class Project(ListenableMixin):
     @fg_affinity
     def _queue_migration_after_reopen(self, migration_type: MigrationType) -> None:
         """Marks this project to be migrated when it is next reopened."""
+        if self.readonly:
+            raise ProjectReadOnlyError()
+        assert isinstance(self._fs, LocalFilesystem)
+        
         if migration_type == MigrationType.FLAT_TO_HIERARCHICAL:  # v1 -> v2
             if self.major_version != 1:
                 raise ValueError()
@@ -3047,13 +3224,17 @@ class Project(ListenableMixin):
         
         Is the inverse of `close()`, but does not restore the state of tasks.
         """
+        if not isinstance(self._fs, LocalFilesystem):
+            raise NonLocalFilesystemNotSupported(
+                '(Re)opening a project as writable is not supported on a non-local filesystem')
+        
         try:
             cls = type(self)
             
             # Open database at the new path, attempting to open as writable
             old_readonly = self._readonly
-            with cls._open_database_but_close_if_raises(self.path, False, self._mark_dirty_if_untitled, expect_writable=False) as (
-                    self._db, new_readonly, self._database_is_on_ssd):
+            with cls._open_database_but_close_if_raises(self._fs, self.path, False, self._mark_dirty_if_untitled, expect_writable=False) as (
+                    self._db, new_readonly, self._database_is_on_ssd, self._db_tmp_file):
                 if new_readonly != old_readonly:
                     self._readonly = new_readonly
                     
@@ -3121,6 +3302,16 @@ class ProjectReadOnlyError(Exception):
 
 class ProjectClosedError(Exception):
     pass
+
+
+class NonLocalFilesystemReadOnlyError(NotImplementedError):
+    def __init__(self) -> None:
+        super().__init__('Writable projects stored in non-local filesystem are not supported')
+
+
+class NonLocalFilesystemNotSupported(NotImplementedError):
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(message or 'Operation not supported for a non-local filesystem')
 
 
 # ------------------------------------------------------------------------------
