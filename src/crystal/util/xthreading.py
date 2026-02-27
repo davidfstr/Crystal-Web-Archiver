@@ -28,7 +28,7 @@ import time
 import traceback
 from typing import Any, assert_never, cast, Deque, Optional, Protocol, TypeVar
 from typing_extensions import ParamSpec
-import wx
+
 
 # If True, then the runtime of foreground tasks is tracked to ensure
 # they are short. This is necessary to keep the UI responsive.
@@ -256,6 +256,8 @@ def fg_call_later(
         return
     
     try:
+        import wx
+        
         # NOTE: wx.CallAfter can be used on any thread
         # NOTE: Schedules a wx.PyEvent with category wx.EVT_CATEGORY_UI
         wx.CallAfter(_run_deferred_fg_calls)  # pylint: disable=no-direct-callafter
@@ -294,6 +296,8 @@ def _run_deferred_fg_calls() -> bool:
     Returns whether any callables were run.
     """
     if _deferred_fg_calls_paused:
+        import wx
+        
         # NOTE: wx.CallLater can be used on the foreground thread only
         # NOTE: Schedules a wx.TimerEvent with category wx.EVT_CATEGORY_TIMER
         wx.CallLater(1, _run_deferred_fg_calls)  # pylint: disable=no-direct-calllater
@@ -480,6 +484,8 @@ def fg_wait_for(condition_func: Callable[[], bool], *, timeout: float | None, po
     Raises:
     * TimeoutError -- if the condition does not become true within the specified timeout
     """
+    import wx
+    
     start_time = time.monotonic()  # capture
     app = wx.GetApp()
     loop = app.GetTraits().CreateEventLoop() if app is not None else None
