@@ -6,7 +6,8 @@ from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import (
     Project, ProjectReadOnlyError, Resource, ResourceGroup, RootResource,
 )
-from crystal.progress import CancelSaveAs, SaveAsProgressDialog
+from crystal.progress.interface import CancelSaveAs
+from crystal.progress.ui import SaveAsProgressDialog
 from crystal.task import DownloadResourceGroupTask, DownloadResourceTask
 from crystal.tests.util import xtempfile
 from crystal.tests.util.cli import (

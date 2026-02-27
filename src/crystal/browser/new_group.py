@@ -5,7 +5,7 @@ from crystal.browser.new_root_url import (
     fields_hide_hint_when_focused, NewRootUrlDialog,
 )
 from crystal.model import Project, ResourceGroup, ResourceGroupSource
-from crystal.progress import CancelLoadUrls
+from crystal.progress.interface import CancelLoadUrls
 from crystal.util import features
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.wx_bind import bind

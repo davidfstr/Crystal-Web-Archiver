@@ -10,7 +10,7 @@ This abstraction provides:
 from __future__ import annotations
 
 from collections.abc import Callable, Container
-from crystal.progress import OpenProjectProgressListener
+from crystal.progress.interface import OpenProjectProgressListener
 from crystal.util.bulkheads import run_bulkhead_call
 from crystal.util.wx_bind import bind
 from crystal.util.wx_error import (

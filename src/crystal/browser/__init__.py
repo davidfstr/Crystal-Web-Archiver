@@ -15,10 +15,11 @@ from crystal.model import (
     Alias, Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
 from crystal.model.project import MigrationType
-from crystal.progress import (
+from crystal.progress.interface import (
     CancelLoadUrls, CancelSaveAs, DummyOpenProjectProgressListener,
-    OpenProjectProgressListener, SaveAsProgressDialog,
+    OpenProjectProgressListener,
 )
+from crystal.progress.ui import SaveAsProgressDialog
 from crystal.server import ProjectServer
 from crystal.task import RootTask
 from crystal.ui.actions import Action

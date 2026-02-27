@@ -1,9 +1,9 @@
 from contextlib import closing
 from functools import wraps
-from crystal import progress
 import crystal.main
 from crystal.model import Project, Resource
-from crystal.progress import CancelOpenProject
+from crystal.progress.interface import CancelOpenProject
+from crystal.progress import interface as progress_interface
 from crystal.tests.util.asserts import assertEqual
 from crystal.tests.util.cli import crystal_shell, py_eval_await_literal
 from crystal.util.controls import TreeItem
@@ -41,11 +41,11 @@ def skip_if_not_macos(func):
 async def test_when_create_project_then_shows_dialog_saying_opening_project_but_no_other_messages() -> None:
     ocd = await OpenOrCreateDialog.wait_for()
     
-    progress_listener = progress._active_progress_listener
+    progress_listener = progress_interface._active_progress_listener
     assert progress_listener is not None
     
-    with patch('crystal.progress._DELAY_UNTIL_PROGRESS_DIALOG_SHOWS', 0), \
-            patch('crystal.progress.wx.ProgressDialog', autospec=True) as MockProgressDialog:
+    with patch('crystal.progress.ui._DELAY_UNTIL_PROGRESS_DIALOG_SHOWS', 0), \
+            patch('crystal.progress.ui.wx.ProgressDialog', autospec=True) as MockProgressDialog:
         pd = MockProgressDialog.return_value
         pd.Pulse.return_value = (True, False)
         pd.Update.return_value = (True, False)
@@ -412,7 +412,7 @@ async def test_given_project_opening_when_click_cancel_then_returns_to_prompt_di
             with subtests.test(method_name=method_name):
                 ocd = await OpenOrCreateDialog.wait_for()
                 
-                progress_listener = progress._active_progress_listener
+                progress_listener = progress_interface._active_progress_listener
                 assert progress_listener is not None
                 
                 with patch.object(progress_listener, method_name, side_effect=CancelOpenProject):

@@ -33,7 +33,7 @@ from typing_extensions import override
 if TYPE_CHECKING:
     from crystal.browser import MainWindow
     from crystal.model import Project
-    from crystal.progress import OpenProjectProgressListener
+    from crystal.progress.interface import OpenProjectProgressListener
     from crystal.shell import Shell
     import wx
 
@@ -874,7 +874,8 @@ async def _did_launch(
     * SystemExit -- if the user quits
     """
     from crystal.model import Project
-    from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
+    from crystal.progress.interface import CancelOpenProject
+    from crystal.progress.ui import OpenProjectProgressDialog
     from crystal.util.ports import is_port_in_use_error
     from crystal.util.server_ports import DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT
     from crystal.util.test_mode import tests_are_running
@@ -912,8 +913,8 @@ async def _did_launch(
             with OpenProjectProgressDialog() as progress_listener:
                 # Export reference to progress_listener, if running tests
                 if tests_are_running():
-                    from crystal import progress
-                    progress._active_progress_listener = progress_listener
+                    from crystal.progress import interface as progress_interface
+                    progress_interface._active_progress_listener = progress_listener
                 
                 # Calculate whether to open as readonly
                 effective_readonly: bool
@@ -1055,7 +1056,7 @@ async def _prompt_for_project(
     * SystemExit -- if the user quits rather than providing a project
     """
     from crystal.browser import MainWindow
-    from crystal.progress import CancelOpenProject
+    from crystal.progress.interface import CancelOpenProject
     from crystal.ui.dialog import BetterMessageDialog
     from crystal.util.wx_bind import bind
     from crystal.util.wx_window import SetFocus
@@ -1189,8 +1190,8 @@ def _create_untitled_project(
         **project_kwargs: object
         ) -> Project:
     from crystal.model import Project
-    from crystal.progress import LoadUrlsProgressDialog
-    
+    from crystal.progress.ui import LoadUrlsProgressDialog
+
     return Project(
         None,  # untitled
         progress_listener, 
@@ -1209,7 +1210,7 @@ def _prompt_to_open_project(
     * CancelOpenProject -- if the user cancels the prompt early
     """
     from crystal.model import Project
-    from crystal.progress import CancelOpenProject
+    from crystal.progress.interface import CancelOpenProject
     from crystal.util.wx_bind import bind
     from crystal.util.wx_dialog import ShowFileDialogModal
     from crystal.util.xos import is_linux, is_mac_os, is_windows
@@ -1300,7 +1301,8 @@ def _load_project(
     * CancelOpenProject
     """
     from crystal.model import Project, ProjectFormatError, ProjectReadOnlyError, ProjectTooNewError
-    from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog
+    from crystal.progress.interface import CancelOpenProject
+    from crystal.progress.ui import LoadUrlsProgressDialog
     from crystal.util.wx_dialog import position_dialog_initially
     import wx
     
