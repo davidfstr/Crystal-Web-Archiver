@@ -9,10 +9,10 @@ See doc/tech_designs/pack16.md for more information.
 from collections.abc import Iterator
 from contextlib import closing, contextmanager, redirect_stderr
 from unittest import skip
-from crystal import progress
 from crystal.model import Project, Resource, ResourceRevision as RR, NoRevisionBodyError, RevisionBodyMissingError
 from crystal.model.project import MigrationType
-from crystal.progress import CancelOpenProject
+from crystal.progress.interface import CancelOpenProject
+from crystal.progress import interface as progress_interface
 from crystal.tests.model.test_project_migrate import (
     progress_reported_at_maximum_resolution,
     project_opened_without_migrating,
@@ -924,7 +924,7 @@ async def test_given_migration_in_progress_when_cancel_and_reopen_project_then_m
     if True:
         ocd = await OpenOrCreateDialog.wait_for()
 
-        progress_listener = progress._active_progress_listener
+        progress_listener = progress_interface._active_progress_listener
         assert progress_listener is not None
 
         # Prepare to: Cancel migration in the middle
@@ -1538,7 +1538,7 @@ async def test_given_disk_disconnects_before_migration_reaches_intermediate_chec
     # Reopen project. Migration should detect disk disconnect and abort.
     with patch('os.listdir', mock_listdir), \
             patch('crystal.model.pack16.create_pack_file', mock_create_pack_file), \
-            patch('crystal.progress.ShowModal',
+            patch('crystal.progress.ui.ShowModal',
                 mocked_show_modal('cr-disk-error', wx.ID_OK)) as show_modal_method, \
             _revision_count_between_disk_health_checks_set_to(32):
         ocd = await OpenOrCreateDialog.wait_for()
@@ -1620,7 +1620,7 @@ async def test_given_disk_disconnects_before_migration_reaches_final_checkpoint_
     #       only the final checkpoint should catch the disconnect
     with patch('os.listdir', mock_listdir), \
             patch('crystal.model.pack16.create_pack_file', mock_create_pack_file), \
-            patch('crystal.progress.ShowModal',
+            patch('crystal.progress.ui.ShowModal',
                 mocked_show_modal('cr-disk-error', wx.ID_OK)) as show_modal_method:
         ocd = await OpenOrCreateDialog.wait_for()
         await ocd.start_opening(project_dirpath, next_window_name='cr-open-or-create-project')

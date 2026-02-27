@@ -1,5 +1,5 @@
 from crystal.model import Project, Resource, ResourceGroup
-from crystal.progress import CancelLoadUrls
+from crystal.progress.interface import CancelLoadUrls
 # TODO: Consider extracting serve_and_fetch_xkcd_home_page() to utility module
 from crystal.tests.test_server import serve_and_fetch_xkcd_home_page
 from crystal.util.controls import click_button, TreeItem

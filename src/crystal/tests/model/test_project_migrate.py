@@ -9,12 +9,12 @@ All tests below implicitly include the condition:
 """
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, closing, contextmanager
-from crystal import progress
-import crystal.main
 from crystal.model import Project, Resource
 from crystal.model import ResourceRevision as RR
 from crystal.model import ResourceRevisionMetadata
-from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
+from crystal.progress.interface import CancelOpenProject
+from crystal.progress import interface as progress_interface
+from crystal.progress.ui import OpenProjectProgressDialog
 from crystal.tests.test_server import serve_and_fetch_xkcd_home_page
 from crystal.tests.util.runner import bg_sleep
 from crystal.tests.util.server import extracted_project
@@ -140,7 +140,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
         
         with _upgrade_required_modal_always_shown(), \
                 patch(
-                    'crystal.progress.ShowModal',
+                    'crystal.progress.ui.ShowModal',
                     # Prepare to: Accept upgrade
                     mocked_show_modal('cr-upgrade-required', continue_button_id)
                     ) as show_modal_method:
@@ -172,7 +172,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
         
         with _upgrade_required_modal_always_shown(), \
                 patch(
-                    'crystal.progress.ShowModal',
+                    'crystal.progress.ui.ShowModal',
                     # Prepare to: Defer upgrade
                     mocked_show_modal('cr-upgrade-required', later_button_id)
                     ) as show_modal_method:
@@ -194,7 +194,7 @@ async def test_when_prompted_to_upgrade_project_from_major_version_1_to_2_then_c
         
         with _upgrade_required_modal_always_shown(), \
                 patch(
-                    'crystal.progress.ShowModal',
+                    'crystal.progress.ui.ShowModal',
                     # Prepare to: Cancel
                     mocked_show_modal('cr-upgrade-required', wx.ID_CANCEL)
                     ) as show_modal_method:
@@ -324,7 +324,7 @@ async def test_can_cancel_and_resume_upgrade_of_project_from_major_version_1_to_
         if True:
             ocd = await OpenOrCreateDialog.wait_for()
             
-            progress_listener = progress._active_progress_listener
+            progress_listener = progress_interface._active_progress_listener
             assert progress_listener is not None
             
             # Prepare to: Cancel upgrade in the middle

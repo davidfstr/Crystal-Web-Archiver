@@ -45,6 +45,11 @@ Release Notes ⋮
 * Documentation improvements
     * Project format documented at: <doc/crystalproj_project_format.md>
 
+* Headless mode fixes
+    * UI progress dialogs will now never show in headless mode.
+    * wxPython is now never even loaded in headless mode.
+      Therefore Crystal can now be run (in headless mode) if wxPython isn't installed.
+
 ### v2.2.0 (January 27, 2026)
 
 Many developer-facing improvements are in this release:

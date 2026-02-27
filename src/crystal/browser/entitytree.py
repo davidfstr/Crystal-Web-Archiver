@@ -11,7 +11,7 @@ from crystal.model import (
     ResourceGroupSource, ResourceRevision, RevisionBodyMissingError,
     RevisionDeletedError, RootResource,
 )
-from crystal.progress import (
+from crystal.progress.interface import (
     CancelLoadUrls, DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
 )

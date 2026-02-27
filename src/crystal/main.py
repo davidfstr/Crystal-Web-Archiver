@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import atexit
 from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 import datetime
 import io
 import locale
@@ -33,7 +34,7 @@ from typing_extensions import override
 if TYPE_CHECKING:
     from crystal.browser import MainWindow
     from crystal.model import Project
-    from crystal.progress import OpenProjectProgressListener
+    from crystal.progress.interface import OpenProjectProgressListener
     from crystal.shell import Shell
     import wx
 
@@ -474,14 +475,22 @@ def _main2(args: list[str]) -> None:
         exit_code = 0 if is_ok else 1
         sys.exit(exit_code)
     
-    # Start GUI subsystem
-    if 'wx' in sys.modules:
-        raise AssertionError('wx was imported earlier than intended')
-    import wx
-    import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
-    import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
-    assert 'wx' in sys.modules
+    # Set headless mode, before anybody tries to call fg_call_later or access the wx module
+    from crystal.util.headless import set_headless_mode
+    set_headless_mode(parsed_args.headless)
     
+    # Start GUI subsystem (or fake in --headless mode)
+    if parsed_args.headless:
+        from crystal.util.wx_fake import install_fake_wx
+        install_fake_wx()
+    else:
+        if 'wx' in sys.modules:
+            raise AssertionError('wx was imported earlier than intended')
+        import wx
+        import wx.richtext  # must import before wx.App object is created, according to wx.richtext module docstring
+        import wx.xml  # required by wx.richtext; use explicit import as hint to py2app
+        assert 'wx' in sys.modules
+
     def on_atexit() -> None:
         """Called when the main thread and all non-daemon threads have exited."""
 
@@ -509,10 +518,6 @@ def _main2(args: list[str]) -> None:
         os._exit(exit_code)
     atexit.register(on_atexit)
     
-    # Set headless mode, before anybody tries to call fg_call_later
-    from crystal.util.headless import set_headless_mode
-    set_headless_mode(parsed_args.headless)
-    
     # Create shell if requested. But don't start it yet.
     if parsed_args.shell:
         from crystal.shell import Shell
@@ -532,7 +537,13 @@ def _main2(args: list[str]) -> None:
     # 2. Initialize the foreground thread
     from crystal.util.bulkheads import capture_crashes_to_stderr
     from crystal.util.xthreading import fg_affinity
-    class MyApp(wx.App):
+    if parsed_args.headless and not TYPE_CHECKING:
+        # Give MyApp a fake superclass in headless mode because it will
+        # never be instantiated
+        wx_App = object
+    else:
+        wx_App = wx.App  # type: type[wx.App]
+    class MyApp(wx_App):
         def __init__(self, *args, **kwargs):
             from crystal import APP_NAME
             from crystal.util.wx_bind import bind
@@ -870,7 +881,7 @@ async def _did_launch(
     * SystemExit -- if the user quits
     """
     from crystal.model import Project
-    from crystal.progress import CancelOpenProject, OpenProjectProgressDialog
+    from crystal.progress.interface import CancelOpenProject, DummyOpenProjectProgressListener
     from crystal.util.ports import is_port_in_use_error
     from crystal.util.server_ports import DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT
     from crystal.util.test_mode import tests_are_running
@@ -905,11 +916,19 @@ async def _did_launch(
             # No project to open in headless shell mode
             project = None
         else:
-            with OpenProjectProgressDialog() as progress_listener:
+            if parsed_args.headless:
+                progress_listener_ctx = nullcontext(
+                    DummyOpenProjectProgressListener()
+                )  # type: AbstractContextManager[OpenProjectProgressListener]
+            else:
+                from crystal.progress.ui import OpenProjectProgressDialog
+                progress_listener_ctx = OpenProjectProgressDialog()
+            
+            with progress_listener_ctx as progress_listener:
                 # Export reference to progress_listener, if running tests
                 if tests_are_running():
-                    from crystal import progress
-                    progress._active_progress_listener = progress_listener
+                    from crystal.progress import interface as progress_interface
+                    progress_interface._active_progress_listener = progress_listener
                 
                 # Calculate whether to open as readonly
                 effective_readonly: bool
@@ -1051,7 +1070,7 @@ async def _prompt_for_project(
     * SystemExit -- if the user quits rather than providing a project
     """
     from crystal.browser import MainWindow
-    from crystal.progress import CancelOpenProject
+    from crystal.progress.interface import CancelOpenProject
     from crystal.ui.dialog import BetterMessageDialog
     from crystal.util.wx_bind import bind
     from crystal.util.wx_window import SetFocus
@@ -1185,8 +1204,8 @@ def _create_untitled_project(
         **project_kwargs: object
         ) -> Project:
     from crystal.model import Project
-    from crystal.progress import LoadUrlsProgressDialog
-    
+    from crystal.progress.ui import LoadUrlsProgressDialog
+
     return Project(
         None,  # untitled
         progress_listener, 
@@ -1205,7 +1224,7 @@ def _prompt_to_open_project(
     * CancelOpenProject -- if the user cancels the prompt early
     """
     from crystal.model import Project
-    from crystal.progress import CancelOpenProject
+    from crystal.progress.interface import CancelOpenProject
     from crystal.util.wx_bind import bind
     from crystal.util.wx_dialog import ShowFileDialogModal
     from crystal.util.xos import is_linux, is_mac_os, is_windows
@@ -1296,7 +1315,8 @@ def _load_project(
     * CancelOpenProject
     """
     from crystal.model import Project, ProjectFormatError, ProjectReadOnlyError, ProjectTooNewError
-    from crystal.progress import CancelOpenProject, LoadUrlsProgressDialog
+    from crystal.progress.interface import CancelOpenProject, DummyLoadUrlsProgressListener
+    from crystal.util.headless import is_headless_mode
     from crystal.util.wx_dialog import position_dialog_initially
     import wx
     
@@ -1304,8 +1324,19 @@ def _load_project(
         from crystal.util.wx_dialog import ShowModal as _show_modal_func
     assert _show_modal_func is not None  # help mypy
     
+    if is_headless_mode():
+        load_urls_progress_listener = DummyLoadUrlsProgressListener()
+    else:
+        from crystal.progress.ui import LoadUrlsProgressDialog
+        load_urls_progress_listener = LoadUrlsProgressDialog()
+    
     try:
-        return Project(project_path, progress_listener, LoadUrlsProgressDialog(), **project_kwargs)  # type: ignore[arg-type]
+        return Project(
+            project_path,
+            progress_listener,
+            load_urls_progress_listener,
+            **project_kwargs  # type: ignore[arg-type]
+        )
     except ProjectReadOnlyError:
         # TODO: Present this error to the user nicely
         raise

@@ -379,12 +379,14 @@ def set_dialog_or_frame_icon_if_appropriate(tlw: wx.TopLevelWindow) -> None:
 def CreateButtonSizer(
         parent: wx.Dialog,
         affirmative_id: int | None=None,
-        cancel_id=wx.ID_CANCEL,
+        cancel_id: int | None=None,
         ) -> wx.Sizer:
     """
     Has a similar effect as wx.Dialog.CreateButtonSizer() but supports any
     value for the `affirmative_id`.
     """
+    if cancel_id is None:
+        cancel_id = wx.ID_CANCEL
     sizer = wx.StdDialogButtonSizer()
     
     if affirmative_id is not None:

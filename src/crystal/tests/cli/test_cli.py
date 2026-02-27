@@ -13,8 +13,21 @@ from crystal.tests.util.asserts import (
     assertEqual, assertIn, assertNotIn, assertRegex
 )
 from crystal.tests.util.cli import (
-    ReadUntilTimedOut, close_open_or_create_dialog, drain, py_eval, py_eval_await, py_eval_literal, py_exec, read_until, crystal_shell,
-    crystal_running_with_banner, run_crystal, wait_for_crystal_to_exit, wait_for_main_window,
+    close_open_or_create_dialog,
+    crystal_running_with_banner,
+    crystal_shell,
+    drain,
+    PROJECT_PROXY_REPR_STR,
+    py_eval_await,
+    py_eval_literal,
+    py_eval,
+    py_exec,
+    read_until,
+    ReadUntilTimedOut,
+    run_crystal,
+    wait_for_crystal_to_exit,
+    wait_for_main_window,
+    WINDOW_PROXY_REPR_STR,
 )
 from crystal.tests.util.server import extracted_project, served_project
 from crystal.tests.util.skip import skipTest
@@ -381,10 +394,10 @@ def test_when_launched_with_shell_and_no_project_filepath_then_shell_starts_with
     with crystal_shell() as (crystal, banner):
         # Verify project and window variables are unset proxies (not real objects)
         result = py_eval_literal(crystal, 'repr(project)')
-        assertIn('<unset crystal.model.project.Project proxy>', result)
+        assertEqual(PROJECT_PROXY_REPR_STR.strip(), result)
         
         result = py_eval_literal(crystal, 'repr(window)')
-        assertIn('<unset crystal.browser.MainWindow proxy>', result)
+        assertEqual(WINDOW_PROXY_REPR_STR.strip(), result)
 
 
 def test_when_launched_with_shell_and_project_filepath_then_shell_starts_with_opened_project() -> None:
@@ -501,7 +514,7 @@ def test_when_headless_shell_with_project_then_starts_shell_without_gui() -> Non
         ) as (crystal, banner_metadata):
             assertIn('<crystal.model.project.Project object at 0x', py_eval_literal(crystal, 'repr(project)'))
             assertEqual(project_path, py_eval_literal(crystal, 'project.path'))
-            assertIn('<unset crystal.browser.MainWindow proxy>', py_eval_literal(crystal, 'repr(window)'))
+            assertEqual(WINDOW_PROXY_REPR_STR.strip(), py_eval_literal(crystal, 'repr(window)'))
             
             # Simulate Ctrl-D to exit the shell
             assert crystal.stdin is not None
@@ -520,8 +533,8 @@ def test_when_headless_shell_without_project_then_starts_shell_without_gui() -> 
             'version', 'help', 'variables', 'exit', 'prompt'
         ]
     ) as (crystal, banner_metadata):
-        assertIn('<unset crystal.model.project.Project proxy>', py_eval_literal(crystal, 'repr(project)'))
-        assertIn('<unset crystal.browser.MainWindow proxy>', py_eval_literal(crystal, 'repr(window)'))
+        assertEqual(PROJECT_PROXY_REPR_STR.strip(), py_eval_literal(crystal, 'repr(project)'))
+        assertEqual(WINDOW_PROXY_REPR_STR.strip(), py_eval_literal(crystal, 'repr(window)'))
 
 
 def test_when_headless_serve_shell_with_project_then_starts_both_server_and_shell() -> None:
@@ -535,7 +548,7 @@ def test_when_headless_serve_shell_with_project_then_starts_both_server_and_shel
         ) as (crystal, banner_metadata):
             assertIn('<crystal.model.project.Project object at 0x', py_eval_literal(crystal, 'repr(project)'))
             assertEqual(project_path, py_eval_literal(crystal, 'project.path'))
-            assertIn('<unset crystal.browser.MainWindow proxy>', py_eval_literal(crystal, 'repr(window)'))
+            assertEqual(WINDOW_PROXY_REPR_STR.strip(), py_eval_literal(crystal, 'repr(window)'))
             
             assert banner_metadata.server_url is not None
             _ensure_server_is_accessible(banner_metadata.server_url)

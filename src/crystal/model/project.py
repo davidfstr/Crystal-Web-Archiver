@@ -12,7 +12,7 @@ from crystal.model.resource_revision import (
     NoRevisionBodyError, ResourceRevision,
 )
 from crystal.model.root_resource import RootResource
-from crystal.progress import (
+from crystal.progress.interface import (
     CancelLoadUrls, CancelOpenProject, DummyLoadUrlsProgressListener, DummyOpenProjectProgressListener,
     LoadUrlsProgressListener, OpenProjectProgressListener,
     SaveAsProgressListener, VetoUpgradeProject,
@@ -2652,7 +2652,7 @@ class Project(ListenableMixin):
         TARGET_MAX_DELAY_BETWEEN_REPORTS = 0.5  # seconds
         
         if progress_listener is None:
-            from crystal.progress import DummySaveAsProgressListener
+            from crystal.progress.interface import DummySaveAsProgressListener
             progress_listener = DummySaveAsProgressListener()
         
         # Calculate approximate size of project resource revision files
