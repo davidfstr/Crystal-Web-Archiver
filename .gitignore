@@ -1,5 +1,6 @@
 # AI Coding
 /plan
+pytest-of-*
 
 # Crystal: Profiling output (local)
 *.prof
