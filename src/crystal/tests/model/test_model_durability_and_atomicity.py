@@ -327,7 +327,7 @@ async def test_create_resource_revision_is_durable() -> None:
                     patch('os.fsync', side_effect=spy_fsync), \
                     patch('crystal.model.resource_revision.NamedTemporaryFile', side_effect=spy_named_temp_file), \
                     patch('os.open', side_effect=spy_os_open), \
-                    patch('crystal.model.resource_revision.replace_and_flush', side_effect=spy_replace_and_flush):
+                    patch('crystal.filesystem.LocalFilesystem.replace_and_flush', side_effect=spy_replace_and_flush):
                 # Internally calls download_resource_revision() on a background thread.
                 revision_future = r.download_body()
                 revision = await wait_for_future(revision_future)
@@ -572,7 +572,7 @@ async def _test_orphaned_revision_repair(
                     assertEqual(4, project._revision_count(), 
                         'Orphaned revision should exist in database after failed rollback')
                     assert False == os.path.exists(ResourceRevision._body_filepath_with(
-                        project._fs, project.path, project.major_version, revision_id=4,
+                        project._fs_path, project.major_version, revision_id=4,
                     ))
                 
                 elif last_revision_error_type == 'bad_block':
@@ -728,7 +728,7 @@ async def test_given_last_revision_body_missing_and_other_revision_bodies_also_m
     def before_reopen(project_dirpath: str, project: Project) -> None:
         # Delete revision 3's body file to simulate filesystem issues
         revision3_filepath = ResourceRevision._body_filepath_with(
-            project._fs, project_dirpath, project.major_version, revision_id=3)
+            project._fs_path, project.major_version, revision_id=3)
         if os.path.exists(revision3_filepath):
             os.remove(revision3_filepath)
     

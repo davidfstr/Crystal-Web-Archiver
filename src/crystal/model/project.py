@@ -4,7 +4,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Generator, Iterable, Iterator
 from concurrent.futures import Future
 from contextlib import closing, contextmanager
-from crystal.filesystem import Filesystem, LocalFilesystem, S3Filesystem
+from crystal.filesystem import Filesystem, FilesystemPath, LocalFilesystem, S3Filesystem
 from crystal import resources as resources_
 from crystal.model.alias import Alias
 from crystal.model.resource import Resource
@@ -26,7 +26,6 @@ from crystal.util.db import (
     get_index_names, get_table_names, is_no_such_column_error_for,
 )
 from crystal.util.ellipsis import Ellipsis
-from crystal.util.filesystem import replace_and_flush, flush_renames_in_directory
 from crystal.util.listenable import ListenableMixin
 from crystal.util.profile import profiling_context
 from crystal.util.progress import DevNullFile
@@ -52,10 +51,9 @@ import datetime
 from enum import Enum, StrEnum, auto
 import json
 import math
-import os
 import pathlib
 import re
-from send2trash import send2trash, TrashPermissionError
+from send2trash import TrashPermissionError
 import shutil
 from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
 from sortedcontainers import SortedList
@@ -243,54 +241,56 @@ class Project(ListenableMixin):
         self._load_urls_progress_listener = load_urls_progress_listener
         readonly_requested = readonly  # rename for clarity
         
-        # If path is missing then prepare to create an untitled project
-        if path is None:
-            # Create an untitled project in a permanent but hidden directory
-            untitled_projects_dir = user_untitled_projects_dir()
-            assert os.path.exists(untitled_projects_dir)
-            project_name = f'Untitled-{uuid.uuid4().hex[:8]}{Project.FILE_EXTENSION}'
-            untitled_project_dirpath = os.path.join(untitled_projects_dir, project_name)
-            assert not os.path.exists(untitled_project_dirpath)
+        # Compute/set the project's path
+        if True:
+            # If path is missing then prepare to create an untitled project
+            if path is None:
+                # Create an untitled project in a permanent but hidden directory
+                lfs = LocalFilesystem()
+                untitled_projects_dir = user_untitled_projects_dir()
+                assert lfs.exists(untitled_projects_dir)
+                project_name = f'Untitled-{uuid.uuid4().hex[:8]}{Project.FILE_EXTENSION}'
+                untitled_project_dirpath = lfs.join(untitled_projects_dir, project_name)
+                assert not lfs.exists(untitled_project_dirpath)
+                
+                path = untitled_project_dirpath  # reinterpret
+                is_untitled = True  # reinterpret
             
-            path = untitled_project_dirpath  # reinterpret
-            is_untitled = True  # reinterpret
-        
-        if S3Filesystem.recognizes_path(path):
-            (s3_credentials, plain_path) = S3Filesystem.split_credentials_if_present(path)
-            fs: Filesystem = S3Filesystem(s3_credentials)
-            path = plain_path  # reinterpret
-        elif LocalFilesystem.recognizes_path(path):
-            fs = LocalFilesystem()
-        else:
-            raise AssertionError(f'Unknown kind of path: {path}')
-        self._fs = fs
-        
-        # Normalize the project path, to end with .crystalproj and not /
-        if isinstance(fs, LocalFilesystem):
-            # Remove any trailing slash from the path
-            (head, tail) = os.path.split(path)
-            if len(tail) == 0:
-                path = head  # reinterpret
+            if S3Filesystem.recognizes_path(path):
+                (s3_credentials, plain_path) = S3Filesystem.split_credentials_if_present(path)
+                fs: Filesystem = S3Filesystem(s3_credentials)
+                path = plain_path  # reinterpret
+            elif LocalFilesystem.recognizes_path(path):
+                fs = LocalFilesystem()
+            else:
+                raise AssertionError(f'Unknown kind of path: {path}')
             
-            # Normalize path
-            normalized_path = self._normalize_project_path(path)  # reinterpret
-            if normalized_path is None:
-                raise ProjectFormatError(f'Project does not end with {self.FILE_EXTENSION}')
-            path = normalized_path  # reinterpret
-        elif isinstance(fs, S3Filesystem):
-            # Remove any trailing slash from the key
-            (bucket_name, key, region) = fs.parse_url(path)
-            if key.endswith('/'):
-                key = key.removesuffix('/')  # reinterpret
-            path = fs.format_url(bucket_name, key, region)  # reinterpret
+            # Normalize the project path, to end with .crystalproj and not /
+            if isinstance(fs, LocalFilesystem):
+                # Remove any trailing slash from the path
+                (head, tail) = fs.split(path)
+                if len(tail) == 0:
+                    path = head  # reinterpret
+
+                # Normalize path
+                normalized_path = self._normalize_project_path(path)  # reinterpret
+                if normalized_path is None:
+                    raise ProjectFormatError(f'Project does not end with {self.FILE_EXTENSION}')
+                path = normalized_path  # reinterpret
+            elif isinstance(fs, S3Filesystem):
+                # Remove any trailing slash from the key
+                (bucket_name, key, region) = fs.parse_url(path)
+                if key.endswith('/'):
+                    key = key.removesuffix('/')  # reinterpret
+                path = fs.format_url(bucket_name, key, region)  # reinterpret
+
+                # Normalize path
+                # (TODO: Call _normalize_project_path here, after adapting it to
+                #        use the Filesystem interface to manipulate paths)
+            else:
+                assert_never(fs)
             
-            # Normalize path
-            # (TODO: Call _normalize_project_path here, after adapting it to
-            #        use the Filesystem interface to manipulate paths)
-        else:
-            assert_never(fs)
-        
-        self.path = path
+            self._fs_path = FilesystemPath(fs, path)
         
         self._closed = False
         self._readonly = True  # will reinitialize after database is located
@@ -311,7 +311,7 @@ class Project(ListenableMixin):
         progress_listener.opening_project()
         
         if isinstance(fs, LocalFilesystem):
-            create = not os.path.exists(path)
+            create = not fs.exists(path)
             if create and readonly_requested:
                 # Can't create a project if cannot write to disk
                 raise ProjectReadOnlyError(
@@ -330,12 +330,12 @@ class Project(ListenableMixin):
             # Create/verify project structure
             if create:
                 assert isinstance(fs, LocalFilesystem)
-                cls._create_directory_structure(path)
+                cls._create_directory_structure(path, fs)
             else:
-                cls._ensure_directory_structure_valid(fs, path)
+                cls._ensure_directory_structure_valid(self._fs_path)
             try:
                 # NOTE: May raise ProjectReadOnlyError if the database cannot be opened as writable
-                with cls._open_database_but_close_if_raises(fs, path, readonly_requested, self._mark_dirty_if_untitled, expect_writable=create) as (
+                with cls._open_database_but_close_if_raises(self._fs_path, readonly_requested, self._mark_dirty_if_untitled, expect_writable=create) as (
                             self._db, self._readonly, self._database_is_on_ssd, self._db_tmp_file):
                     # Create new project content, if missing
                     if create:
@@ -360,7 +360,7 @@ class Project(ListenableMixin):
             except:
                 if create:
                     assert isinstance(fs, LocalFilesystem)
-                    shutil.rmtree(path, ignore_errors=True)
+                    fs.rmtree(path, ignore_errors=True)
                 raise
         finally:
             self._loading = False
@@ -380,33 +380,32 @@ class Project(ListenableMixin):
             Project._last_opened_project = self
     
     @classmethod
-    def _create_directory_structure(cls, project_path: str) -> None:
+    def _create_directory_structure(cls, project_path: str, lfs: LocalFilesystem) -> None:
         """
         Create a new project's directory structure, minus the database file.
         """
-        os.mkdir(project_path)
-        os.mkdir(os.path.join(project_path, cls._REVISIONS_DIRNAME))
-        
+        lfs.mkdir(project_path)
+        lfs.mkdir(lfs.join(project_path, cls._REVISIONS_DIRNAME))
+
         # TODO: Consider let _apply_migrations() define the rest of the
         #       project structure, rather than duplicating logic here
-        os.mkdir(os.path.join(project_path, cls._TEMPORARY_DIRNAME))
-        with open(os.path.join(project_path, cls._OPENER_DEFAULT_FILENAME), 'wb') as f:
+        lfs.mkdir(lfs.join(project_path, cls._TEMPORARY_DIRNAME))
+        with open(lfs.join(project_path, cls._OPENER_DEFAULT_FILENAME), 'wb') as f:
             f.write(cls._OPENER_DEFAULT_CONTENT)
-        with open(os.path.join(project_path, cls._README_FILENAME), 'w', newline='') as tf:
+        with open(lfs.join(project_path, cls._README_FILENAME), 'w', newline='') as tf:
             tf.write(cls._README_DEFAULT_CONTENT)
-        with open(os.path.join(project_path, cls._DESKTOP_INI_FILENAME), 'w', newline='') as tf:
+        with open(lfs.join(project_path, cls._DESKTOP_INI_FILENAME), 'w', newline='') as tf:
             tf.write(cls._DESKTOP_INI_CONTENT)
-        os.mkdir(os.path.join(project_path, cls._ICONS_DIRNAME))
+        lfs.mkdir(lfs.join(project_path, cls._ICONS_DIRNAME))
         with resources_.open_binary('docicon.ico') as src_file:
-            with open(os.path.join(project_path, cls._ICONS_DIRNAME, 'docicon.ico'), 'wb') as dst_file:
+            with open(lfs.join(project_path, cls._ICONS_DIRNAME, 'docicon.ico'), 'wb') as dst_file:
                 shutil.copyfileobj(src_file, dst_file)
     
     @classmethod
     @contextmanager
     def _open_database_but_close_if_raises(
             cls,
-            fs: Filesystem,
-            project_path: str,
+            fs_path: FilesystemPath,
             readonly_requested: bool,
             mark_dirty_func: Callable[[], None],
             expect_writable: bool
@@ -418,22 +417,24 @@ class Project(ListenableMixin):
         Yields (db, readonly_actual, database_is_on_ssd, db_tmp_file).
 
         Effects of this method are reversed by `_close_database()`.
-        
+
         Raises:
-        * ProjectReadOnlyError -- 
+        * ProjectReadOnlyError --
             if expect_writable is True but the project database cannot be opened as writable
         """
+        (fs, project_path) = fs_path
+        
         tmp_db_file = None  # type: IO[bytes] | None
         if isinstance(fs, LocalFilesystem):
-            db_filepath = os.path.join(project_path, cls._DB_FILENAME)  # cache
+            db_filepath = fs.join(project_path, cls._DB_FILENAME)  # cache
             can_write_db = (
                 # Can write to *.crystalproj
                 # (is not Locked on macOS, is not on read-only volume)
-                os.access(project_path, os.W_OK) and (
-                    not os.path.exists(db_filepath) or
+                fs.access(project_path, fs.W_OK) and (
+                    not fs.exists(db_filepath) or
                     # Can write to database
                     # (is not Locked on macOS, is not Read Only on Windows, is not on read-only volume)
-                    os.access(db_filepath, os.W_OK)
+                    fs.access(db_filepath, fs.W_OK)
                 )
             )
         elif isinstance(fs, S3Filesystem):
@@ -576,7 +577,7 @@ class Project(ListenableMixin):
             normalized_path = path
         
         try:
-            Project._ensure_directory_structure_valid(fs, normalized_path)
+            Project._ensure_directory_structure_valid(FilesystemPath(fs, normalized_path))
         except ProjectFormatError:
             return False
         else:
@@ -586,13 +587,14 @@ class Project(ListenableMixin):
     def _normalize_project_path(cls, path: str) -> str | None:
         if not LocalFilesystem.recognizes_path(path):
             raise NonLocalFilesystemNotSupported()
-        
-        if os.path.exists(path):
+        lfs = LocalFilesystem()
+
+        if lfs.exists(path):
             # Try to alter existing path to point to item ending with FILE_EXTENSION
             if path.endswith(cls.FILE_EXTENSION):
                 return path
             elif path.endswith(cls.OPENER_FILE_EXTENSION):
-                parent_itempath = os.path.dirname(path)
+                parent_itempath = lfs.dirname(path)
                 if parent_itempath.endswith(cls.FILE_EXTENSION):
                     return parent_itempath
         else:
@@ -604,22 +606,23 @@ class Project(ListenableMixin):
         return None  # invalid
     
     @classmethod
-    def _ensure_directory_structure_valid(cls, fs: Filesystem, path: str) -> None:
+    def _ensure_directory_structure_valid(cls, fs_path: FilesystemPath) -> None:
         """
         Raises:
         * ProjectFormatError -- if the project at the specified path is invalid
         """
+        (fs, path) = fs_path
         db_path = fs.join(path, Project._DB_FILENAME)
         if isinstance(fs, LocalFilesystem):
-            if not os.path.isdir(path):
+            if not fs.isdir(path):
                 raise ProjectFormatError(f'Project is missing outermost directory: {path}')
-            
+
             # Ensure database exists
-            if not os.path.isfile(db_path):
+            if not fs.isfile(db_path):
                 raise ProjectFormatError(f'Project is missing database: {db_path}')
-            
+
             revision_dirpath = fs.join(path, Project._REVISIONS_DIRNAME)
-            if not os.path.isdir(revision_dirpath):
+            if not fs.isdir(revision_dirpath):
                 raise ProjectFormatError(f'Project is missing revisions directory: {revision_dirpath}')
         elif isinstance(fs, S3Filesystem):
             import botocore.exceptions
@@ -673,7 +676,9 @@ class Project(ListenableMixin):
         if self.readonly:
             raise ProjectReadOnlyError()
         assert isinstance(self._fs, LocalFilesystem)
-        
+        lfs = self._fs
+        (_, path) = self._fs_path
+
         # Add missing database columns and indexes
         with self._db, closing(self._db.cursor()) as c:
             index_names = get_index_names(c)  # cache
@@ -721,34 +726,34 @@ class Project(ListenableMixin):
         # Add missing directory structures
         if True:
             # Add temporary directory if missing
-            tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
-            if not os.path.exists(tmp_dirpath):
-                os.mkdir(tmp_dirpath)
-            
+            tmp_dirpath = lfs.join(path, self._TEMPORARY_DIRNAME)
+            if not lfs.exists(tmp_dirpath):
+                lfs.mkdir(tmp_dirpath)
+
             # Add opener and README if missing
-            if not any([n for n in os.listdir(self.path) if n.endswith(self.OPENER_FILE_EXTENSION)]):
+            if not any([n for n in lfs.listdir(path) if n.endswith(self.OPENER_FILE_EXTENSION)]):
                 # Add missing opener
-                with open(os.path.join(self.path, self._OPENER_DEFAULT_FILENAME), 'wb') as f:
+                with open(lfs.join(path, self._OPENER_DEFAULT_FILENAME), 'wb') as f:
                     f.write(self._OPENER_DEFAULT_CONTENT)
-                
+
                 # Add README if not already there
-                readme_filepath = os.path.join(self.path, self._README_FILENAME)
-                if not os.path.exists(readme_filepath):
+                readme_filepath = lfs.join(path, self._README_FILENAME)
+                if not lfs.exists(readme_filepath):
                     with open(readme_filepath, 'w', newline='') as tf:
                         tf.write(self._README_DEFAULT_CONTENT)
-            
+
             # Add Windows desktop.ini and icon for .crystalproj if missing
-            desktop_ini_filepath = os.path.join(self.path, self._DESKTOP_INI_FILENAME)
-            if not os.path.exists(desktop_ini_filepath):
+            desktop_ini_filepath = lfs.join(path, self._DESKTOP_INI_FILENAME)
+            if not lfs.exists(desktop_ini_filepath):
                 with open(desktop_ini_filepath, 'w', newline='') as tf:
                     tf.write(self._DESKTOP_INI_CONTENT)
-                
-                icons_dirpath = os.path.join(self.path, self._ICONS_DIRNAME)
-                if not os.path.exists(icons_dirpath):
-                    os.mkdir(icons_dirpath)
-                    
+
+                icons_dirpath = lfs.join(path, self._ICONS_DIRNAME)
+                if not lfs.exists(icons_dirpath):
+                    lfs.mkdir(icons_dirpath)
+
                     with resources_.open_binary('docicon.ico') as src_file:
-                        with open(os.path.join(icons_dirpath, 'docicon.ico'), 'wb') as dst_file:
+                        with open(lfs.join(icons_dirpath, 'docicon.ico'), 'wb') as dst_file:
                             shutil.copyfileobj(src_file, dst_file)
             
             # Add Linux icon for .crystalproj if missing
@@ -789,11 +794,11 @@ class Project(ListenableMixin):
                     # Touch .crystalproj so that GNOME Files (AKA Nautilus)
                     # observes the icon change
                     if did_set_gio_icon:
-                        pathlib.Path(self.path).touch()
+                        lfs.touch(self.path)
                 
                 # KDE: Define icon in .directory file
-                dot_directory_filepath = os.path.join(self.path, '.directory')
-                if not os.path.exists(dot_directory_filepath):
+                dot_directory_filepath = lfs.join(self.path, '.directory')
+                if not lfs.exists(dot_directory_filepath):
                     with open(dot_directory_filepath, 'w') as tf:
                         tf.write('[Desktop Entry]\nIcon=crystalproj\n')
             
@@ -822,9 +827,9 @@ class Project(ListenableMixin):
             if major_version == 2:
                 # If did not finish commit of "Upgrade major version 1 -> 2",
                 # resume the commit
-                ip_revisions_dirpath = os.path.join(
-                    self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
-                if os.path.exists(ip_revisions_dirpath):
+                ip_revisions_dirpath = lfs.join(
+                    path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
+                if lfs.exists(ip_revisions_dirpath):
                     self._commit_migrate_v1_to_v2()
 
                 # Nothing to do
@@ -849,14 +854,15 @@ class Project(ListenableMixin):
         if self.readonly:
             raise ProjectReadOnlyError()
         assert isinstance(self._fs, LocalFilesystem)
-        
-        revisions_dirpath = os.path.join(
+        lfs = self._fs
+
+        revisions_dirpath = lfs.join(
             self.path, self._REVISIONS_DIRNAME)  # cache
-        ip_revisions_dirpath = os.path.join(
+        ip_revisions_dirpath = lfs.join(
             self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
-        tmp_revisions_dirpath = os.path.join(
+        tmp_revisions_dirpath = lfs.join(
             self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
-        
+
         def calculate_new_revision_filepath(id: int) -> tuple[str, str]:
             new_revision_filepath_parts = f'{id:015x}'
             if len(new_revision_filepath_parts) != 15:
@@ -869,20 +875,20 @@ class Project(ListenableMixin):
                     'Revision ID {id} is too high to migrate to the '
                     'major version 2 project format')
             new_revision_parent_relpath = (
-                new_revision_filepath_parts[0:3] + os_path_sep +
-                new_revision_filepath_parts[3:6] + os_path_sep +
-                new_revision_filepath_parts[6:9] + os_path_sep +
+                new_revision_filepath_parts[0:3] + lfs_sep +
+                new_revision_filepath_parts[3:6] + lfs_sep +
+                new_revision_filepath_parts[6:9] + lfs_sep +
                 new_revision_filepath_parts[9:12]
             )
             new_revision_filepath = (
-                ip_revisions_dirpath + os_path_sep + 
-                new_revision_parent_relpath + os_path_sep +
+                ip_revisions_dirpath + lfs_sep + 
+                new_revision_parent_relpath + lfs_sep +
                 new_revision_filepath_parts[12:15]
             )
             return (new_revision_filepath, new_revision_parent_relpath)
         
         # Ensure old revisions directory exists
-        assert os.path.isdir(revisions_dirpath)
+        assert lfs.isdir(revisions_dirpath)
         
         # 1. Confirm want to migrate now
         # 2. Create new revisions directory
@@ -892,7 +898,7 @@ class Project(ListenableMixin):
             * VetoUpgradeProject
             * CancelOpenProject
             """
-            migration_was_in_progress = os.path.isdir(ip_revisions_dirpath)  # capture
+            migration_was_in_progress = lfs.isdir(ip_revisions_dirpath)  # capture
             
             if approx_revision_count > Project._MAX_REVISION_ID:
                 assert not migration_was_in_progress
@@ -914,47 +920,47 @@ class Project(ListenableMixin):
             
             # Create new revisions directory
             if not migration_was_in_progress:
-                os.mkdir(ip_revisions_dirpath)
-        
+                lfs.mkdir(ip_revisions_dirpath)
+
         # Move revisions to appropriate locations in new revisions directory
-        os_path_sep = os.path.sep  # cache
+        lfs_sep = lfs.sep  # cache
         last_new_revision_parent_relpath = None  # type: Optional[str]
         def migrate_revision(row: tuple) -> None:
             (id,) = row
             old_revision_filepath = (
-                revisions_dirpath + os_path_sep +
+                revisions_dirpath + lfs_sep +
                 str(id)
             )
-            
+
             (new_revision_filepath, new_revision_parent_relpath) = \
                 calculate_new_revision_filepath(id)
-            
+
             # Create parent directory for new location if needed
-            # 
-            # NOTE: Avoids extra calls to os.makedirs() when easy to
+            #
+            # NOTE: Avoids extra calls to lfs.makedirs() when easy to
             #       prove that there's no work to be done
             nonlocal last_new_revision_parent_relpath
             if new_revision_parent_relpath != last_new_revision_parent_relpath:
                 new_revision_parent_dirpath = \
-                    ip_revisions_dirpath + os_path_sep + new_revision_parent_relpath
-                os.makedirs(new_revision_parent_dirpath, exist_ok=True)
+                    ip_revisions_dirpath + lfs_sep + new_revision_parent_relpath
+                lfs.makedirs(new_revision_parent_dirpath, exist_ok=True)
                 last_new_revision_parent_relpath = new_revision_parent_relpath
-            
+
             # Move revision from old location to new location
             try:
-                os.rename(old_revision_filepath, new_revision_filepath)
+                lfs.rename(old_revision_filepath, new_revision_filepath)
             except FileNotFoundError:
                 # Either:
                 # 1. Revision has already been moved from old location to new location
                 #    (if this migration is being resumed from an earlier canceled migration)
                 # 2. Revision was missing in old location before, and will be missing in new location.
                 pass
-            
+
             if new_revision_filepath.endswith('fff'):
                 # Flush all changes to leaf directory before moving
                 # on to the next leaf directory
-                flush_renames_in_directory(
-                    os.path.dirname(new_revision_filepath)
+                lfs.flush_renames_in_directory(
+                    lfs.dirname(new_revision_filepath)
                 )
         with Caffeination.caffeinated(), profiling_context(
                 'migrate_revisions_v1_to_v2.prof', enabled=_PROFILE_MIGRATE_REVISIONS_V1_TO_V2):
@@ -983,8 +989,8 @@ class Project(ListenableMixin):
                 if max_revision_id is not None:
                     (new_revision_filepath, _) = \
                         calculate_new_revision_filepath(max_revision_id)
-                    flush_renames_in_directory(
-                        os.path.dirname(new_revision_filepath)
+                    lfs.flush_renames_in_directory(
+                        lfs.dirname(new_revision_filepath)
                     )
                 
                 self._commit_migrate_v1_to_v2()
@@ -997,28 +1003,29 @@ class Project(ListenableMixin):
         if self.readonly:
             raise ProjectReadOnlyError()
         assert isinstance(self._fs, LocalFilesystem)
-        
+        lfs = self._fs
+
         assert self._get_major_version(self._db) in [1, 2]
-        
-        revisions_dirpath = os.path.join(
+
+        revisions_dirpath = lfs.join(
             self.path, self._REVISIONS_DIRNAME)  # cache
-        ip_revisions_dirpath = os.path.join(
+        ip_revisions_dirpath = lfs.join(
             self.path, self._IN_PROGRESS_REVISIONS_DIRNAME)  # cache
-        tmp_revisions_dirpath = os.path.join(
+        tmp_revisions_dirpath = lfs.join(
             self.path, self._TEMPORARY_DIRNAME, self._REVISIONS_DIRNAME)  # cache
-        
+
         # Start commit
         major_version = 2
         self._set_major_version(major_version, self._db)
         # (If crash happens between here and "Finish commit",
         #  reopening the project will resume the commit)
-        
+
         # Move aside old revisions directory and queue it for deletion
-        os.rename(revisions_dirpath, tmp_revisions_dirpath)
-        
+        lfs.rename(revisions_dirpath, tmp_revisions_dirpath)
+
         # 1. Move new revisions directory to final location
         # 2. Finish commit
-        replace_and_flush(ip_revisions_dirpath, revisions_dirpath)
+        lfs.replace_and_flush(ip_revisions_dirpath, revisions_dirpath)
     
     def _migrate_v2_to_v3(self,
             progress_listener: OpenProjectProgressListener,
@@ -1036,7 +1043,8 @@ class Project(ListenableMixin):
         if self.readonly:
             raise ProjectReadOnlyError()
         assert isinstance(self._fs, LocalFilesystem)
-        
+        lfs = self._fs
+
         assert self._get_major_version(self._db) == 3
         assert self._get_major_version_old(self._db) == 2
 
@@ -1070,8 +1078,8 @@ class Project(ListenableMixin):
 
                     # Pack revisions [pack_start_id, pack_end_id], if not already done
                     pack_filepath = ResourceRevision._body_pack_filepath_with(
-                        self._fs, self.path, pack_end_id)
-                    if not os.path.exists(pack_filepath):
+                        self._fs_path, pack_end_id)
+                    if not lfs.exists(pack_filepath):
                         ResourceRevision._pack_revisions_for_id(
                             self,
                             pack_end_id,
@@ -1090,7 +1098,7 @@ class Project(ListenableMixin):
                     # to silently skip all remaining packs.
                     if pack_start_id % Project._revision_count_between_disk_health_checks == 0:
                         self._check_disk_health_during_migration(
-                            self.path, progress_listener)  # may raise CancelOpenProject
+                            self.path, progress_listener, lfs)  # may raise CancelOpenProject
 
                     # Report progress approximately once per second
                     current_time = time.monotonic()  # capture
@@ -1104,10 +1112,10 @@ class Project(ListenableMixin):
                         )  # may raise CancelOpenProject
                         last_report_time = current_time
                 revisions_processed = pack_start_id
-                
+
                 # Final disk health check after the last pack is processed
                 self._check_disk_health_during_migration(
-                    self.path, progress_listener)  # may raise CancelOpenProject
+                    self.path, progress_listener, lfs)  # may raise CancelOpenProject
 
             # Migration complete. Remove migration marker.
             self._delete_major_version_old(self._db)
@@ -1118,6 +1126,7 @@ class Project(ListenableMixin):
     def _check_disk_health_during_migration(
             project_path: str,
             progress_listener: OpenProjectProgressListener,
+            lfs: LocalFilesystem,
             ) -> None:
         """
         Performs a lightweight disk health check during migration.
@@ -1129,9 +1138,9 @@ class Project(ListenableMixin):
         Raises:
         * CancelOpenProject
         """
-        revisions_dir = os.path.join(project_path, Project._REVISIONS_DIRNAME)
+        revisions_dir = lfs.join(project_path, Project._REVISIONS_DIRNAME)
         try:
-            os.listdir(revisions_dir)
+            lfs.listdir(revisions_dir)
         except OSError:
             progress_listener.upgrade_revisions_disk_error()
             raise CancelOpenProject()
@@ -1283,9 +1292,10 @@ class Project(ListenableMixin):
         if self.readonly:
             raise ProjectReadOnlyError()
         assert isinstance(self._fs, LocalFilesystem)
-        
+        lfs = self._fs
+
         assert self.major_version >= 3
-        
+
         # Locate last revision and related pack boundaries
         max_revision_id = self._max_revision_id()
         if max_revision_id is None:
@@ -1296,19 +1306,19 @@ class Project(ListenableMixin):
             return
         pack_start_id = max_revision_id - 15
         pack_end_id = max_revision_id
-        
+
         # Check whether pack file is missing
         pack_filepath = ResourceRevision._body_pack_filepath_with(
-            self._fs, self.path, max_revision_id)
-        if os.path.exists(pack_filepath):
+            self._fs_path, max_revision_id)
+        if lfs.exists(pack_filepath):
             return
-        
+
         # Check if there are any individual revision files that should be in the pack
         has_any_revision_files = False
         for rid in range(pack_start_id, pack_end_id + 1):
             hierarchical_body_filepath = ResourceRevision._body_filepath_with(
-                self._fs, self.path, 2, rid)
-            if os.path.exists(hierarchical_body_filepath):
+                self._fs_path, 2, rid)
+            if lfs.exists(hierarchical_body_filepath):
                 has_any_revision_files = True
                 break
         if not has_any_revision_files:
@@ -1449,15 +1459,16 @@ class Project(ListenableMixin):
         # Cleanup any temporary files from last session (unless is readonly)
         if not self.readonly:
             assert isinstance(self._fs, LocalFilesystem)
-            
-            tmp_dirpath = os.path.join(self.path, self._TEMPORARY_DIRNAME)
-            if os.path.exists(tmp_dirpath):
-                for tmp_filename in os.listdir(tmp_dirpath):
-                    tmp_filepath = os.path.join(tmp_dirpath, tmp_filename)
-                    if os.path.isfile(tmp_filepath):
-                        os.remove(tmp_filepath)
+            lfs = self._fs
+
+            tmp_dirpath = lfs.join(self.path, self._TEMPORARY_DIRNAME)
+            if lfs.exists(tmp_dirpath):
+                for tmp_filename in lfs.listdir(tmp_dirpath):
+                    tmp_filepath = lfs.join(tmp_dirpath, tmp_filename)
+                    if lfs.isfile(tmp_filepath):
+                        lfs.remove(tmp_filepath)
                     else:
-                        shutil.rmtree(tmp_filepath)
+                        lfs.rmtree(tmp_filepath)
         
         with self._db, closing(self._db.cursor()) as c:
             # Load project properties
@@ -1585,6 +1596,41 @@ class Project(ListenableMixin):
     
     # === Properties ===
     
+    _fs_path: FilesystemPath
+    """
+    The path where this project resides.
+    
+    See also:
+    - Project.path
+    - Project._fs
+    """
+
+    @property
+    def path(self) -> str:
+        """
+        The path where this project resides in a filesystem.
+        
+        Usually the same as the `path` argument passed to `Project.__init__`.
+        However an s3:// URL containing credentials passed as `path` will have
+        those credentials stripped when read from `Project.path`.
+        
+        See also:
+        - Project._fs_path
+        - Project._fs
+        """
+        return self._fs_path.path
+
+    @property
+    def _fs(self) -> Filesystem:
+        """
+        The filesystem in which this project resides.
+        
+        See also:
+        - Project._fs_path
+        - Project.path
+        """
+        return self._fs_path.fs
+
     @property
     def readonly(self) -> bool:
         """
@@ -2643,17 +2689,18 @@ class Project(ListenableMixin):
             new_path: str, 
             progress_listener: Optional['SaveAsProgressListener'] = None
             ) -> Generator[SwitchToThread, None, None]:
-        # TODO: Add support for non-local filesystems to 
+        # TODO: Add support for non-local filesystems to
         #       {_save_as_coro, _copytree_of_project_with_progress}
         if not isinstance(self._fs, LocalFilesystem):
             raise NonLocalFilesystemNotSupported(
                 'Save As does not support non-local filesystems yet')
-        
-        if os.path.exists(new_path):
+        lfs = self._fs
+
+        if lfs.exists(new_path):
             raise FileExistsError(
                 f'Cannot save project to {new_path!r} because a file or '
                 f'directory already exists at that path')
-        
+
         if not new_path.endswith(Project.FILE_EXTENSION):
             raise ValueError(
                 f'Cannot save project to {new_path!r} because it does not end with '
@@ -2662,14 +2709,14 @@ class Project(ListenableMixin):
             new_path.removesuffix(Project.FILE_EXTENSION) +
             Project.PARTIAL_FILE_EXTENSION
         )
-        
+
         old_path = self.path  # capture
         was_untitled = self._is_untitled  # capture
-        
+
         # Save the current state of tasks
         if not self.readonly:
             self.hibernate_tasks()
-        
+
         try:
             # - Stop and destroy tasks
             # - Stop scheduler
@@ -2679,11 +2726,11 @@ class Project(ListenableMixin):
             #       recovery code below attempts to reopen using the same
             #       Project state it may fail again.
             self.close(capture_crashes=False, _will_reopen=True)
-            
+
             # Reset session state that could affect how tasks are unhibernated
             for r in self._materialized_resources:
                 r.already_downloaded_this_session = False
-            
+
             # Move/copy the project directory to the new path.
             # - If the project is untitled, it will be renamed.
             # - If the project is titled, it will be copied.
@@ -2693,15 +2740,15 @@ class Project(ListenableMixin):
                     # Move the project directory to the new path
                     try:
                         # Try atomic move first
-                        os.rename(old_path, new_path)
+                        lfs.rename(old_path, new_path)
                     except OSError:
                         # Try copy and delete if atomic move fails
-                        
+
                         # Copy
                         self._copytree_of_project_with_progress(
-                            self._fs, old_path, new_partial_path, progress_listener)
-                        os.rename(new_partial_path, new_path)
-                        
+                            FilesystemPath(lfs, old_path), new_partial_path, progress_listener)
+                        lfs.rename(new_partial_path, new_path)
+
                         # Delete
                         # (Later in this method,
                         #  at call to Project._delete_in_background)
@@ -2710,13 +2757,13 @@ class Project(ListenableMixin):
                 else:
                     # Copy the project directory to the new path
                     self._copytree_of_project_with_progress(
-                        self._fs, self.path, new_partial_path, progress_listener)
-                    os.rename(new_partial_path, new_path)
+                        self._fs_path, new_partial_path, progress_listener)
+                    lfs.rename(new_partial_path, new_path)
             except:
                 # Clean up partial copy if an error occurs
-                if os.path.exists(new_partial_path):
+                if lfs.exists(new_partial_path):
                     try:
-                        send2trash(new_partial_path)
+                        lfs.send2trash(new_partial_path)
                     except (TrashPermissionError, OSError, Exception):
                         # Give up. Leave the partial copy in place
                         # for the user to delete manually.
@@ -2725,20 +2772,20 @@ class Project(ListenableMixin):
                                 f'*** send2trash failed. Partial copy left at: {new_partial_path!r} '
                                 f'Consider using _rmtree_fallback_for_send2trash().',
                                 file=sys.stderr)
-                
+
                 raise
-            
+
             # - Open database
             # - Start scheduler
             yield SwitchToThread.FOREGROUND
-            self.path = new_path
+            self._fs_path = FilesystemPath(self._fs_path.fs, new_path)
             # NOTE: May change the readonly status of this Project
             self._reopen()
-            
+
             # Restore the state of tasks
             if not self.readonly:
                 self.unhibernate_tasks()
-            
+
             # Bulk-save any unsaved resources, populating the resource IDs
             if not self.readonly and len(self._unsaved_resources) > 0:
                 ids = Resource._bulk_create_resource_ids_for_urls(
@@ -2752,13 +2799,13 @@ class Project(ListenableMixin):
                 self._check_url_collection_invariants()
         except:
             # Try to reopen the project at the old path
-            if os.path.exists(old_path):
+            if lfs.exists(old_path):
                 yield SwitchToThread.FOREGROUND
-                self.path = old_path
+                self._fs_path = FilesystemPath(self._fs_path.fs, old_path)
                 self._reopen()
                 if not self.readonly:
                     self.unhibernate_tasks()
-            
+
             raise
         else:
             self._mark_clean_and_titled()
@@ -2766,14 +2813,13 @@ class Project(ListenableMixin):
             assert self._is_dirty == False
 
             # Delete old project if it was untitled and is still present
-            if was_untitled and os.path.exists(old_path):
-                Project._delete_in_background(old_path)
+            if was_untitled and lfs.exists(old_path):
+                Project._delete_in_background(old_path, lfs)
     
     @staticmethod
     @bg_affinity
     def _copytree_of_project_with_progress(
-            src_fs: Filesystem,
-            src_project_dirpath: str,
+            src_fs_path: FilesystemPath,
             dst_project_dirpath: str,
             progress_listener: 'SaveAsProgressListener | None' = None
             ) -> None:
@@ -2796,10 +2842,11 @@ class Project(ListenableMixin):
         # - Find Sample Time: 0.25 seconds
         # - Size Sample Time: 0.23 seconds
         REVISIONS_SAMPLE_SIZE = 256  # revisions
-        
+
         # Ensure at least 1 report will be made during each 1-second interval
         TARGET_MAX_DELAY_BETWEEN_REPORTS = 0.5  # seconds
-        
+
+        (src_fs, src_project_dirpath) = src_fs_path
         if not isinstance(src_fs, LocalFilesystem):
             raise NonLocalFilesystemNotSupported()
         
@@ -2817,7 +2864,7 @@ class Project(ListenableMixin):
             approx_revision_count: int  # type: ignore[no-redef]
             major_version: int
             random_revision_ids: list[int]
-            db_filepath = os.path.join(src_project_dirpath, Project._DB_FILENAME)
+            db_filepath = src_fs.join(src_project_dirpath, Project._DB_FILENAME)
             db_connect_query = '?mode=ro'
             db_raw = sqlite3.connect(
                 'file:' + url_quote(db_filepath) + db_connect_query,
@@ -2853,8 +2900,7 @@ class Project(ListenableMixin):
                     continue
                 try:
                     revision_size = ResourceRevision._size_with(
-                        src_fs,
-                        src_project_dirpath,
+                        src_fs_path,
                         major_version,
                         revision_id,
                         READONLY_DURING_SAMPLING,
@@ -2878,7 +2924,7 @@ class Project(ListenableMixin):
         #       (1) allow skipping the revisions directory and to
         #       (2) size the project database (which resides directly
         #           within the project directory) as early as possible
-        for (parent_dirpath, dirnames, filenames) in os.walk(src_project_dirpath, topdown=True):
+        for (parent_dirpath, dirnames, filenames) in src_fs.walk(src_project_dirpath, topdown=True):
             # If the revisions directory is encountered, add its approximate size
             # and file count to the totals rather than walking into it
             if parent_dirpath == src_project_dirpath and Project._REVISIONS_DIRNAME in dirnames:
@@ -2887,11 +2933,11 @@ class Project(ListenableMixin):
                 dirnames.remove(Project._REVISIONS_DIRNAME)
             
             for filename in filenames:
-                filepath = os.path.join(parent_dirpath, filename)
+                filepath = src_fs.join(parent_dirpath, filename)
                 try:
                     # TODO: Access the os.DirEntry object from the os.scandir() call
                     #       used inside of os.walk() to avoid calls to os.path.getsize()
-                    total_byte_count += os.path.getsize(filepath)
+                    total_byte_count += src_fs.getsize(filepath)
                     total_file_count += 1
                 except OSError:
                     # File is inaccessible
@@ -2903,7 +2949,7 @@ class Project(ListenableMixin):
         files_copied = 0
         start_time = time.monotonic()  # capture
         last_report_time = start_time
-        os.mkdir(dst_project_dirpath)
+        src_fs.mkdir(dst_project_dirpath)
         for (src_parent_dirpath, dst_parent_dirpath, dirnames, filenames) in walkzip(
                 src_project_dirpath, dst_project_dirpath, topdown=True):
             # Ensure files and directories are copied in a deterministic lexicographic order
@@ -2912,8 +2958,8 @@ class Project(ListenableMixin):
 
             # Copy files to the current destination directory
             for filename in filenames:
-                src_filepath = os.path.join(src_parent_dirpath, filename)
-                dst_filepath = os.path.join(dst_parent_dirpath, filename)
+                src_filepath = src_fs.join(src_parent_dirpath, filename)
+                dst_filepath = src_fs.join(dst_parent_dirpath, filename)
                 
                 # Copy the file
                 with open(src_filepath, 'rb') as src_file, \
@@ -2942,7 +2988,7 @@ class Project(ListenableMixin):
                 
                 # Preserve file metadata
                 try:
-                    shutil.copystat(src_filepath, dst_filepath)
+                    src_fs.copystat(src_filepath, dst_filepath)
                 except OSError:
                     # Some metadata might not be copyable, ignore errors
                     pass
@@ -2951,8 +2997,8 @@ class Project(ListenableMixin):
             
             # Create directories in the current destination directory
             for dirname in dirnames:
-                dst_dirpath = os.path.join(dst_parent_dirpath, dirname)
-                os.mkdir(dst_dirpath)
+                dst_dirpath = src_fs.join(dst_parent_dirpath, dirname)
+                src_fs.mkdir(dst_dirpath)
         
         # Final progress report
         if True:
@@ -2967,15 +3013,15 @@ class Project(ListenableMixin):
             progress_listener.did_copy_files()
     
     @staticmethod
-    def _delete_in_background(old_path: str) -> None:
+    def _delete_in_background(old_path: str, lfs: LocalFilesystem) -> None:
         # Try to send the project to the
         # OS temporary directory, where it will
         # be deleted when the computer restarts
         try:
             temp_dirpath = tempfile.gettempdir()
-            old_path_in_temp = os.path.join(temp_dirpath, os.path.basename(old_path))
+            old_path_in_temp = lfs.join(temp_dirpath, lfs.basename(old_path))
             if old_path_in_temp != old_path:
-                os.rename(old_path, old_path_in_temp)
+                lfs.rename(old_path, old_path_in_temp)
         except:
             # Give up
             pass
@@ -2990,7 +3036,7 @@ class Project(ListenableMixin):
         @capture_crashes_to_stderr
         def bg_delete_old_path() -> None:
             try:
-                shutil.rmtree(old_path)
+                lfs.rmtree(old_path)
             except OSError:
                 # Give up
                 pass
@@ -3058,20 +3104,21 @@ class Project(ListenableMixin):
                                     if not isinstance(self._fs, LocalFilesystem):
                                         raise NonLocalFilesystemNotSupported(
                                             'Untitled projects are only supported on local filesystems')
+                                    lfs = self._fs
                                     try:
                                         # Try to send the untitled project to the trash,
                                         # where the user can easily recover it if they change
                                         # their mind about not saving it
-                                        send2trash(self.path)
+                                        lfs.send2trash(self.path)
                                     except:
                                         try:
                                             # Try to send the untitled project to the
                                             # OS temporary directory, where it will
                                             # be deleted when the computer restarts
                                             temp_dirpath = tempfile.gettempdir()
-                                            os.rename(
+                                            lfs.rename(
                                                 self.path,
-                                                os.path.join(temp_dirpath, os.path.basename(self.path)))
+                                                lfs.join(temp_dirpath, lfs.basename(self.path)))
                                         except:
                                             # Give up
                                             pass
@@ -3157,12 +3204,13 @@ class Project(ListenableMixin):
         if self.readonly:
             raise ProjectReadOnlyError()
         assert isinstance(self._fs, LocalFilesystem)
+        lfs = self._fs
         
         if migration_type == MigrationType.FLAT_TO_HIERARCHICAL:  # v1 -> v2
             if self.major_version != 1:
                 raise ValueError()
             
-            os.mkdir(os.path.join(
+            lfs.mkdir(lfs.join(
                 self.path, self._IN_PROGRESS_REVISIONS_DIRNAME))
         elif migration_type == MigrationType.HIERARCHICAL_TO_PACK16:  # v2 -> v3
             if self.major_version != 2:
@@ -3220,7 +3268,7 @@ class Project(ListenableMixin):
             
             # Open database at the new path, attempting to open as writable
             old_readonly = self._readonly
-            with cls._open_database_but_close_if_raises(self._fs, self.path, False, self._mark_dirty_if_untitled, expect_writable=False) as (
+            with cls._open_database_but_close_if_raises(self._fs_path, False, self._mark_dirty_if_untitled, expect_writable=False) as (
                     self._db, new_readonly, self._database_is_on_ssd, self._db_tmp_file):
                 if new_readonly != old_readonly:
                     self._readonly = new_readonly
