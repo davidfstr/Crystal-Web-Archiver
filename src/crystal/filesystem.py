@@ -1,28 +1,78 @@
 # TODO: Rename crystal.util.filesystem -> local_filesystem
-from crystal.util.filesystem import open_nonexclusive
+from collections.abc import Iterator
+from contextlib import contextmanager
+from crystal.util.filesystem import (
+    flush_renames_in_directory as _flush_renames_in_directory,
+    open_nonexclusive,
+    replace_destination_locked as _replace_destination_locked,
+    RENAME_SUFFIX,
+)
 from dataclasses import dataclass
+import os
 import os.path
-from typing import BinaryIO, Literal, TypeAlias
+import pathlib
+import shutil
+from typing import BinaryIO, ClassVar, Literal, NamedTuple, TypeAlias
 import urllib.parse
 
 
-# A supported filesystem type.
-# 
-# Use instead of _AbstractFilesystem so that exhaustiveness checking
-# can be performed by typecheckers on code like `if isinstance(X, FooFilesystem): ...`.
 Filesystem: TypeAlias = 'LocalFilesystem | S3Filesystem'
+"""
+A supported filesystem type.
+
+Use instead of _AbstractFilesystem so that exhaustiveness checking
+can be performed by typecheckers on code like `if isinstance(X, FooFilesystem): ...`.
+
+See alsp:
+- _AbstractFilesystem
+"""
+
+
+class FilesystemPath(NamedTuple):
+    """
+    A (Filesystem, path) bundle, which is convenient to pass between functions because
+    I/O can only be done on a path through a Filesystem instance.
+    
+    Supports destructuring via:
+        fs_path: FilesystemPath = ...
+        (fs, path) = fs_path
+    """
+    fs: Filesystem
+    path: str
 
 
 class _AbstractFilesystem:
+    """
+    Interface for manipulating files & directories in a filesystem.
+    
+    Designed originally to support only the intersection of operations
+    that make sense for LocalFilesystem and S3Filesystem.
+    
+    Subclasses - notably LocalFilesystem - may support additional operations
+    not in this abstract interface.
+    """
+    
+    # === Filesystem API ===
+    
     @classmethod
     def recognizes_path(cls, path: str) -> bool:
+        """
+        Whether this Filesystem subclass is responsible for manipulating
+        paths in the format matching the specified path.
+        """
         raise NotImplementedError()
-    
+
     def join(self, /, parent_dirpath: str, *itemnames: str) -> str:
         raise NotImplementedError()
-    
+
     def split(self, /, itempath: str, *, root_ok: bool = False) -> tuple[str, str]:
         raise NotImplementedError()
+
+    def dirname(self, /, path: str) -> str:
+        return self.split(path)[0]
+
+    def basename(self, /, path: str) -> str:
+        return self.split(path)[1]
     
     def open(self, path: str, mode: Literal['rb']) -> BinaryIO:
         """
@@ -48,6 +98,16 @@ class _AbstractFilesystem:
 
 
 class LocalFilesystem(_AbstractFilesystem):
+    """
+    Interface for manipulating files/directories on the local computer filesystem.
+    
+    Directories exist as concrete entities in this filesystem type. Therefore:
+    - It is necessary to "create the parent directory" of a file before
+      it is created. See makedirs().
+    """
+    
+    # === Filesystem API ===
+    
     @classmethod
     def recognizes_path(cls, path: str) -> bool:
         return not S3Filesystem.recognizes_path(path)
@@ -87,13 +147,169 @@ class LocalFilesystem(_AbstractFilesystem):
     def getsize(self, path: str) -> int:
         """
         Returns the size of the specified file.
-        
+
         Raises:
         * FileNotFoundError -- if no file exists at `path`
         * PermissionError -- if you are not authorized to access `path`
-        * IOError -- if some other kind of I/O error occurs
+        * OSError -- if some other kind of I/O error occurs
         """
         return os.path.getsize(path)
+
+    # === LocalFilesystem API ===
+
+    W_OK: ClassVar[int] = os.W_OK
+
+    @property
+    def sep(self) -> str:
+        return os.path.sep
+
+    def exists(self, path: str) -> bool:
+        """
+        Raises:
+        * OSError
+        """
+        return os.path.exists(path)
+
+    def isfile(self, path: str) -> bool:
+        """
+        Raises:
+        * OSError
+        """
+        return os.path.isfile(path)
+
+    def isdir(self, path: str) -> bool:
+        """
+        Raises:
+        * OSError
+        """
+        return os.path.isdir(path)
+
+    def access(self, path: str, mode: int) -> bool:
+        """
+        Raises:
+        * OSError
+        """
+        return os.access(path, mode)
+    
+    def touch(self, path: str) -> None:
+        """
+        Raises:
+        * OSError
+        """
+        pathlib.Path(path).touch()
+
+    def listdir(self, path: str) -> list[str]:
+        """
+        Raises:
+        * FileNotFoundError
+        * OSError
+        """
+        return os.listdir(path)
+
+    def walk(self,
+            top: str,
+            *, topdown: bool = True,
+            ) -> Iterator[tuple[str, list[str], list[str]]]:
+        """
+        Raises:
+        * OSError
+        """
+        return os.walk(top, topdown=topdown)
+
+    def mkdir(self, path: str) -> None:
+        """
+        Raises:
+        * FileExistsError
+        * OSError
+        """
+        os.mkdir(path)
+
+    # TODO: Remove exist_ok and assume it is always True,
+    #       because all callers at the time of writing specify exist_ok=True.
+    def makedirs(self, path: str, exist_ok: bool = False) -> None:
+        """
+        Raises:
+        * OSError
+        """
+        os.makedirs(path, exist_ok=exist_ok)
+
+    def rename(self, src: str, dst: str) -> None:
+        """
+        Renames/move an item to a different name/path that is assumed to not exist, atomically.
+        
+        If the destination itempath DOES actually exist then this function
+        behaves differently depending on the operating system.
+        See os.rename() documentation for details.
+        
+        Raises:
+        * OSError
+        """
+        os.rename(src, dst)
+
+    def flush_renames_in_directory(self, parent_dirpath: str) -> None:
+        """
+        Ensures that all renames of files to locations directly within the
+        specified parent directory are flushed to disk.
+
+        Raises:
+        * OSError
+        """
+        _flush_renames_in_directory(parent_dirpath)
+
+    def replace_and_flush(self, src: str, dst: str, *, nonatomic_ok: bool = False) -> None:
+        """
+        Renames/move an item to a different name/path that is assumed may exist,
+        replacing the destination itempath, atomically.
+        
+        If the destination itempath does not actually exist then this function
+        also succeeds.
+        
+        Raises:
+        * OSError
+        """
+        from crystal.util.filesystem import replace_and_flush as _replace_and_flush
+        _replace_and_flush(src, dst, nonatomic_ok=nonatomic_ok)
+
+    @contextmanager
+    def replace_destination_locked(self, dst_filepath: str) -> Iterator[None]:
+        """
+        Context in which either
+        (1) a non-atomic replace_and_flush() operation or
+        (2) a repair of one, is allowed.
+        """
+        with _replace_destination_locked(dst_filepath):
+            yield
+
+    def remove(self, path: str) -> None:
+        """
+        Raises:
+        * FileNotFoundError
+        * OSError
+        """
+        os.remove(path)
+
+    def rmtree(self, path: str, *, ignore_errors: bool = False) -> None:
+        """
+        Raises:
+        * OSError
+        """
+        shutil.rmtree(path, ignore_errors=ignore_errors)
+
+    def send2trash(self, path: str) -> None:
+        """
+        Raises:
+        * TrashPermissionError
+        * OSError
+        """
+        from send2trash import send2trash as _send2trash
+        _send2trash(path)
+
+    def copystat(self, src: str, dst: str) -> None:
+        """
+        Raises:
+        * OSError
+        """
+        shutil.copystat(src, dst)
 
 
 class S3Filesystem(_AbstractFilesystem):
@@ -117,10 +333,13 @@ class S3Filesystem(_AbstractFilesystem):
             )
         self._credentials = credentials
     
+    # === Filesystem API ===
+    
     @classmethod
     def recognizes_path(cls, path: str) -> bool:
         return path.startswith('s3://')
     
+    # TODO: Move this function to the "S3Filesystem API" section below
     @classmethod
     def split_credentials_if_present(cls, secret_url: str) -> 'tuple[Credentials | None, str]':
         """
@@ -178,6 +397,7 @@ class S3Filesystem(_AbstractFilesystem):
             )
         return (credentials, plain_url)
     
+    # TODO: Move this function to the "S3Filesystem API" section below
     @classmethod
     def parse_url(cls,
             path: str,
@@ -223,6 +443,7 @@ class S3Filesystem(_AbstractFilesystem):
 
         return (bucket_name, parsed.key, region)
 
+    # TODO: Move this function to the "S3Filesystem API" section below
     @classmethod
     def format_url(cls,
             bucket_name: str,
@@ -403,6 +624,10 @@ class S3Filesystem(_AbstractFilesystem):
             else:
                 raise
         return resp['ContentLength']
+    
+    # === S3Filesystem API ===
+    
+    # (TODO: Move functions specific to this subclass from the above section to here)
     
     # === Credentials ===
     

@@ -24,7 +24,7 @@ from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, scheduler_thread_context
 from crystal.tests.util.wait import wait_for, wait_for_future, wait_while
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.util.filesystem import fine_grained_mtimes_available, replace_and_flush
+from crystal.util.filesystem import fine_grained_mtimes_available, replace_and_flush, RENAME_SUFFIX
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_windows
 from crystal.util.xtyping import not_none
@@ -1798,7 +1798,7 @@ async def test_when_read_packed_revision_and_pack_file_needs_repair_then_repair_
         assert os.path.exists(pack_filepath), 'Pack file should exist'
         
         # Simulate crash during delete by renaming pack file to .replacing
-        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        replacing_filepath = pack_filepath + RENAME_SUFFIX
         os.rename(pack_filepath, replacing_filepath)
         
         # Precondition: Pack file does NOT exist, .replacing file exists
@@ -1832,7 +1832,7 @@ async def test_when_concurrent_reads_of_packed_revision_and_pack_file_needs_repa
         assert os.path.exists(pack_filepath), 'Pack file should exist'
         
         # Simulate crash during delete by renaming pack file to .replacing
-        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        replacing_filepath = pack_filepath + RENAME_SUFFIX
         os.rename(pack_filepath, replacing_filepath)
         
         # Precondition: Pack file does NOT exist, .replacing file exists
@@ -1842,15 +1842,12 @@ async def test_when_concurrent_reads_of_packed_revision_and_pack_file_needs_repa
         # Track how many times replace_and_flush is called (indicating repair)
         repair_count = 0
         real_replace_and_flush = replace_and_flush
-        def mock_replace_and_flush(src, dst):
+        def mock_replace_and_flush(self, src, dst, **kwargs):
             nonlocal repair_count
             repair_count += 1
-            return real_replace_and_flush(src, dst)
-        # Copy the RENAME_SUFFIX attribute so the patched function behaves correctly
-        mock_replace_and_flush.RENAME_SUFFIX = replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
-        
+            return real_replace_and_flush(src, dst, **kwargs)
         # Read both revisions concurrently. Only one should trigger repair.
-        with patch('crystal.model.resource_revision.replace_and_flush', mock_replace_and_flush):
+        with patch('crystal.filesystem.LocalFilesystem.replace_and_flush', mock_replace_and_flush):
             # Open revision A (will trigger repair)
             file_a = revision_a.open()
             body_a_half = file_a.read(len(_LARGE_BODY_A) // 2)
@@ -1890,7 +1887,7 @@ async def test_when_read_packed_revision_and_stale_replacing_file_exists_then_re
         
         # Create a stale .replacing file (simulating incomplete cleanup after a
         # successful replacement that didn't finish deleting the old file)
-        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        replacing_filepath = pack_filepath + RENAME_SUFFIX
         with open(replacing_filepath, 'wb') as f:
             # Write stale/different content to the .replacing file
             f.write(b'stale pack content that should be ignored')
@@ -1996,7 +1993,7 @@ async def test_when_delete_packed_revision_during_concurrent_read_and_stale_repl
         
         # Create a stale .replacing file (simulating incomplete cleanup after a
         # successful replacement that didn't finish deleting the old file)
-        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        replacing_filepath = pack_filepath + RENAME_SUFFIX
         with open(replacing_filepath, 'wb') as f:
             # Write stale/different content to the .replacing file
             f.write(b'stale pack content that should be cleaned up during delete')
@@ -2163,7 +2160,7 @@ async def test_when_size_packed_revision_with_default_readonly_true_and_pack_fil
         assert os.path.exists(pack_filepath), 'Pack file should exist'
 
         # Simulate crash during delete by renaming pack file to .replacing
-        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        replacing_filepath = pack_filepath + RENAME_SUFFIX
         os.rename(pack_filepath, replacing_filepath)
 
         # Precondition: Pack file does NOT exist, .replacing file exists
@@ -2194,7 +2191,7 @@ async def test_when_size_packed_revision_with_readonly_false_and_pack_file_needs
         assert os.path.exists(pack_filepath), 'Pack file should exist'
 
         # Simulate crash during delete by renaming pack file to .replacing
-        replacing_filepath = pack_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+        replacing_filepath = pack_filepath + RENAME_SUFFIX
         os.rename(pack_filepath, replacing_filepath)
 
         # Precondition: Pack file does NOT exist, .replacing file exists

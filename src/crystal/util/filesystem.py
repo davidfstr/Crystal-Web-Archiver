@@ -91,6 +91,10 @@ def open_nonexclusive(filepath: str, mode: Literal['rb', 'wb'] = 'rb') -> Binary
         return open(filepath, mode)
 
 
+# Suffix used when renaming aside a file being replaced (by replace_and_flush)
+RENAME_SUFFIX = '.replacing'
+
+
 def replace_and_flush(
         src_filepath: str,
         dst_filepath: str,
@@ -105,7 +109,7 @@ def replace_and_flush(
     
     Callers that opt-in to nonatomic_ok=True behavior should be prepared
     to repair interrupted replace operations, which may transiently rename
-    the (dst_filepath) to (dst_filepath + replace_and_flush.RENAME_SUFFIX).
+    the (dst_filepath) to (dst_filepath + RENAME_SUFFIX).
     For an example of how to do a repair, see how ResourceRevision.open()
     uses nonatomic_ok=True and replace_destination_locked().
     
@@ -160,7 +164,7 @@ def replace_and_flush(
             # 2. Move src to dst (new data in place)
             # 3. Delete dst+RENAME_SUFFIX (cleanup)
             with replace_destination_locked(dst_filepath):
-                movedaside_dst_filepath = dst_filepath + replace_and_flush.RENAME_SUFFIX  # type: ignore[attr-defined]
+                movedaside_dst_filepath = dst_filepath + RENAME_SUFFIX
                 
                 # Step 1: Rename aside (will succeed if file opened with FILE_SHARE_DELETE)
                 try:
@@ -206,9 +210,6 @@ def replace_and_flush(
     else:
         os.replace(src_filepath, dst_filepath)
         flush_renames_in_directory(os.path.dirname(dst_filepath))
-
-# Suffix used when renaming aside a file being replaced
-replace_and_flush.RENAME_SUFFIX = '.replacing'  # type: ignore[attr-defined]
 
 
 _mutex_for_replace_destination_lock = Lock()
