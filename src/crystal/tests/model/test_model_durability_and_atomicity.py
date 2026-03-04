@@ -29,7 +29,7 @@ from crystal.tests.util.skip import skipTest
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from crystal.tests.util.wait import wait_for_future
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.util.filesystem import flush_renames_in_directory, replace_and_flush
+from crystal.filesystem.local import flush_renames_in_directory, replace_and_flush
 from crystal.util.xos import is_linux, is_mac_os, is_windows
 from crystal.util.xtyping import not_none
 import crystal.tests.util.xtempfile as xtempfile

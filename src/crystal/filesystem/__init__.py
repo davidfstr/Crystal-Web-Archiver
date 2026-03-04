@@ -1,7 +1,6 @@
-# TODO: Rename crystal.util.filesystem -> local_filesystem
 from collections.abc import Iterator
 from contextlib import contextmanager
-from crystal.util.filesystem import (
+from crystal.filesystem.local import (
     flush_renames_in_directory as _flush_renames_in_directory,
     open_nonexclusive,
     replace_destination_locked as _replace_destination_locked,
@@ -267,7 +266,7 @@ class LocalFilesystem(_AbstractFilesystem):
         Raises:
         * OSError
         """
-        from crystal.util.filesystem import replace_and_flush as _replace_and_flush
+        from crystal.filesystem.local import replace_and_flush as _replace_and_flush
         _replace_and_flush(src, dst, nonatomic_ok=nonatomic_ok)
 
     @contextmanager

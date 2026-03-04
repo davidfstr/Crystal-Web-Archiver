@@ -24,7 +24,7 @@ from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util.tasks import scheduler_disabled, scheduler_thread_context
 from crystal.tests.util.wait import wait_for, wait_for_future, wait_while
 from crystal.tests.util.windows import OpenOrCreateDialog
-from crystal.util.filesystem import fine_grained_mtimes_available, replace_and_flush, RENAME_SUFFIX
+from crystal.filesystem.local import fine_grained_mtimes_available, replace_and_flush, RENAME_SUFFIX
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.xos import is_windows
 from crystal.util.xtyping import not_none
