@@ -548,16 +548,16 @@ class S3Filesystem(_AbstractFilesystem):
             )
 
         bucket_name = parsed.bucket_name
-        if bucket_name == '':
+        if not bucket_name:
             # NOTE: Do NOT include secret_url in the output because it
             #       might contain secret credentials
             raise ValueError(f'Invalid S3 URL bucket')
 
         region = parsed.region
-        if region is None or region == '':
-            # NOTE: Do NOT include secret_url in the output because it
-            #       might contain secret credentials
-            raise ValueError(f'S3 URL must include exactly one region')
+        # NOTE: If no ?region=R is specified in the URL, parse_s3_url()
+        #       will fallback to "us-east-1" as a default region rather
+        #       then returning a blank or None region
+        assert region
 
         plain_url = cls.format_url(bucket_name, parsed.key, region)
         if access_key_id is None:
