@@ -527,7 +527,7 @@ class S3Filesystem(_AbstractFilesystem):
         except Exception:
             # NOTE: Do NOT include secret_url in the output because it
             #       might contain secret credentials
-            raise ValueError(f'Not an S3 URL')
+            raise ValueError(f'Not a valid S3 URL')
 
         access_key_id = parsed.access_key_id
         if access_key_id is None:
@@ -581,7 +581,7 @@ class S3Filesystem(_AbstractFilesystem):
         try:
             parsed = parse_s3_url(path)
         except Exception:
-            raise ValueError(f'Not an S3 URL: {path}')
+            raise ValueError(f'Not a valid S3 URL: {path}')
 
         access_key_id = parsed.access_key_id
         if access_key_id is None:
