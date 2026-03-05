@@ -647,7 +647,7 @@ class Project(ListenableMixin):
                     '- AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY environment variables\n'
                     f'- the "default" profile in {credentials_path}, as set by "aws configure"\n'
                     f'- a {custom_var} profile in {credentials_path}, as set by "aws configure --profile {custom_var}"\n'
-                    '- the s3:// URL for the project, e.g. "s3://AKIA***OO:XP***@my-bucket/My Project.crystalproj?region=us-east-1"'
+                    '- the s3:// URL for the project, e.g. "s3://{access_key_id}:{secret_access_key.replace("/", "%2F")}@my-bucket/My Project.crystalproj?region=us-east-1"'
                 ) from e
             except FileNotFoundError as e:
                 raise ProjectFormatError(f'Project is missing database: {db_path}') from e
