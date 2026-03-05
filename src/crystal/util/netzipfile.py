@@ -43,6 +43,20 @@ class NetZipFile:
         self._open_range = open_range
         self._entries = _read_central_directory(open_range)
 
+    def size(self, entry_name: str) -> int:
+        """
+        Returns the uncompressed size of the named entry.
+
+        Reads directly from the cached central directory: no I/O needed.
+
+        Raises:
+        * KeyError -- if entry_name is not found in the zip file.
+        """
+        entry = self._entries.get(entry_name)
+        if entry is None:
+            raise KeyError(entry_name)
+        return entry.uncompressed_size
+
     def open(self, entry_name: str, mode: Literal['r'] = 'r') -> BinaryIO:
         """
         Opens the named entry for reading.

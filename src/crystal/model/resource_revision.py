@@ -1142,7 +1142,10 @@ class ResourceRevision:
                 
                 if nzf is not None:
                     try:
-                        return nzf.open(entry_name) 
+                        if _raise_size:
+                            raise _ReturnSize(nzf.size(entry_name))
+                        else:
+                            return nzf.open(entry_name)
                     except KeyError:  # ZipEntryNotFoundError analogue
                         # (keep going)
                         pass
