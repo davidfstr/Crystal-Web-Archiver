@@ -10,7 +10,7 @@ from unittest.mock import patch
 import zipfile
 
 
-# === Tests ===
+# === Tests: open + read ===
 
 def test_can_read_entry_given_zip64_stored_zip() -> None:
     entries = {'000': b'Alpha', '001': b'Beta', '00f': b'Pi'}
@@ -48,6 +48,8 @@ def test_raises_key_error_when_try_read_missing_entry() -> None:
     with pytest.raises(KeyError):
         nzf.open('nonexistent')
 
+
+# === Tests: open + read: Efficiency ===
 
 def test_given_average_case_zip_file_when_open_and_read_entry_then_2_reads_required() -> None:
     entries = {'000': b'Alpha', '001': b'Beta'}
@@ -150,6 +152,31 @@ def test_given_average_case_pack16_zip_file_when_open_and_read_all_entries_then_
     # NOTE: Opening + 16 entries = 1 + 16 = 17 reads
     assert call_count[0] == 17, \
         f'Expected 17 reads (1 CD + 16 entries), got {call_count[0]}'
+
+
+# === Tests: size ===
+
+def test_can_size_entry_given_zip64_stored_zip() -> None:
+    entries = {'000': b'Alpha', '001': b'Beta', '00f': b'Pi'}
+    data = _create_zip64_stored_zip(entries)
+    (open_range, call_count) = _create_counting_open_range_func(data)
+
+    nzf = NetZipFile(open_range)
+    assert call_count[0] == 1, 'Opening should cost 1 read (CD tail)'
+
+    assert nzf.size('000') == len(b'Alpha')
+    assert nzf.size('001') == len(b'Beta')
+    assert nzf.size('00f') == len(b'Pi')
+    assert call_count[0] == 1, 'size() should require no additional reads'
+
+
+def test_raises_key_error_when_try_size_missing_entry() -> None:
+    entries = {'000': b'Alpha'}
+    data = _create_zip64_stored_zip(entries)
+    nzf = NetZipFile(_create_open_range_func(data))
+
+    with pytest.raises(KeyError):
+        nzf.size('nonexistent')
 
 
 # === Utility ===

@@ -116,6 +116,12 @@ class CrystalLintRules(BaseChecker):
             'Direct local filesystem access in crystal/model is not allowed. '
             'Use Filesystem.join(), Filesystem.split(), LocalFilesystem.rename(), etc. instead.',
         ),
+        'C9018': (
+            "Don't import pytest in src/crystal/tests/; use unittest for E2E tests, or move the file to tests/ if it's a unit test",
+            'no-pytest-in-e2e-tests',
+            'pytest imports are not allowed in src/crystal/tests/. '
+            'E2E tests use unittest conventions. Unit tests belong in tests/.',
+        ),
     }
     
     # === Visit Call ===
@@ -411,6 +417,16 @@ class CrystalLintRules(BaseChecker):
         normalized = filepath.replace(os.sep, '/')
         return '/crystal/model/' in normalized
 
+    def _is_in_e2e_tests_layer(self, node: nodes.NodeNG) -> bool:
+        """Check if the node is in a file under src/crystal/tests/."""
+        module = node.root()
+        filepath = getattr(module, 'file', None)
+        if filepath is None:
+            return False
+        # Normalize path separators for cross-platform compatibility
+        normalized = filepath.replace(os.sep, '/')
+        return '/crystal/tests/' in normalized
+
     # === Visit Import ===
     
     def visit_import(self, node: nodes.Import) -> None:
@@ -420,6 +436,11 @@ class CrystalLintRules(BaseChecker):
         for (module_name, _) in node.names:
             if module_name == 'asyncio':
                 self.add_message('no-asyncio', node=node)
+        
+        # import pytest (in src/crystal/tests/)
+        for (module_name, _) in node.names:
+            if module_name == 'pytest' and self._is_in_e2e_tests_layer(node):
+                self.add_message('no-pytest-in-e2e-tests', node=node)
     
     _BANNED_FILESYSTEM_IMPORTS = frozenset({
         'flush_renames_in_directory',
@@ -435,6 +456,10 @@ class CrystalLintRules(BaseChecker):
         # from asyncio import ...
         if node.modname == 'asyncio':
             self.add_message('no-asyncio', node=node)
+
+        # from pytest import ... (in src/crystal/tests/)
+        if node.modname == 'pytest' and self._is_in_e2e_tests_layer(node):
+            self.add_message('no-pytest-in-e2e-tests', node=node)
 
         # from crystal.util.filesystem import open_nonexclusive (in model layer)
         if self._is_in_model_layer(node) and node.modname == 'crystal.util.filesystem':
