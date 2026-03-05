@@ -339,119 +339,6 @@ class S3Filesystem(_AbstractFilesystem):
     def recognizes_path(cls, path: str) -> bool:
         return path.startswith('s3://')
     
-    # TODO: Move this function to the "S3Filesystem API" section below
-    @classmethod
-    def split_credentials_if_present(cls, secret_url: str) -> 'tuple[Credentials | None, str]':
-        """
-        Splits an s3:// URL into (optional_credentials, plain_url).
-
-        The returned plain_url never contains embedded credentials.
-        """
-        from s3_parse_url import parse_s3_url
-
-        try:
-            parsed = parse_s3_url(secret_url)
-        except Exception:
-            # NOTE: Do NOT include secret_url in the output because it
-            #       might contain secret credentials
-            raise ValueError(f'Not an S3 URL')
-
-        access_key_id = parsed.access_key_id
-        if access_key_id is None:
-            secret_access_key = None
-        else:
-            try:
-                secret_access_key = parsed.secret_access_key
-            except TypeError:
-                # s3_parse_url may internally store a missing secret as None,
-                # and its property accessor attempts to unquote(None).
-                secret_access_key = None
-
-        if (access_key_id is None) != (secret_access_key is None):
-            # NOTE: Do NOT include secret_url in the output because it
-            #       might contain secret credentials
-            raise ValueError(
-                f'S3 URL has access key ID or secret access key but not both'
-            )
-
-        bucket_name = parsed.bucket_name
-        if bucket_name == '':
-            # NOTE: Do NOT include secret_url in the output because it
-            #       might contain secret credentials
-            raise ValueError(f'Invalid S3 URL bucket')
-
-        region = parsed.region
-        if region is None or region == '':
-            # NOTE: Do NOT include secret_url in the output because it
-            #       might contain secret credentials
-            raise ValueError(f'S3 URL must include exactly one region')
-
-        plain_url = cls.format_url(bucket_name, parsed.key, region)
-        if access_key_id is None:
-            credentials = None
-        else:
-            assert secret_access_key is not None
-            credentials = cls.Credentials(
-                access_key_id,
-                urllib.parse.unquote(secret_access_key),
-            )
-        return (credentials, plain_url)
-    
-    # TODO: Move this function to the "S3Filesystem API" section below
-    @classmethod
-    def parse_url(cls,
-            path: str,
-            *,
-            allow_credentials: bool = False,
-            ) -> tuple[str, str, str]:
-        from s3_parse_url import parse_s3_url
-
-        try:
-            parsed = parse_s3_url(path)
-        except Exception:
-            raise ValueError(f'Not an S3 URL: {path}')
-
-        access_key_id = parsed.access_key_id
-        if access_key_id is None:
-            secret_access_key = None
-        else:
-            try:
-                secret_access_key = parsed.secret_access_key
-            except TypeError:
-                # s3_parse_url may internally store a missing secret as None,
-                # and its property accessor attempts to unquote(None).
-                secret_access_key = None
-
-        if allow_credentials:
-            if access_key_id is None or secret_access_key is None:
-                raise ValueError(
-                    f'S3 URL is missing embedded credentials: {path!r}'
-                )
-        else:
-            if access_key_id is not None:
-                raise ValueError(
-                    f'S3 URL must not contain embedded credentials: {path!r}'
-                )
-
-        bucket_name = parsed.bucket_name
-        if bucket_name == '':
-            raise ValueError(f'Invalid S3 URL bucket: {path!r}')
-
-        region = parsed.region
-        if region is None or region == '':
-            raise ValueError(f'S3 URL must include exactly one region: {path!r}')
-
-        return (bucket_name, parsed.key, region)
-
-    # TODO: Move this function to the "S3Filesystem API" section below
-    @classmethod
-    def format_url(cls,
-            bucket_name: str,
-            key: str,
-            region: str,
-            ) -> str:
-        return f's3://{bucket_name}/{key}?region={region}'
-
     def join(self, /, parent_dirpath: str, *itemnames: str) -> str:
         # Validate inputs
         for n in itemnames:
@@ -627,7 +514,115 @@ class S3Filesystem(_AbstractFilesystem):
     
     # === S3Filesystem API ===
     
-    # (TODO: Move functions specific to this subclass from the above section to here)
+    @classmethod
+    def split_credentials_if_present(cls, secret_url: str) -> 'tuple[Credentials | None, str]':
+        """
+        Splits an s3:// URL into (optional_credentials, plain_url).
+
+        The returned plain_url never contains embedded credentials.
+        """
+        from s3_parse_url import parse_s3_url
+
+        try:
+            parsed = parse_s3_url(secret_url)
+        except Exception:
+            # NOTE: Do NOT include secret_url in the output because it
+            #       might contain secret credentials
+            raise ValueError(f'Not an S3 URL')
+
+        access_key_id = parsed.access_key_id
+        if access_key_id is None:
+            secret_access_key = None
+        else:
+            try:
+                secret_access_key = parsed.secret_access_key
+            except TypeError:
+                # s3_parse_url may internally store a missing secret as None,
+                # and its property accessor attempts to unquote(None).
+                secret_access_key = None
+
+        if (access_key_id is None) != (secret_access_key is None):
+            # NOTE: Do NOT include secret_url in the output because it
+            #       might contain secret credentials
+            raise ValueError(
+                f'S3 URL has access key ID or secret access key but not both'
+            )
+
+        bucket_name = parsed.bucket_name
+        if bucket_name == '':
+            # NOTE: Do NOT include secret_url in the output because it
+            #       might contain secret credentials
+            raise ValueError(f'Invalid S3 URL bucket')
+
+        region = parsed.region
+        if region is None or region == '':
+            # NOTE: Do NOT include secret_url in the output because it
+            #       might contain secret credentials
+            raise ValueError(f'S3 URL must include exactly one region')
+
+        plain_url = cls.format_url(bucket_name, parsed.key, region)
+        if access_key_id is None:
+            credentials = None
+        else:
+            assert secret_access_key is not None
+            credentials = cls.Credentials(
+                access_key_id,
+                urllib.parse.unquote(secret_access_key),
+            )
+        return (credentials, plain_url)
+    
+    @classmethod
+    def parse_url(cls,
+            path: str,
+            *,
+            allow_credentials: bool = False,
+            ) -> tuple[str, str, str]:
+        from s3_parse_url import parse_s3_url
+
+        try:
+            parsed = parse_s3_url(path)
+        except Exception:
+            raise ValueError(f'Not an S3 URL: {path}')
+
+        access_key_id = parsed.access_key_id
+        if access_key_id is None:
+            secret_access_key = None
+        else:
+            try:
+                secret_access_key = parsed.secret_access_key
+            except TypeError:
+                # s3_parse_url may internally store a missing secret as None,
+                # and its property accessor attempts to unquote(None).
+                secret_access_key = None
+
+        if allow_credentials:
+            if access_key_id is None or secret_access_key is None:
+                raise ValueError(
+                    f'S3 URL is missing embedded credentials: {path!r}'
+                )
+        else:
+            if access_key_id is not None:
+                raise ValueError(
+                    f'S3 URL must not contain embedded credentials: {path!r}'
+                )
+
+        bucket_name = parsed.bucket_name
+        if bucket_name == '':
+            raise ValueError(f'Invalid S3 URL bucket: {path!r}')
+
+        region = parsed.region
+        if region is None or region == '':
+            raise ValueError(f'S3 URL must include exactly one region: {path!r}')
+
+        return (bucket_name, parsed.key, region)
+
+    @classmethod
+    def format_url(cls,
+            bucket_name: str,
+            key: str,
+            region: str,
+            ) -> str:
+        return f's3://{bucket_name}/{key}?region={region}'
     
     # === Credentials ===
     
