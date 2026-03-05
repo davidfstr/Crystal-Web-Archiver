@@ -393,20 +393,48 @@ class _LimitedReader(io.RawIOBase):
 
 
 class _DeflateReader(io.RawIOBase):
-    def __init__(self, raw: BinaryIO):
+    # Chunk size for reading compressed data from the underlying stream
+    _READ_CHUNK = 65536
+
+    def __init__(self, raw: BinaryIO) -> None:
         self._raw = raw
-        self._decompressor = zlib.decompressobj()
+        # wbits=-15: raw deflate (no zlib header), as used in ZIP
+        self._decompressor = zlib.decompressobj(-15)
+        self._buf = bytearray()  # decompressed bytes not yet consumed by caller
+        self._buf_pos = 0        # read cursor into _buf; advance instead of slicing
+        self._done = False       # True once decompressor is exhausted
 
     def readable(self) -> bool:
         return True
 
     def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
-        chunk = self._raw.read(len(b))
-        if not chunk:
-            data = self._decompressor.flush()
-        else:
-            data = self._decompressor.decompress(chunk)
+        # Trim bytes consumed by the previous call, keeping memory usage bounded.
+        # del bytearray[:n] is O(remaining), not O(total).
+        if self._buf_pos > 0:
+            del self._buf[:self._buf_pos]
+            self._buf_pos = 0
 
-        n = len(data)
-        b[:n] = data
-        return n
+        # Fill the internal buffer until we have enough decompressed bytes or
+        # reach the end of the compressed stream.
+        want = len(b)  # cache
+        while len(self._buf) < want and not self._done:
+            chunk = self._raw.read(self._READ_CHUNK)
+            if chunk:
+                # bytearray.extend() is amortized O(1); avoids creating a new bytes object
+                self._buf.extend(self._decompressor.decompress(chunk))
+            else:
+                # No more compressed data; flush any remaining decompressed bytes
+                self._buf.extend(self._decompressor.flush())
+                self._done = True
+
+        # Copy min(want, len(self._buf)) bytes from the start of self._buf to b.
+        # Return the number of bytes copied.
+        if (len_buf := len(self._buf)) <= want:
+            b[:len_buf] = self._buf
+            self._buf_pos = len_buf
+            return len_buf
+        else:
+            # NOTE: Use a memoryview to avoid creating a temporary slice
+            b[:] = memoryview(self._buf)[:want]
+            self._buf_pos = want
+            return want
