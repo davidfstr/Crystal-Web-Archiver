@@ -1085,10 +1085,9 @@ class ResourceRevision:
                             # may have just moved it into place
                             pack_fileobj = fs.open(pack_filepath, 'rb')
                         except FileNotFoundError:
-                            movedaside_pack_filepath = (
-                                pack_filepath +
-                                RENAME_SUFFIX
-                            )
+                            (parent, name) = fs.split(pack_filepath)
+                            movedaside_pack_filepath = fs.join(
+                                parent, name + RENAME_SUFFIX)
                             if readonly:
                                 # Try to read from unrepaired pack file
                                 try:
@@ -1125,10 +1124,9 @@ class ResourceRevision:
                 try:
                     nzf = NetZipFile(open_pack_filepath)
                 except FileNotFoundError:
-                    movedaside_pack_filepath = (
-                        pack_filepath +
-                        RENAME_SUFFIX
-                    )
+                    (parent, name) = fs.split(pack_filepath)
+                    movedaside_pack_filepath = fs.join(
+                        parent, name + RENAME_SUFFIX)
                     assert readonly
                     
                     # Try to read from unrepaired pack file

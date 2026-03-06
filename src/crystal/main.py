@@ -226,6 +226,11 @@ def _main2(args: list[str]) -> None:
     # Initialize global configuration
     from crystal.util.xurllib import patch_urlparse_to_never_raise_valueerror
     patch_urlparse_to_never_raise_valueerror()
+
+    # Install boto3 fake if CRYSTAL_FAKE_S3_ROOT is set
+    if os.environ.get('CRYSTAL_FAKE_S3_ROOT'):
+        from crystal.tests.util.fake_boto3 import install as install_fake_boto3
+        install_fake_boto3()
     
     # Filter out strange "psn" argument (ex: '-psn_0_438379') that
     # macOS does sometimes pass upon first launch when run as a

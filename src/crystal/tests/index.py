@@ -25,6 +25,7 @@ Tests, by hierarchy:
         - test_model_durability_and_atomicity.py
         - test_pack16.py
         - test_project_migrate.py
+        - test_projects_on_s3.py
         - test_url_normalization.py
     - task -- Task tests, which make changes to a project
         - test_download_body.py
@@ -68,7 +69,7 @@ from crystal.tests import (
 from crystal.tests.aspects import test_do_not_download_groups, test_external_urls, test_readonly_mode, test_untitled_projects
 from crystal.tests.cli import test_cli, test_runner, test_shell
 from crystal.tests.desktop_integration import test_file_extension_visibility, test_icons, test_install_to_desktop
-from crystal.tests.model import test_disk_io_errors, test_hibernate, test_model_durability_and_atomicity, test_pack16, test_project_migrate, test_url_normalization
+from crystal.tests.model import test_disk_io_errors, test_hibernate, test_model_durability_and_atomicity, test_pack16, test_project_migrate, test_projects_on_s3, test_url_normalization
 from crystal.tests.task import test_download, test_download_body, test_tasks
 from crystal.tests.ui import test_about_box, test_callout, test_edit_alias, test_edit_group, test_edit_root_url, test_menus, test_new_alias, test_new_group, test_new_root_url, test_preferences, test_window_modal_titles
 from crystal.tests.ui.main_window import test_entitytree, test_load_urls, test_log_drawer, test_main_window, test_tasktree
@@ -127,6 +128,7 @@ TEST_FUNCS = (
     _test_functions_in_module(test_preferences) +
     _test_functions_in_module(test_profile) +
     _test_functions_in_module(test_project_migrate) +
+    _test_functions_in_module(test_projects_on_s3) +
     _test_functions_in_module(test_readonly_mode) +
     _test_functions_in_module(test_runner) +
     _test_functions_in_module(test_server) +

@@ -1,5 +1,138 @@
+"""
+Unit tests for the S3Filesystem class.
+"""
+
 from crystal.filesystem import S3Filesystem
 import pytest
+
+
+# === Test: join ===
+
+def test_s3_filesystem_join_child() -> None:
+    fs = S3Filesystem()
+
+    result = fs.join('s3://my-bucket/Archive?region=us-east-2', 'mysite.crystalproj')
+
+    assert result == 's3://my-bucket/Archive/mysite.crystalproj?region=us-east-2'
+
+
+def test_s3_filesystem_join_multiple_children() -> None:
+    fs = S3Filesystem()
+
+    result = fs.join('s3://my-bucket/a?region=us-east-2', 'b', 'c')
+
+    assert result == 's3://my-bucket/a/b/c?region=us-east-2'
+
+
+def test_s3_filesystem_join_from_bucket_root() -> None:
+    fs = S3Filesystem()
+
+    result = fs.join('s3://my-bucket/?region=us-east-2', 'Archive')
+
+    assert result == 's3://my-bucket/Archive?region=us-east-2'
+
+
+def test_s3_filesystem_join_when_name_contains_slash_then_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.join('s3://my-bucket/Archive?region=us-east-2', 'a/b')
+
+
+def test_s3_filesystem_join_when_name_is_empty_then_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.join('s3://my-bucket/Archive?region=us-east-2', '')
+
+
+def test_s3_filesystem_join_when_name_is_parent_dir_then_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.join('s3://my-bucket/Archive?region=us-east-2', '..')
+
+
+def test_s3_filesystem_join_when_name_is_current_dir_then_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.join('s3://my-bucket/Archive?region=us-east-2', '.')
+
+
+def test_s3_filesystem_join_when_parent_has_trailing_slash_then_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.join('s3://my-bucket/Archive/?region=us-east-2', 'child')
+
+
+# === Test: split ===
+
+def test_s3_filesystem_split_nested_path() -> None:
+    fs = S3Filesystem()
+
+    (parent, name) = fs.split('s3://my-bucket/Archive/mysite.crystalproj?region=us-east-2')
+
+    assert parent == 's3://my-bucket/Archive?region=us-east-2'
+    assert name == 'mysite.crystalproj'
+
+
+def test_s3_filesystem_split_top_level_path() -> None:
+    fs = S3Filesystem()
+
+    (parent, name) = fs.split('s3://my-bucket/Archive?region=us-east-2')
+
+    assert parent == 's3://my-bucket/?region=us-east-2'
+    assert name == 'Archive'
+
+
+def test_s3_filesystem_split_with_root_ok() -> None:
+    fs = S3Filesystem()
+    root_url = 's3://my-bucket/?region=us-east-2'
+
+    (parent, name) = fs.split(root_url, root_ok=True)
+
+    assert parent == root_url
+    assert name == ''
+
+
+def test_s3_filesystem_split_at_root_without_root_ok_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.split('s3://my-bucket/?region=us-east-2')
+
+
+# === Test: open: Validate Arguments ===
+
+def test_s3_filesystem_open_when_invalid_mode_then_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.open('s3://my-bucket/some-key?region=us-east-2', 'w')  # type: ignore[arg-type]
+
+
+def test_s3_filesystem_open_when_negative_start_with_end_then_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.open('s3://my-bucket/some-key?region=us-east-2', 'rb', start=-5, end=10)
+
+
+def test_s3_filesystem_open_when_nonnegative_start_without_end_then_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.open('s3://my-bucket/some-key?region=us-east-2', 'rb', start=0)
+
+
+def test_s3_filesystem_open_when_start_greater_than_end_then_raises_value_error() -> None:
+    fs = S3Filesystem()
+
+    with pytest.raises(ValueError):
+        fs.open('s3://my-bucket/some-key?region=us-east-2', 'rb', start=10, end=5)
+
 
 
 # === Test: split_credentials_if_present ===
