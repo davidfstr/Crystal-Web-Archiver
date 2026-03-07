@@ -16,7 +16,7 @@ def TemporaryDirectory(*args, **kwargs) -> tempfile.TemporaryDirectory:
     to be used in tests where cleanup errors can be ignored.
     Use `tempfile.TemporaryDirectory` directly in production code.
     """
-    return tempfile.TemporaryDirectory(*args, **(kwargs | dict(
+    return tempfile.TemporaryDirectory(*args, **(kwargs | dict(  # pylint: disable=no-direct-temporarydirectory-in-tests
         # NOTE: If a file inside the temporary directory is still open,
         #       ignore_cleanup_errors=True will prevent Windows from raising,
         #       at the cost of leaving the temporary directory around

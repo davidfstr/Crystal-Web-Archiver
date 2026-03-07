@@ -122,6 +122,12 @@ class CrystalLintRules(BaseChecker):
             'pytest imports are not allowed in src/crystal/tests/. '
             'E2E tests use unittest conventions. Unit tests belong in tests/.',
         ),
+        'C9019': (
+            "Don't use tempfile.TemporaryDirectory in tests; use TemporaryDirectory from crystal.tests.util.xtempfile instead",
+            'no-direct-temporarydirectory-in-tests',
+            'tempfile.TemporaryDirectory is not allowed in tests. '
+            'Use TemporaryDirectory from crystal.tests.util.xtempfile instead.',
+        ),
     }
     
     # === Visit Call ===
@@ -184,6 +190,10 @@ class CrystalLintRules(BaseChecker):
         # shutil.copystat(...), shutil.rmtree(...) in model layer
         if self._is_banned_shutil_call_in_model(node):
             self.add_message('no-direct-filesystem-access-in-model', node=node)
+
+        # tempfile.TemporaryDirectory(...) in tests layer
+        if self._is_banned_tempfile_temporarydirectory_in_tests(node):
+            self.add_message('no-direct-temporarydirectory-in-tests', node=node)
 
     def _is_thread_call(self, node: nodes.Call) -> bool:
         # Thread(...)
@@ -380,6 +390,22 @@ class CrystalLintRules(BaseChecker):
 
         return False
 
+    def _is_banned_tempfile_temporarydirectory_in_tests(self, node: nodes.Call) -> bool:
+        """
+        Check if this is a tempfile.TemporaryDirectory(...) call inside a tests file.
+        """
+        if not self._is_in_any_tests_layer(node):
+            return False
+
+        # tempfile.TemporaryDirectory(...)
+        if isinstance(node.func, nodes.Attribute):
+            if node.func.attrname == 'TemporaryDirectory':
+                if isinstance(node.func.expr, nodes.Name):
+                    if node.func.expr.name == 'tempfile':
+                        return True
+
+        return False
+
     _BANNED_OS_PATH_ATTR_READS = frozenset({'sep'})
     _BANNED_OS_ATTR_READS = frozenset({'W_OK'})
 
@@ -426,6 +452,16 @@ class CrystalLintRules(BaseChecker):
         # Normalize path separators for cross-platform compatibility
         normalized = filepath.replace(os.sep, '/')
         return '/crystal/tests/' in normalized
+
+    def _is_in_any_tests_layer(self, node: nodes.NodeNG) -> bool:
+        """Check if the node is in a tests file (tests/ or src/crystal/tests/)."""
+        module = node.root()
+        filepath = getattr(module, 'file', None)
+        if filepath is None:
+            return False
+        # Normalize path separators for cross-platform compatibility
+        normalized = filepath.replace(os.sep, '/')
+        return '/tests/' in normalized
 
     # === Visit Import ===
     

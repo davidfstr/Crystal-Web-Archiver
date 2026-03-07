@@ -35,13 +35,13 @@ from crystal.tests.util.subtests import awith_subtests, SubtestsContext, with_su
 from crystal.tests.util.tasks import scheduler_disabled, step_scheduler_until_done
 from crystal.tests.util.wait import DEFAULT_WAIT_TIMEOUT
 from crystal.tests.util.windows import OpenOrCreateDialog
+from crystal.tests.util import xtempfile
 from crystal.util.ports import port_in_use
 from crystal.util.xos import is_mac_os
 from io import TextIOBase
 import os
 import signal
 import socket
-import tempfile
 import textwrap
 from unittest import skip
 import urllib.request
@@ -693,7 +693,7 @@ def test_when_crystal_receives_ctrl_c_or_sigint_then_exits_cleanly() -> None:
 @contextmanager
 def _temporary_project() -> Iterator[str]:
     """Create a temporary project directory for testing."""
-    with tempfile.TemporaryDirectory(suffix='.crystalproj') as temp_project_dirpath:
+    with xtempfile.TemporaryDirectory(suffix='.crystalproj') as temp_project_dirpath:
         os.rmdir(temp_project_dirpath)
         yield temp_project_dirpath
 
