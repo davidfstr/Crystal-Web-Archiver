@@ -125,6 +125,8 @@ jaraco-text = ">=4.0.0"
 wakepy = "^0.9.0"
 trycast = "^1.2.1"
 PySocks = "^1.7.1"
+boto3 = "*"
+s3-parse-url = "==0.4.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=9.0,<10.0"

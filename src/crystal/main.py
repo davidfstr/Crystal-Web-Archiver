@@ -226,6 +226,11 @@ def _main2(args: list[str]) -> None:
     # Initialize global configuration
     from crystal.util.xurllib import patch_urlparse_to_never_raise_valueerror
     patch_urlparse_to_never_raise_valueerror()
+
+    # Install boto3 fake if CRYSTAL_FAKE_S3_ROOT is set
+    if os.environ.get('CRYSTAL_FAKE_S3_ROOT'):
+        from crystal.tests.util.fake_boto3 import install as install_fake_boto3
+        install_fake_boto3()
     
     # Filter out strange "psn" argument (ex: '-psn_0_438379') that
     # macOS does sometimes pass upon first launch when run as a
@@ -589,6 +594,8 @@ def _main2(args: list[str]) -> None:
         @capture_crashes_to_stderr
         @override
         def OnInit(self):
+            from crystal.util.xos import is_windows
+            
             # If running as Mac .app, LC_CTYPE may be set to the default locale
             # instead of LANG. So copy any such locale to LANG.
             # 
@@ -600,7 +607,7 @@ def _main2(args: list[str]) -> None:
                         os.environ['LANG'] = os.environ[alternate_lang_var]
                         break
             
-            if sys.platform.startswith('win') and sys.version_info >= (3, 8):
+            if is_windows() and sys.version_info >= (3, 8):
                 # Workaround wxPython >4.0.7 plus Python 3.8 breaking locale
                 # https://discuss.wxpython.org/t/wxpython4-1-1-python3-8-locale-wxassertionerror/35168
                 locale.setlocale(locale.LC_ALL, 'C')
@@ -1214,6 +1221,7 @@ def _create_untitled_project(
     )
 
 
+# TODO: Provide way to open a project from an s3:// URL from the UI
 def _prompt_to_open_project(
         parent: wx.Window,
         progress_listener: OpenProjectProgressListener,
@@ -1223,6 +1231,7 @@ def _prompt_to_open_project(
     Raises:
     * CancelOpenProject -- if the user cancels the prompt early
     """
+    from crystal.filesystem import LocalFilesystem
     from crystal.model import Project
     from crystal.progress.interface import CancelOpenProject
     from crystal.util.wx_bind import bind
@@ -1292,7 +1301,7 @@ def _prompt_to_open_project(
     
     if not os.path.exists(project_path):
         raise AssertionError()
-    if not Project.is_valid(project_path):
+    if not Project.is_valid(project_path, fs=LocalFilesystem()):
         _show_invalid_project_dialog()
         raise CancelOpenProject()
     

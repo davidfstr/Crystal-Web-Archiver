@@ -8,7 +8,7 @@ large minimum object sizes (e.g., AWS S3 Glacier with 128 KB minimum).
 See doc/tech_designs/pack16.md for more information.
 """
 
-from crystal.util.filesystem import open_nonexclusive, replace_and_flush
+from crystal.filesystem import LocalFilesystem
 from crystal.util.xio import Reader, Writer
 import os
 import shutil
@@ -26,6 +26,8 @@ def create_pack_file(
         dest_filepath: str,
         tmp_dirpath: str,
         retain_empty_pack_file_if_errors: bool = False,
+        *,
+        lfs: LocalFilesystem,
         ) -> set[str]:
     """
     Creates an uncompressed ZIP64 file from a mapping of entry names to
@@ -141,17 +143,17 @@ def create_pack_file(
             # Move to final location.
             # Create parent directory if needed.
             try:
-                replace_and_flush(tmp_filepath, dest_filepath)
+                lfs.replace_and_flush(tmp_filepath, dest_filepath)
             except FileNotFoundError:
-                os.makedirs(os.path.dirname(dest_filepath), exist_ok=True)
-                replace_and_flush(tmp_filepath, dest_filepath)
+                lfs.makedirs(lfs.dirname(dest_filepath), exist_ok=True)
+                lfs.replace_and_flush(tmp_filepath, dest_filepath)
         else:
-            os.remove(tmp_filepath)
+            lfs.remove(tmp_filepath)
     except:
         # Clean up temp file if operation failed
         if tmp_filepath is not None:
             try:
-                os.remove(tmp_filepath)
+                lfs.remove(tmp_filepath)
             except FileNotFoundError:
                 pass
         raise
@@ -195,7 +197,9 @@ class _DevNullWriter(Writer):
 def open_pack_entry(
         pack_file: str | BinaryIO,
         entry_name: str,
-        *, _raise_info: bool = False,
+        *,
+        lfs: LocalFilesystem,
+        _raise_info: bool = False,
         ) -> 'ZipEntryReader':
     """
     Opens a specific entry from a pack zip file, returning a file-like object.
@@ -214,7 +218,7 @@ def open_pack_entry(
     * OSError -- if could not read pack file
     """
     if isinstance(pack_file, str):
-        pack_fileobj = open_nonexclusive(pack_file, 'rb')
+        pack_fileobj = lfs.open(pack_file, 'rb')
     else:
         pack_fileobj = pack_file
     try:
@@ -294,6 +298,8 @@ class ZipEntryReader:
 def size_pack_entry(
         pack_file: str | BinaryIO,
         entry_name: str,
+        *,
+        lfs: LocalFilesystem,
         ) -> int:
     """
     Returns the uncompressed size of a specific entry from a pack zip file, in bytes.
@@ -307,7 +313,7 @@ def size_pack_entry(
     * OSError -- if could not read pack file
     """
     try:
-        open_pack_entry(pack_file, entry_name, _raise_info=True)
+        open_pack_entry(pack_file, entry_name, lfs=lfs, _raise_info=True)
     except _ReturnZipInfo as e:
         return e.info.file_size
     except (ZipEntryNotFoundError, OSError):
@@ -330,7 +336,10 @@ class _ReturnZipInfo(Exception):
 def rewrite_pack_without_entry(
         pack_filepath: str,
         entry_name: str,
-        tmp_dirpath: str) -> None:
+        tmp_dirpath: str,
+        *,
+        lfs: LocalFilesystem,
+        ) -> None:
     """
     Rewrites a pack zip file with one entry removed, atomically.
     
@@ -362,7 +371,7 @@ def rewrite_pack_without_entry(
             # Stream-copy each entry (except the deleted one)
             # from source zip to destination zip
             entry_count = 0
-            with open_nonexclusive(pack_filepath) as pack_fileobj, \
+            with lfs.open(pack_filepath, 'rb') as pack_fileobj, \
                     ZipFile(pack_fileobj, 'r') as source_zf, \
                     ZipFile(tmp_file, 'w', compression=ZIP_STORED, allowZip64=True) as dest_zf:
                 for name in source_zf.namelist():
@@ -380,16 +389,16 @@ def rewrite_pack_without_entry(
 
         if entry_count == 0:
             # Delete the old pack file instead of replacing it
-            os.remove(tmp_filepath)
-            os.remove(pack_filepath)
+            lfs.remove(tmp_filepath)
+            lfs.remove(pack_filepath)
         else:
             # Move new pack file to final location, replacing old pack file
-            replace_and_flush(tmp_filepath, pack_filepath, nonatomic_ok=True)
+            lfs.replace_and_flush(tmp_filepath, pack_filepath, nonatomic_ok=True)
     except:
         # Clean up temp file if operation failed
         if tmp_filepath is not None:
             try:
-                os.remove(tmp_filepath)
+                lfs.remove(tmp_filepath)
             except FileNotFoundError:
                 pass
         raise

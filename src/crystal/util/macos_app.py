@@ -1,4 +1,5 @@
 from crystal.util.cli import print_special
+from crystal.util.xos import is_mac_os
 from crystal.util.xthreading import bg_call_later
 from crystal.util.bulkheads import capture_crashes_to_stderr
 import sys
@@ -9,7 +10,7 @@ import time
 
 def get_application_menu_name() -> str:
     """Retrieves the title of the application menu on macOS."""
-    if sys.platform != 'darwin':
+    if not is_mac_os():
         raise ValueError('Not supported on this OS')
     
     try:
@@ -89,7 +90,7 @@ def get_application_menu_name() -> str:
 
 def set_application_menu_name(app_name: str) -> None:
     """Changes the title of the application menu on macOS."""
-    if sys.platform != 'darwin':
+    if not is_mac_os():
         raise ValueError('Not supported on this OS')
     
     try:
@@ -161,7 +162,7 @@ def warn_if_application_menu_name_changes_from(
     Periodically checks if the app name remains as expected_name. If it changes,
     prints a warning message and stops monitoring.
     """
-    if sys.platform != 'darwin':
+    if not is_mac_os():
         raise ValueError('Not supported on this OS')
     
     @capture_crashes_to_stderr
@@ -186,7 +187,7 @@ def warn_if_application_menu_name_changes_from(
 
 def bring_app_to_front() -> None:
     """Brings the current application to the front on macOS."""
-    if sys.platform != 'darwin':
+    if not is_mac_os():
         raise ValueError('Not supported on this OS')
     
     try:

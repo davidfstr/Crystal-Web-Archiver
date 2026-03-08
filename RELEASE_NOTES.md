@@ -13,6 +13,8 @@ Release Notes ⋮
 ### main / v2.3.0
 
 * Workflow improvements
+    * Projects can now be opened from AWS S3 cloud hosting.
+        * See [Projects on AWS S3] in the wiki for more information.
     * Projects now support storing URL revisions in Pack16 format,
       making them efficiently storable in storage systems with
       a large minimum object size, such as AWS S3 Glacier
@@ -49,6 +51,8 @@ Release Notes ⋮
     * UI progress dialogs will now never show in headless mode.
     * wxPython is now never even loaded in headless mode.
       Therefore Crystal can now be run (in headless mode) if wxPython isn't installed.
+
+[Projects on AWS S3]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Projects-on-AWS-S3
 
 ### v2.2.0 (January 27, 2026)
 

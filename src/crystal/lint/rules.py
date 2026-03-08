@@ -110,6 +110,30 @@ class CrystalLintRules(BaseChecker):
             'no-wx-constant-at-declaration-time',
             'wx.UPPER_CASE constants at declaration time are not compatible with --headless mode.',
         ),
+        'C9017': (
+            "Don't access the local filesystem directly in the model layer; use Filesystem methods instead",
+            'no-direct-filesystem-access-in-model',
+            'Direct local filesystem access in crystal/model is not allowed. '
+            'Use Filesystem.join(), Filesystem.split(), LocalFilesystem.rename(), etc. instead.',
+        ),
+        'C9018': (
+            "Don't import pytest in src/crystal/tests/; use unittest for E2E tests, or move the file to tests/ if it's a unit test",
+            'no-pytest-in-e2e-tests',
+            'pytest imports are not allowed in src/crystal/tests/. '
+            'E2E tests use unittest conventions. Unit tests belong in tests/.',
+        ),
+        'C9019': (
+            "Don't use tempfile.TemporaryDirectory in tests; use TemporaryDirectory from crystal.tests.util.xtempfile instead",
+            'no-direct-temporarydirectory-in-tests',
+            'tempfile.TemporaryDirectory is not allowed in tests. '
+            'Use TemporaryDirectory from crystal.tests.util.xtempfile instead.',
+        ),
+        'C9020': (
+            "Don't read sys.platform directly; use is_windows(), is_linux(), or is_mac_os() from crystal.util.xos instead",
+            'no-direct-sys-platform',
+            'Direct sys.platform access is not allowed. '
+            'Use is_windows(), is_linux(), or is_mac_os() from crystal.util.xos instead.',
+        ),
     }
     
     # === Visit Call ===
@@ -160,7 +184,23 @@ class CrystalLintRules(BaseChecker):
         # something.rollback(...)
         if self._is_database_rollback_call(node):
             self.add_message('no-direct-database-rollback', node=node)
-    
+
+        # os.path.join(...), os.makedirs(...), os.rename(...), etc. in model layer
+        if self._is_banned_os_call_in_model(node):
+            self.add_message('no-direct-filesystem-access-in-model', node=node)
+
+        # send2trash(...) in model layer
+        if self._is_banned_send2trash_call_in_model(node):
+            self.add_message('no-direct-filesystem-access-in-model', node=node)
+
+        # shutil.copystat(...), shutil.rmtree(...) in model layer
+        if self._is_banned_shutil_call_in_model(node):
+            self.add_message('no-direct-filesystem-access-in-model', node=node)
+
+        # tempfile.TemporaryDirectory(...) in tests layer
+        if self._is_banned_tempfile_temporarydirectory_in_tests(node):
+            self.add_message('no-direct-temporarydirectory-in-tests', node=node)
+
     def _is_thread_call(self, node: nodes.Call) -> bool:
         # Thread(...)
         if isinstance(node.func, nodes.Name) and node.func.name == 'Thread':
@@ -272,9 +312,171 @@ class CrystalLintRules(BaseChecker):
         if isinstance(node.func, nodes.Attribute):
             if node.func.attrname == 'rollback':
                 return True
-        
+
         return False
-    
+
+    _BANNED_OS_PATH_ATTRS = frozenset({
+        'basename',
+        'dirname',
+        'exists',
+        'getsize',
+        'isdir',
+        'isfile',
+        'join',
+        'split',
+    })
+
+    _BANNED_OS_ATTRS = frozenset({
+        'access',
+        'listdir',
+        'makedirs',
+        'mkdir',
+        'remove',
+        'rename',
+        'walk',
+    })
+
+    def _is_banned_os_call_in_model(self, node: nodes.Call) -> bool:
+        """
+        Check if this is a banned os.path.X(...) os.X(...) call
+        inside a crystal/model source file.
+        """
+        if not self._is_in_model_layer(node):
+            return False
+
+        # os.path.join(...), os.path.exists(...), etc.
+        if isinstance(node.func, nodes.Attribute):
+            if node.func.attrname in self._BANNED_OS_PATH_ATTRS:
+                if isinstance(node.func.expr, nodes.Attribute):
+                    if node.func.expr.attrname == 'path':
+                        if isinstance(node.func.expr.expr, nodes.Name):
+                            if node.func.expr.expr.name == 'os':
+                                return True
+
+        # os.makedirs(...), os.listdir(...), etc.
+        if isinstance(node.func, nodes.Attribute):
+            if node.func.attrname in self._BANNED_OS_ATTRS:
+                if isinstance(node.func.expr, nodes.Name):
+                    if node.func.expr.name == 'os':
+                        return True
+
+        return False
+
+    def _is_banned_send2trash_call_in_model(self, node: nodes.Call) -> bool:
+        """
+        Check if this is a send2trash(...) call inside a crystal/model source file.
+        """
+        if not self._is_in_model_layer(node):
+            return False
+
+        # send2trash(...)
+        if isinstance(node.func, nodes.Name) and node.func.name == 'send2trash':
+            return True
+
+        return False
+
+    _BANNED_SHUTIL_ATTRS = frozenset({
+        'copystat',
+        'rmtree',
+    })
+
+    def _is_banned_shutil_call_in_model(self, node: nodes.Call) -> bool:
+        """
+        Check if this is a banned shutil.X(...) call inside a crystal/model source file.
+        """
+        if not self._is_in_model_layer(node):
+            return False
+
+        # shutil.copystat(...), shutil.rmtree(...)
+        if isinstance(node.func, nodes.Attribute):
+            if node.func.attrname in self._BANNED_SHUTIL_ATTRS:
+                if isinstance(node.func.expr, nodes.Name):
+                    if node.func.expr.name == 'shutil':
+                        return True
+
+        return False
+
+    def _is_banned_tempfile_temporarydirectory_in_tests(self, node: nodes.Call) -> bool:
+        """
+        Check if this is a tempfile.TemporaryDirectory(...) call inside a tests file.
+        """
+        if not self._is_in_any_tests_layer(node):
+            return False
+
+        # tempfile.TemporaryDirectory(...)
+        if isinstance(node.func, nodes.Attribute):
+            if node.func.attrname == 'TemporaryDirectory':
+                if isinstance(node.func.expr, nodes.Name):
+                    if node.func.expr.name == 'tempfile':
+                        return True
+
+        return False
+
+    def _is_sys_platform_read(self, node: nodes.Attribute) -> bool:
+        # sys.platform
+        if node.attrname == 'platform':
+            if isinstance(node.expr, nodes.Name):
+                if node.expr.name == 'sys':
+                    return True
+        return False
+
+    _BANNED_OS_PATH_ATTR_READS = frozenset({'sep'})
+    _BANNED_OS_ATTR_READS = frozenset({'W_OK'})
+
+    def _is_banned_os_attr_read_in_model(self, node: nodes.Attribute) -> bool:
+        """
+        Check if this is a banned os.path.X or os.X constant attribute access
+        inside a crystal/model source file.
+        """
+        if not self._is_in_model_layer(node):
+            return False
+
+        # os.path.sep etc.
+        if node.attrname in self._BANNED_OS_PATH_ATTR_READS:
+            if isinstance(node.expr, nodes.Attribute):
+                if node.expr.attrname == 'path':
+                    if isinstance(node.expr.expr, nodes.Name):
+                        if node.expr.expr.name == 'os':
+                            return True
+
+        # os.W_OK etc.
+        if node.attrname in self._BANNED_OS_ATTR_READS:
+            if isinstance(node.expr, nodes.Name):
+                if node.expr.name == 'os':
+                    return True
+
+        return False
+
+    def _is_in_model_layer(self, node: nodes.NodeNG) -> bool:
+        """Check if the node is in a file under crystal/model."""
+        module = node.root()
+        filepath = getattr(module, 'file', None)
+        if filepath is None:
+            return False
+        # Normalize path separators for cross-platform compatibility
+        normalized = filepath.replace(os.sep, '/')
+        return '/crystal/model/' in normalized
+
+    def _is_in_e2e_tests_layer(self, node: nodes.NodeNG) -> bool:
+        """Check if the node is in a file under src/crystal/tests/."""
+        module = node.root()
+        filepath = getattr(module, 'file', None)
+        if filepath is None:
+            return False
+        # Normalize path separators for cross-platform compatibility
+        normalized = filepath.replace(os.sep, '/')
+        return '/crystal/tests/' in normalized
+
+    def _is_in_any_tests_layer(self, node: nodes.NodeNG) -> bool:
+        """Check if the node is in a tests file (tests/ or src/crystal/tests/)."""
+        module = node.root()
+        filepath = getattr(module, 'file', None)
+        if filepath is None:
+            return False
+        # Normalize path separators for cross-platform compatibility
+        normalized = filepath.replace(os.sep, '/')
+        return '/tests/' in normalized
+
     # === Visit Import ===
     
     def visit_import(self, node: nodes.Import) -> None:
@@ -284,21 +486,52 @@ class CrystalLintRules(BaseChecker):
         for (module_name, _) in node.names:
             if module_name == 'asyncio':
                 self.add_message('no-asyncio', node=node)
+        
+        # import pytest (in src/crystal/tests/)
+        for (module_name, _) in node.names:
+            if module_name == 'pytest' and self._is_in_e2e_tests_layer(node):
+                self.add_message('no-pytest-in-e2e-tests', node=node)
     
+    _BANNED_FILESYSTEM_IMPORTS = frozenset({
+        'flush_renames_in_directory',
+        'open_nonexclusive',
+        'replace_and_flush',
+        'replace_destination_locked',
+        'RENAME_SUFFIX',
+    })
+
     def visit_importfrom(self, node: nodes.ImportFrom) -> None:
         """Check for banned from imports."""
-        
+
         # from asyncio import ...
         if node.modname == 'asyncio':
             self.add_message('no-asyncio', node=node)
+
+        # from pytest import ... (in src/crystal/tests/)
+        if node.modname == 'pytest' and self._is_in_e2e_tests_layer(node):
+            self.add_message('no-pytest-in-e2e-tests', node=node)
+
+        # from crystal.util.filesystem import open_nonexclusive (in model layer)
+        if self._is_in_model_layer(node) and node.modname == 'crystal.util.filesystem':
+            for (name, _) in node.names:
+                if name in self._BANNED_FILESYSTEM_IMPORTS:
+                    self.add_message('no-direct-filesystem-access-in-model', node=node)
+                    break
     
-    # === Visit Attribute (wx constants) ===
+    # === Visit Attribute (wx constants + banned os attr reads) ===
 
     def visit_attribute(self, node: nodes.Attribute) -> None:
-        """Check for wx.CONSTANT usage outside function/method bodies."""
-        if not self._is_wx_constant_at_declaration_time(node):
-            return
-        self.add_message('no-wx-constant-at-declaration-time', node=node)
+        """Check for wx.CONSTANT usage outside function/method bodies and banned os attribute reads."""
+        if self._is_wx_constant_at_declaration_time(node):
+            self.add_message('no-wx-constant-at-declaration-time', node=node)
+
+        # os.path.sep, os.W_OK in model layer
+        if self._is_banned_os_attr_read_in_model(node):
+            self.add_message('no-direct-filesystem-access-in-model', node=node)
+
+        # sys.platform
+        if self._is_sys_platform_read(node):
+            self.add_message('no-direct-sys-platform', node=node)
 
     def _is_wx_constant_at_declaration_time(self, node: nodes.Attribute) -> bool:
         """
@@ -789,7 +1022,9 @@ def _patch_astroid() -> None:
     
     Backports the fix: https://github.com/pylint-dev/astroid/pull/2928
     """
-    if sys.platform != 'win32':
+    # NOTE: Don't use is_windows() because don't want to depend
+    #       on any part of the crystal.* packages in the linting system.
+    if sys.platform != 'win32':  # pylint: disable=no-direct-sys-platform
         # Patch only useful on Windows
         return
     try:

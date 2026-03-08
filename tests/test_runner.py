@@ -11,7 +11,8 @@ from crystal.tests.runner.parallel import (
     _interrupt_workers, _parse_test_result, _read_until_prompt, _run_worker,
 )
 from crystal.tests.runner.shared import normalize_test_names
-from crystal.util.pipes import create_selectable_pipe, Pipe
+from crystal.tests.util import xtempfile
+from crystal.util.pipes import create_selectable_pipe
 from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 import os
@@ -19,10 +20,8 @@ import pytest
 import queue
 import signal
 import sys
-import tempfile
 import threading
 from typing import Any
-from unittest import skip
 from unittest.mock import patch
 
 
@@ -895,7 +894,7 @@ class TestInterruptRunParallelTestWorker:
             work_queue = queue.Queue()
         
         # Create temporary directory for logs
-        with tempfile.TemporaryDirectory() as log_dir:
+        with xtempfile.TemporaryDirectory() as log_dir:
             # Create interrupt event and pipes
             interrupted_event = threading.Event()
             interrupt_pipe = create_selectable_pipe()

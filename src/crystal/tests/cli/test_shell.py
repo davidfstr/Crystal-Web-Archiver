@@ -1383,7 +1383,8 @@ def _console_impl(crystal) -> ConsoleImplementation:
 
 @contextmanager
 def _echo_restored_on_exit() -> Iterator[None]:
-    if sys.platform == 'win32':
+    # NOTE: mypy understands sys.platform but not is_windows()
+    if sys.platform == 'win32':  # is_windows()  # pylint: disable=no-direct-sys-platform
         raise SkipTest('not supported on Windows')
     try:
         yield
