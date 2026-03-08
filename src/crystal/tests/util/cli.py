@@ -103,7 +103,8 @@ def crystal_running(
     
     if tty:
         # TODO: Support Windows, probably via the pywintty library
-        if sys.platform == 'win32':
+        # NOTE: mypy understands sys.platform but not is_windows()
+        if sys.platform == 'win32':  # is_windows()  # pylint: disable=no-direct-sys-platform
             raise NotImplementedError('tty=True not supported on Windows')
         import pty
         (master_fd, slave_fd) = pty.openpty()

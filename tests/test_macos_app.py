@@ -1,6 +1,7 @@
 """Unit tests for module util/macos_app.py"""
 
 from crystal.util import macos_app
+from crystal.util.xos import is_mac_os
 from crystal.tests.util.wait import wait_for_sync
 import pytest
 import sys
@@ -9,7 +10,7 @@ from unittest.mock import patch
 
 # Skip all tests in this module on non-macOS platforms
 pytestmark = pytest.mark.skipif(
-    sys.platform != 'darwin',
+    not is_mac_os(),
     reason='Tests only run on macOS'
 )
 
@@ -38,14 +39,14 @@ def test_set_and_get_application_menu_name() -> None:
 
 def test_get_application_menu_name_not_supported_on_non_darwin() -> None:
     """Test that get_application_menu_name raises error on non-macOS."""
-    with patch('sys.platform', 'linux'):
+    with patch('crystal.util.macos_app.is_mac_os', return_value=False):
         with pytest.raises(ValueError, match='Not supported on this OS'):
             macos_app.get_application_menu_name()
 
 
 def test_set_application_menu_name_not_supported_on_non_darwin() -> None:
     """Test that set_application_menu_name raises error on non-macOS."""
-    with patch('sys.platform', 'linux'):
+    with patch('crystal.util.macos_app.is_mac_os', return_value=False):
         with pytest.raises(ValueError, match='Not supported on this OS'):
             macos_app.set_application_menu_name('TestName')
 
@@ -80,6 +81,6 @@ def test_warn_if_application_menu_name_changes_from_detects_name_change() -> Non
 
 def test_bring_app_to_front_not_supported_on_non_darwin() -> None:
     """Test that bring_app_to_front raises error on non-macOS."""
-    with patch('sys.platform', 'linux'):
+    with patch('crystal.util.macos_app.is_mac_os', return_value=False):
         with pytest.raises(ValueError, match='Not supported on this OS'):
             macos_app.bring_app_to_front()

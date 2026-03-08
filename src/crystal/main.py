@@ -594,6 +594,8 @@ def _main2(args: list[str]) -> None:
         @capture_crashes_to_stderr
         @override
         def OnInit(self):
+            from crystal.util.xos import is_windows
+            
             # If running as Mac .app, LC_CTYPE may be set to the default locale
             # instead of LANG. So copy any such locale to LANG.
             # 
@@ -605,7 +607,7 @@ def _main2(args: list[str]) -> None:
                         os.environ['LANG'] = os.environ[alternate_lang_var]
                         break
             
-            if sys.platform.startswith('win') and sys.version_info >= (3, 8):
+            if is_windows() and sys.version_info >= (3, 8):
                 # Workaround wxPython >4.0.7 plus Python 3.8 breaking locale
                 # https://discuss.wxpython.org/t/wxpython4-1-1-python3-8-locale-wxassertionerror/35168
                 locale.setlocale(locale.LC_ALL, 'C')

@@ -14,7 +14,8 @@ from weakref import WeakValueDictionary
 #       which is easy to confuse with BytesIO concrete implementation
 def open_nonexclusive(filepath: str, mode: Literal['rb', 'wb'] = 'rb') -> BinaryIO:
     """Opens a binary file, allowing concurrent writes from other processes."""
-    if sys.platform == 'win32':  # is_windows()
+    # NOTE: mypy understands sys.platform but not is_windows()
+    if sys.platform == 'win32':  # is_windows()  # pylint: disable=no-direct-sys-platform
         import ctypes
         import msvcrt
         from ctypes import wintypes

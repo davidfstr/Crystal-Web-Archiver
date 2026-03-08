@@ -72,9 +72,10 @@ def _make_nonblocking_unix(fd: int) -> None:
     
     This is only available on Unix-like systems (macOS, Linux, etc.).
     """
-    if sys.platform == 'win32':  # help mypy
+    # NOTE: mypy understands sys.platform but not is_windows()
+    if sys.platform == 'win32':  # is_windows()  # pylint: disable=no-direct-sys-platform
         raise ValueError('Not support on Windows')
-    
+
     import fcntl
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)

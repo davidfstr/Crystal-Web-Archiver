@@ -128,6 +128,12 @@ class CrystalLintRules(BaseChecker):
             'tempfile.TemporaryDirectory is not allowed in tests. '
             'Use TemporaryDirectory from crystal.tests.util.xtempfile instead.',
         ),
+        'C9020': (
+            "Don't read sys.platform directly; use is_windows(), is_linux(), or is_mac_os() from crystal.util.xos instead",
+            'no-direct-sys-platform',
+            'Direct sys.platform access is not allowed. '
+            'Use is_windows(), is_linux(), or is_mac_os() from crystal.util.xos instead.',
+        ),
     }
     
     # === Visit Call ===
@@ -406,6 +412,14 @@ class CrystalLintRules(BaseChecker):
 
         return False
 
+    def _is_sys_platform_read(self, node: nodes.Attribute) -> bool:
+        # sys.platform
+        if node.attrname == 'platform':
+            if isinstance(node.expr, nodes.Name):
+                if node.expr.name == 'sys':
+                    return True
+        return False
+
     _BANNED_OS_PATH_ATTR_READS = frozenset({'sep'})
     _BANNED_OS_ATTR_READS = frozenset({'W_OK'})
 
@@ -514,6 +528,10 @@ class CrystalLintRules(BaseChecker):
         # os.path.sep, os.W_OK in model layer
         if self._is_banned_os_attr_read_in_model(node):
             self.add_message('no-direct-filesystem-access-in-model', node=node)
+
+        # sys.platform
+        if self._is_sys_platform_read(node):
+            self.add_message('no-direct-sys-platform', node=node)
 
     def _is_wx_constant_at_declaration_time(self, node: nodes.Attribute) -> bool:
         """
@@ -1004,7 +1022,9 @@ def _patch_astroid() -> None:
     
     Backports the fix: https://github.com/pylint-dev/astroid/pull/2928
     """
-    if sys.platform != 'win32':
+    # NOTE: Don't use is_windows() because don't want to depend
+    #       on any part of the crystal.* packages in the linting system.
+    if sys.platform != 'win32':  # pylint: disable=no-direct-sys-platform
         # Patch only useful on Windows
         return
     try:
