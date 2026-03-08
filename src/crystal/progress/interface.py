@@ -28,6 +28,9 @@ class OpenProjectProgressListener:
     def opening_project(self) -> None:
         pass
     
+    def downloading_database(self) -> None:
+        pass
+    
     def upgrading_project(self, message: str) -> None:
         pass
     

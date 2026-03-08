@@ -278,6 +278,12 @@ class MainWindow(CloakMixin):
             wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O')),
             action_func=self._on_open_project,
             enabled=True)
+        self._open_project_from_s3_action = Action(
+            wx.ID_ANY,
+            'Open Project from &S3...',
+            accel=None,
+            action_func=self._on_open_project_from_s3,
+            enabled=True)
         self._close_project_action = Action(
             wx.ID_CLOSE,
             '&Close Project',
@@ -414,6 +420,7 @@ class MainWindow(CloakMixin):
         file_menu = wx.Menu()
         self._new_project_action.append_menuitem_to(file_menu)
         self._open_project_action.append_menuitem_to(file_menu)
+        self._open_project_from_s3_action.append_menuitem_to(file_menu)
         file_menu.AppendSeparator()
         self._close_project_action.append_menuitem_to(file_menu)
         self._save_project_action.append_menuitem_to(file_menu)
@@ -510,6 +517,7 @@ class MainWindow(CloakMixin):
     def _create_minimal_menu_bar(cls,
             *, on_new_project: Callable[[], None],
             on_open_project: Callable[[], None],
+            on_open_project_from_s3: Callable[[], None],
             on_quit: Callable[[], None],
             ) -> tuple[wx.MenuBar, Callable[[wx.MenuEvent], None]]:
         """
@@ -524,7 +532,7 @@ class MainWindow(CloakMixin):
         handler_for_id = {}
         def Set(
                 mi: wx.MenuItem,
-                *, Accel: wx.AcceleratorEntry,
+                *, Accel: wx.AcceleratorEntry | None,
                 Handler: Callable[[], None] | None,
                 ) -> wx.MenuItem:
             mi.Accel = Accel
@@ -540,6 +548,9 @@ class MainWindow(CloakMixin):
         Set(file_menu.Append(wx.ID_OPEN, '&Open Project...'),
             Accel=wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('O')),
             Handler=on_open_project)
+        Set(file_menu.Append(wx.ID_ANY, 'Open Project from &S3...'),
+            Accel=None,
+            Handler=on_open_project_from_s3)
         file_menu.AppendSeparator()
         Set(file_menu.Append(wx.ID_CLOSE, '&Close Project'),
             Accel=wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('W')),
@@ -1089,6 +1100,11 @@ class MainWindow(CloakMixin):
         # 1. Try to close this MainWindow, saving any changes
         # 2. Upon success, prompt to open a different project
         wx.GetApp().MacOpenFile('__open__')
+
+    def _on_open_project_from_s3(self, event: wx.MenuEvent) -> None:
+        # 1. Try to close this MainWindow, saving any changes
+        # 2. Upon success, show the Open Project from S3 dialog
+        wx.GetApp().MacOpenFile('__open_s3__')
     
     def _on_close_window(self, event: wx.CommandEvent) -> None:
         self._frame.Close()  # will trigger call to _on_close_frame()
@@ -1257,6 +1273,8 @@ class MainWindow(CloakMixin):
             )
         
         # Destroy self, since we did not Veto() the close event
+        # NOTE: On Linux/wxGTK the Destroy is NOT performed synchronously,
+        #       unlike macOS and Windows
         self._frame.Destroy()
         
         # Clear reference to self if we're the last created MainWindow

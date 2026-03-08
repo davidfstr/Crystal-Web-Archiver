@@ -996,6 +996,15 @@ async def _did_launch(
                     # NOTE: Can raise SystemExit
                     retry_on_cancel = True
                     project = await _prompt_for_project(progress_listener, initial_choice=wx.ID_NO, **project_kwargs)
+                elif filepath == '__open_s3__':
+                    # NOTE: Can raise CancelOpenProject
+                    retry_on_cancel = True
+                    try:
+                        project = _prompt_to_open_project_from_s3(progress_listener, **project_kwargs)
+                    except CancelOpenProject:
+                        # Don't immediately retry to open from S3 again
+                        filepath = None
+                        raise
                 else:
                     # NOTE: Can raise CancelOpenProject
                     retry_on_cancel = False
@@ -1094,9 +1103,15 @@ async def _prompt_for_project(
                 choice_id,
             ))
         
+        def on_open_project_from_s3() -> None:
+            global _project_to_open_soon
+            _project_to_open_soon = ('__open_s3__', False)
+            select_choice_in_dialog(wx.ID_NO)  # trigger the "Open" button
+
         (menubar, on_menu) = MainWindow._create_minimal_menu_bar(
             on_new_project=lambda: select_choice_in_dialog(wx.ID_YES),  # "New Project" button
             on_open_project=lambda: select_choice_in_dialog(wx.ID_NO),  # "Open" button
+            on_open_project_from_s3=on_open_project_from_s3,
             on_quit=lambda: select_choice_in_dialog(wx.ID_CANCEL),  # Close dialog + Quit
         )
         menubar_frame.SetMenuBar(menubar)
@@ -1184,13 +1199,17 @@ async def _prompt_for_project(
                             if _project_to_open_soon is not None:
                                 (filepath, is_untitled) = _project_to_open_soon
                                 _project_to_open_soon = None  # consume
-                                
+
+                                if filepath == '__open_s3__':
+                                    return _prompt_to_open_project_from_s3(
+                                        progress_listener, **project_kwargs)
+
                                 project_kwargs['is_untitled'] = is_untitled
                                 return _load_project(
                                     filepath,
                                     progress_listener,
                                     **project_kwargs)  # type: ignore[arg-type]
-                            
+
                             return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
                         elif choice == wx.ID_CANCEL:
                             raise SystemExit()
@@ -1221,7 +1240,6 @@ def _create_untitled_project(
     )
 
 
-# TODO: Provide way to open a project from an s3:// URL from the UI
 def _prompt_to_open_project(
         parent: wx.Window,
         progress_listener: OpenProjectProgressListener,
@@ -1301,7 +1319,12 @@ def _prompt_to_open_project(
     
     if not os.path.exists(project_path):
         raise AssertionError()
-    if not Project.is_valid(project_path, fs=LocalFilesystem()):
+    try:
+        is_valid = Project.is_valid(project_path, fs=LocalFilesystem())
+    except PermissionError as e:
+        _show_access_denied_dialog(e)
+        raise CancelOpenProject()
+    if not is_valid:
         _show_invalid_project_dialog()
         raise CancelOpenProject()
     
@@ -1310,6 +1333,44 @@ def _prompt_to_open_project(
         project_path,
         progress_listener,
         **project_kwargs)  # type: ignore[arg-type]
+
+
+def _prompt_to_open_project_from_s3(
+        progress_listener: OpenProjectProgressListener,
+        **project_kwargs: object
+        ) -> Project:
+    """
+    Shows the Open Project from S3 dialog and loads the selected project.
+
+    Raises:
+    * CancelOpenProject -- if the user cancels the dialog
+    """
+    from crystal.browser.open_project_from_s3 import OpenProjectFromS3Dialog
+    from crystal.filesystem import S3Filesystem
+    from crystal.model import Project
+    from crystal.progress.interface import CancelOpenProject
+    from crystal.util.wx_dialog import ShowModal
+    import wx
+
+    dialog = OpenProjectFromS3Dialog(parent=None)
+    with dialog:
+        return_code = ShowModal(dialog)
+        if return_code != wx.ID_OK:
+            raise CancelOpenProject()
+        plain_s3_url = dialog.plain_s3_url
+        credentials = dialog.credentials
+
+    try:
+        is_valid = Project.is_valid(plain_s3_url, fs=S3Filesystem(credentials))
+    except PermissionError as e:
+        _show_access_denied_dialog(e)
+        raise CancelOpenProject()
+    if not is_valid:
+        _show_invalid_project_dialog()
+        raise CancelOpenProject()
+
+    kwargs = {**project_kwargs, 'readonly': True, 'credentials': credentials}
+    return _load_project(plain_s3_url, progress_listener, **kwargs)  # type: ignore[arg-type]
 
 
 def _load_project(
@@ -1349,6 +1410,9 @@ def _load_project(
     except ProjectReadOnlyError:
         # TODO: Present this error to the user nicely
         raise
+    except PermissionError as e:
+        _show_access_denied_dialog(e, _show_modal_func=_show_modal_func)
+        raise CancelOpenProject()
     except ProjectFormatError:
         _show_invalid_project_dialog(
             project_is_likely_corrupted=True,
@@ -1370,6 +1434,29 @@ def _load_project(
         raise CancelOpenProject()
     except CancelOpenProject:
         raise
+
+
+def _show_access_denied_dialog(
+        e: PermissionError,
+        # NOTE: Used by automated tests
+        _show_modal_func: Optional[Callable[[wx.Dialog], int]]=None,
+        ) -> None:
+    from crystal.util.wx_dialog import position_dialog_initially
+    import wx
+
+    if _show_modal_func is None:
+        from crystal.util.wx_dialog import ShowModal as _show_modal_func
+    assert _show_modal_func is not None  # help mypy
+
+    dialog = wx.MessageDialog(None,
+        message=str(e),
+        caption='Access Denied',
+        style=wx.ICON_ERROR|wx.OK,
+    )
+    dialog.Name = 'cr-access-denied'
+    with dialog:
+        position_dialog_initially(dialog)
+        _show_modal_func(dialog)
 
 
 def _show_invalid_project_dialog(

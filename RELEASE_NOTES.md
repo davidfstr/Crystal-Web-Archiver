@@ -14,6 +14,8 @@ Release Notes ⋮
 
 * Workflow improvements
     * Projects can now be opened from AWS S3 cloud hosting.
+        * Use **File > Open Project from S3...** in the menu bar to open
+          a project stored on S3.
         * See [Projects on AWS S3] in the wiki for more information.
     * Projects now support storing URL revisions in Pack16 format,
       making them efficiently storable in storage systems with

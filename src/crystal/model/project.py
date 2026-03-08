@@ -195,6 +195,7 @@ class Project(ListenableMixin):
             *, readonly: bool=False,
             is_untitled: bool=False,
             is_dirty: bool=False,
+            credentials: S3Filesystem.Credentials | S3Filesystem.ProfileCredentials | None=None,
             ) -> None:
         """
         Loads a project from the specified itempath, or creates a new one if none is found.
@@ -220,6 +221,9 @@ class Project(ListenableMixin):
             create a temporary directory for the path internally.
         * is_dirty --
             whether the project is considered immediately dirty
+        * credentials --
+            credentials to use when accessing the specified path;
+            currently only useful for accessing s3:// paths
 
         Raises:
         * ProjectReadOnlyError --
@@ -229,6 +233,9 @@ class Project(ListenableMixin):
         * ProjectTooNewError -- 
             if the project is a version newer than this version of Crystal can open safely
         * CancelOpenProject
+        * PermissionError --
+            if the provided or inferred credentials to access the path were
+            not correct or do not provide access to the specified path
         * sqlite3.DatabaseError, OSError
         """
         super().__init__()
@@ -257,8 +264,8 @@ class Project(ListenableMixin):
                 is_untitled = True  # reinterpret
             
             if S3Filesystem.recognizes_path(path):
-                (s3_credentials, plain_path) = S3Filesystem.split_credentials_if_present(path)
-                fs: Filesystem = S3Filesystem(s3_credentials)
+                (credentials_from_path, plain_path) = S3Filesystem.split_credentials_if_present(path)
+                fs: Filesystem = S3Filesystem(credentials_from_path or credentials)
                 path = plain_path  # reinterpret
             elif LocalFilesystem.recognizes_path(path):
                 fs = LocalFilesystem()
@@ -266,29 +273,10 @@ class Project(ListenableMixin):
                 raise AssertionError(f'Unknown kind of path: {path}')
             
             # Normalize the project path, to end with .crystalproj and not /
-            if isinstance(fs, LocalFilesystem):
-                # Remove any trailing slash from the path
-                (head, tail) = fs.split(path)
-                if len(tail) == 0:
-                    path = head  # reinterpret
-
-                # Normalize path
-                normalized_path = self._normalize_project_path(path)  # reinterpret
-                if normalized_path is None:
-                    raise ProjectFormatError(f'Project does not end with {self.FILE_EXTENSION}')
-                path = normalized_path  # reinterpret
-            elif isinstance(fs, S3Filesystem):
-                # Remove any trailing slash from the key
-                (bucket_name, key, region) = fs.parse_url(path)
-                if key.endswith('/'):
-                    key = key.removesuffix('/')  # reinterpret
-                path = fs.format_url(bucket_name, key, region)  # reinterpret
-
-                # Normalize path
-                # (TODO: Call _normalize_project_path here, after adapting it to
-                #        use the Filesystem interface to manipulate paths)
-            else:
-                assert_never(fs)
+            normalized_path = self._normalize_project_path(fs, path)  # reinterpret
+            if normalized_path is None:
+                raise ProjectFormatError(f'Project does not end with {self.FILE_EXTENSION}')
+            path = normalized_path  # reinterpret
             
             self._fs_path = FilesystemPath(fs, path)
         
@@ -335,8 +323,13 @@ class Project(ListenableMixin):
                 cls._ensure_directory_structure_valid(self._fs_path)
             try:
                 # NOTE: May raise ProjectReadOnlyError if the database cannot be opened as writable
-                with cls._open_database_but_close_if_raises(self._fs_path, readonly_requested, self._mark_dirty_if_untitled, expect_writable=create) as (
-                            self._db, self._readonly, self._database_is_on_ssd, self._db_tmp_file):
+                with cls._open_database_but_close_if_raises(
+                            self._fs_path,
+                            readonly_requested,
+                            self._mark_dirty_if_untitled,
+                            expect_writable=create,
+                            downloading_database=progress_listener.downloading_database,
+                        ) as (self._db, self._readonly, self._database_is_on_ssd, self._db_tmp_file):
                     # Create new project content, if missing
                     if create:
                         self._create()
@@ -408,7 +401,8 @@ class Project(ListenableMixin):
             fs_path: FilesystemPath,
             readonly_requested: bool,
             mark_dirty_func: Callable[[], None],
-            expect_writable: bool
+            expect_writable: bool,
+            downloading_database: Callable[[], None],
             ) -> Iterator[Tuple[DatabaseConnection, bool, bool, IO[bytes] | None]]:
         """
         Opens the project database before entering the context,
@@ -442,7 +436,8 @@ class Project(ListenableMixin):
                 raise NonLocalFilesystemReadOnlyError()
 
             # Download the remote database locally
-            # TODO: Show progress bar while copying database locally
+            # TODO: Show incremental progress while copying database locally
+            downloading_database()
             local_db_file = tempfile.NamedTemporaryFile(
                 'wb',
                 suffix='.sqlite',
@@ -568,20 +563,16 @@ class Project(ListenableMixin):
         """
         Returns whether there appears to be a minimally valid project
         at the specified path.
+        
+        Raises:
+        * PermissionError
         """
         if fs is None:
             fs = LocalFilesystem()
         
-        if isinstance(fs, LocalFilesystem):
-            assert LocalFilesystem.recognizes_path(path)
-            
-            normalized_path = cls._normalize_project_path(path)
-            if normalized_path is None:
-                return False
-        else:
-            # TODO: Add support for non-local filesystem to _normalize_project_path
-            #       so that it can be used here
-            normalized_path = path
+        normalized_path = cls._normalize_project_path(fs, path)
+        if normalized_path is None:
+            return False
         
         try:
             Project._ensure_directory_structure_valid(FilesystemPath(fs, normalized_path))
@@ -591,32 +582,52 @@ class Project(ListenableMixin):
             return True
     
     @classmethod
-    def _normalize_project_path(cls, path: str) -> str | None:
-        if not LocalFilesystem.recognizes_path(path):
-            raise NonLocalFilesystemNotSupported()
-        lfs = LocalFilesystem()
-
-        if lfs.exists(path):
-            # Try to alter existing path to point to item ending with FILE_EXTENSION
-            if path.endswith(cls.FILE_EXTENSION):
-                return path
-            elif path.endswith(cls.OPENER_FILE_EXTENSION):
-                parent_itempath = lfs.dirname(path)
-                if parent_itempath.endswith(cls.FILE_EXTENSION):
-                    return parent_itempath
-        else:
-            # Ensure new path ends with FILE_EXTENSION
-            if path.endswith(cls.FILE_EXTENSION):
-                return path
+    def _normalize_project_path(cls, fs: Filesystem, path: str) -> str | None:
+        if isinstance(fs, LocalFilesystem):
+            # Remove any trailing slash from the path
+            (head, tail) = fs.split(path)
+            if len(tail) == 0:
+                path = head  # reinterpret
+            
+            if fs.exists(path):
+                # Try to alter existing path to point to item ending with FILE_EXTENSION
+                if path.endswith(cls.OPENER_FILE_EXTENSION):
+                    path = fs.dirname(path)
+                if path.endswith(cls.FILE_EXTENSION):
+                    return path
+                else:
+                    return None  # invalid
             else:
-                return path + cls.FILE_EXTENSION
-        return None  # invalid
+                # Ensure new path ends with FILE_EXTENSION
+                if path.endswith(cls.FILE_EXTENSION):
+                    return path
+                else:
+                    return path + cls.FILE_EXTENSION
+            
+        elif isinstance(fs, S3Filesystem):
+            # Remove any trailing slash from the key
+            (bucket_name, key, region) = fs.parse_url(path)
+            if key.endswith('/'):
+                key = key.removesuffix('/')  # reinterpret
+            
+            # Try to alter existing path to point to item ending with FILE_EXTENSION
+            if key.endswith(cls.OPENER_FILE_EXTENSION):
+                key_parts = key.rsplit('/', 1)
+                if len(key_parts) == 2:
+                    key = key_parts[0]
+            if not key.endswith(cls.FILE_EXTENSION):
+                return None  # invalid
+            
+            return fs.format_url(bucket_name, key, region)
+        else:
+            assert_never(fs)
     
     @classmethod
     def _ensure_directory_structure_valid(cls, fs_path: FilesystemPath) -> None:
         """
         Raises:
         * ProjectFormatError -- if the project at the specified path is invalid
+        * PermissionError
         """
         (fs, path) = fs_path
         db_path = fs.join(path, Project._DB_FILENAME)
@@ -3281,8 +3292,13 @@ class Project(ListenableMixin):
             
             # Open database at the new path, attempting to open as writable
             old_readonly = self._readonly
-            with cls._open_database_but_close_if_raises(self._fs_path, False, self._mark_dirty_if_untitled, expect_writable=False) as (
-                    self._db, new_readonly, self._database_is_on_ssd, self._db_tmp_file):
+            with cls._open_database_but_close_if_raises(
+                        self._fs_path,
+                        readonly_requested=False,
+                        mark_dirty_func=self._mark_dirty_if_untitled,
+                        expect_writable=False,
+                        downloading_database=lambda: None,
+                    ) as (self._db, new_readonly, self._database_is_on_ssd, self._db_tmp_file):
                 if new_readonly != old_readonly:
                     self._readonly = new_readonly
                     

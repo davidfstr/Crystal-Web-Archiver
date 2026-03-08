@@ -309,6 +309,22 @@ class OpenOrCreateDialog:
             self.open_or_create_project_dialog.Parent,
             wx.MenuEvent(wx.EVT_MENU.typeId, wx.ID_OPEN))
     
+    async def start_open_project_from_s3_with_menuitem(self) -> None:
+        """Selects File > Open Project from S3... menu item from the dialog's menubar."""
+        menubar_frame = self.open_or_create_project_dialog.Parent
+        menubar = menubar_frame.GetMenuBar()
+        file_menu = menubar.GetMenu(0)  # File is first menu
+        s3_item = None
+        for item in file_menu.GetMenuItems():
+            if item.GetItemLabelText() == 'Open Project from S3...':
+                s3_item = item
+                break
+        assert s3_item is not None, \
+            'Could not find "Open Project from S3..." menu item'
+        wx.PostEvent(
+            menubar_frame,
+            wx.MenuEvent(wx.EVT_MENU.typeId, s3_item.Id))
+
     async def quit_with_menuitem(self) -> None:
         """Selects File > Quit menu item from the dialog's menubar."""
         wx.PostEvent(
@@ -372,6 +388,7 @@ class MainWindow:
         
         self.main_window = mw_frame
         assert isinstance(self.main_window, wx.Frame)
+        self._main_window_id = mw_frame.Id
         entity_tree_window = mw_frame.FindWindow(name='cr-entity-tree')
         assert isinstance(entity_tree_window, wx.TreeCtrl)
         et_nru_button = mw_frame.FindWindow(name='cr-empty-state-new-root-url-button')
@@ -445,6 +462,17 @@ class MainWindow:
         close_menuitem = self.main_window.MenuBar.FindItemById(wx.ID_CLOSE)
         wx.PostEvent(close_menuitem.Menu, wx.CommandEvent(wx.EVT_MENU.typeId, close_menuitem.Id))
     
+    async def start_open_project_from_s3_with_menuitem(self) -> None:
+        """Selects File > Open Project from S3... menu item from the main window's menubar."""
+        file_menu = self.main_window.MenuBar.GetMenu(0)  # File is first menu
+        s3_item = None
+        for item in file_menu.GetMenuItems():
+            if item.GetItemLabelText() == 'Open Project from S3...':
+                s3_item = item
+                break
+        assert s3_item is not None, 'Could not find "Open Project from S3..." menu item'
+        select_menuitem_now(menuitem=s3_item)
+
     async def start_new_alias_with_menuitem(self) -> None:
         select_menuitem_now(self.entity_menu, self.entity_menu.FindItem('New Alias...'))
     
@@ -527,7 +555,7 @@ class MainWindow:
     
     async def wait_for_dispose(self, stacklevel_extra: int=0) -> None:
         """
-        Waits for the main window to be disposed.
+        Waits for this main window to be disposed.
         
         This is different from wait_for_close() in that it waits for the
         window to be disposed only, but the OpenOrCreateDialog might not reappear,
@@ -535,8 +563,11 @@ class MainWindow:
         
         See also: wait_for_close()
         """
+        # NOTE: wx.FindWindowById() is safe to call even after Destroy() is called on
+        #       the frame. It returns None once the C++ object is truly gone.
+        self_rmw_frame_id = self._main_window_id  # rename
         await wait_for(
-            window_disposed_condition('cr-main-window'),
+            lambda: wx.FindWindowById(self_rmw_frame_id) is None,
             timeout=4.0,  # 2.0s isn't long enough for macOS test runners on GitHub Actions
             stacklevel_extra=1 + stacklevel_extra,
         )

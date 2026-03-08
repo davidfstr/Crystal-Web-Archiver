@@ -114,6 +114,29 @@ class _FakeS3Client:
         )
 
 
+class Session:
+    """
+    Fake boto3.Session for testing.
+
+    Supports:
+    - available_profiles property (configured via CRYSTAL_FAKE_S3_PROFILES env var,
+      a comma-separated list of profile names)
+    - client() method for creating S3 clients
+    """
+    def __init__(self, *, profile_name=None):
+        self._profile_name = profile_name
+
+    @property
+    def available_profiles(self):
+        profiles_str = os.environ.get('CRYSTAL_FAKE_S3_PROFILES', '')
+        if not profiles_str:
+            return []
+        return profiles_str.split(',')
+
+    def client(self, service_name, *, region_name=None):
+        return client(service_name, region_name=region_name)
+
+
 def _apply_range(data, range_header):
     """Parse an HTTP Range header value and return the corresponding byte slice."""
     range_str = range_header.removeprefix('bytes=')

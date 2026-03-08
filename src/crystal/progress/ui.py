@@ -160,11 +160,19 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         self._entity_tree_node_count = None
     
     # === Phase 0 ===
-    
+
     @override
     def opening_project(self) -> None:
         self._show_noncancelable_indeterminate_message(
             f'Opening project...')
+
+    @override
+    def downloading_database(self) -> None:
+        """
+        Called immediately before the database download begins.
+        """
+        self._show_noncancelable_indeterminate_message(
+            'Downloading database...')
     
     def _show_noncancelable_indeterminate_message(self, initial_message: str) -> None:
         # HACK: wxGTK does not reliably update wx.ProgressDialog's message

@@ -11,7 +11,7 @@ import os
 import os.path
 import pathlib
 import shutil
-from typing import BinaryIO, ClassVar, Literal, NamedTuple, TypeAlias
+from typing import BinaryIO, ClassVar, Literal, NamedTuple, TypeAlias, assert_never
 import urllib.parse
 
 
@@ -324,7 +324,7 @@ class S3Filesystem(_AbstractFilesystem):
       to be created. There is no makedirs() command.
     - Queries like "does X directory exist" are not supported.
     """
-    def __init__(self, credentials: 'Credentials | None' = None) -> None:
+    def __init__(self, credentials: 'Credentials | ProfileCredentials | None' = None) -> None:
         try:
             import boto3
             import s3_parse_url
@@ -405,12 +405,11 @@ class S3Filesystem(_AbstractFilesystem):
         * PermissionError -- if you are not authorized to access `path`
         * botocore.exceptions.BotoCoreError -- if some other kind of I/O error occurs
         """
-        import boto3
         import botocore.exceptions
-        
+
         if mode != 'rb':
             raise ValueError(f'Invalid mode: {mode!r}')
-        
+
         if start is None:
             range_header = None
         elif start < 0:
@@ -423,15 +422,7 @@ class S3Filesystem(_AbstractFilesystem):
             range_header = f'bytes={start}-{end}'
 
         (bucket, key, region) = self.parse_url(path)
-        if self._credentials is None:
-            s3_client = boto3.client('s3', region_name=region)
-        else:
-            s3_client = boto3.client(
-                's3',
-                aws_access_key_id=self._credentials.access_key_id,
-                aws_secret_access_key=self._credentials.secret_access_key,
-                region_name=region,
-            )
+        s3_client = self._create_s3_client(region)
         try:
             if range_header is None:
                 resp = s3_client.get_object(Bucket=bucket, Key=key)
@@ -476,19 +467,10 @@ class S3Filesystem(_AbstractFilesystem):
         * PermissionError -- if you are not authorized to access `path`
         * botocore.exceptions.BotoCoreError -- if some other kind of I/O error occurs
         """
-        import boto3
         import botocore.exceptions
 
         (bucket, key, region) = self.parse_url(path)
-        if self._credentials is None:
-            s3_client = boto3.client('s3', region_name=region)
-        else:
-            s3_client = boto3.client(
-                's3',
-                aws_access_key_id=self._credentials.access_key_id,
-                aws_secret_access_key=self._credentials.secret_access_key,
-                region_name=region,
-            )
+        s3_client = self._create_s3_client(region)
         try:
             resp = s3_client.head_object(Bucket=bucket, Key=key)
         except botocore.exceptions.ClientError as e:
@@ -515,7 +497,7 @@ class S3Filesystem(_AbstractFilesystem):
         return resp['ContentLength']
     
     # === S3Filesystem API ===
-    
+
     @classmethod
     def split_credentials_if_present(cls, secret_url: str) -> 'tuple[Credentials | None, str]':
         """
@@ -626,10 +608,34 @@ class S3Filesystem(_AbstractFilesystem):
             ) -> str:
         return f's3://{bucket_name}/{key}?region={region}'
     
-    # === Credentials ===
+    # === Utility ===
     
+    def _create_s3_client(self, region: str):
+        """Creates a boto3 S3 client using this filesystem's credentials."""
+        import boto3
+        
+        if isinstance(self._credentials, S3Filesystem.ProfileCredentials):
+            session = boto3.Session(profile_name=self._credentials.profile_name)
+            return session.client('s3', region_name=region)
+        elif isinstance(self._credentials, S3Filesystem.Credentials):
+            return boto3.client(
+                's3',
+                aws_access_key_id=self._credentials.access_key_id,
+                aws_secret_access_key=self._credentials.secret_access_key,
+                region_name=region)
+        elif self._credentials is None:
+            return boto3.client('s3', region_name=region)
+        else:
+            assert_never(self._credentials)
+
+    # === Credentials ===
+
     @dataclass
     class Credentials:
         access_key_id: str
         secret_access_key: str
+
+    @dataclass
+    class ProfileCredentials:
+        profile_name: str
 

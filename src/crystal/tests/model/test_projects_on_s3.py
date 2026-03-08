@@ -7,14 +7,16 @@ Especially exercises code in:
 - S3Filesystem
 """
 
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
-from crystal.filesystem import FilesystemPath, LocalFilesystem, RENAME_SUFFIX
 from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.open_project_from_s3 import OpenProjectFromS3Dialog
+from crystal.filesystem import FilesystemPath, LocalFilesystem, RENAME_SUFFIX, S3Filesystem
 from crystal.model import Project, ProjectFormatError
 from crystal.model.pack16 import open_pack_entry, rewrite_pack_without_entry
 from crystal.model.project import MigrationType, NonLocalFilesystemNotSupported, NonLocalFilesystemReadOnlyError
 from crystal.model.resource_revision import ResourceRevision
+from crystal.server import get_request_url
 from crystal.tests.util.asserts import assertEqual, assertIn, assertRegex
 from crystal.tests.util.cli import (
     crystal_running,
@@ -23,16 +25,27 @@ from crystal.tests.util.cli import (
     read_until,
 )
 from crystal.tests.util.fake_boto3 import install as install_fake_boto3
+from crystal.tests.util.mark import should_check_focused_windows
 from crystal.tests.util.save_as import save_as_with_ui, save_as_without_ui
-from crystal.tests.util.server import extracted_project
+from crystal.tests.util.server import (
+    assert_does_open_webbrowser_to,
+    extracted_project,
+    fetch_archive_url,
+)
 from crystal.tests.util.subtests import awith_subtests, SubtestsContext
 from crystal.tests.util import xtempfile
+from crystal.tests.util.wait import wait_for, wait_for_and_return
+from crystal.tests.util.windows import MainWindow, OpenOrCreateDialog
+from crystal.tests.util.wx_keyboard_actions import press_tab_in_window_to_navigate_focus
+from crystal.util.controls import click_button, TreeItem
 from crystal.util.wx_dialog import mocked_show_modal
+from crystal.util.wx_window import SetFocus
 from crystal.util.xos import is_windows
 from io import TextIOBase
 import os
 import re
 import tempfile
+from typing import assert_never
 import wx
 from unittest import skip
 from unittest.mock import patch
@@ -41,7 +54,18 @@ import urllib.request
 
 # === Test: Happy Path Cases ===
 
-def test_can_open_project_with_credentialless_s3_url_and_env_var_credentials_as_readonly_and_serve_a_resource_revision() -> None:
+@skip('covered by: test_given_open_project_from_s3_dialog_and_profile_credentials_is_selected_and_valid_credentials_provided_when_press_open_button_then_can_serve_a_resource_revision')
+async def test_can_open_project_with_credentialless_s3_url_and_profile_credentials_as_readonly_and_serve_a_resource_revision() -> None:
+    pass
+
+
+@skip('covered by: test_given_open_project_from_s3_dialog_and_manual_credentials_is_selected_and_valid_credentials_provided_when_press_open_button_then_can_serve_a_resource_revision')
+async def test_can_open_project_with_credentialless_s3_url_and_manual_credentials_as_readonly_and_serve_a_resource_revision() -> None:
+    pass
+
+
+@awith_subtests
+async def test_can_open_project_with_credentialless_s3_url_and_env_var_credentials_as_readonly_and_serve_a_resource_revision(subtests: SubtestsContext) -> None:
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
     
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
@@ -52,31 +76,37 @@ def test_can_open_project_with_credentialless_s3_url_and_env_var_credentials_as_
                 key_prefix='Archive/TestProject.crystalproj',
                 ) as fake_s3_root:
         
-        with _crystal_running_with_fake_s3(
-                s3_url, fake_s3_root,
-                extra_args=['--readonly'],
-                ) as crystal:
-            server_url = _wait_for_server_url(crystal)
+        with subtests.test(layer='model'):
+            with _crystal_running_with_fake_s3(
+                    s3_url, fake_s3_root,
+                    extra_args=['--readonly'],
+                    ) as crystal:
+                server_url = _wait_for_server_url(crystal)
 
-            # Fetch the xkcd home page from the ProjectServer
-            archive_url_path = '/_/https/xkcd.com/'
-            request_url = f'{server_url}{archive_url_path}'
-            with urllib.request.urlopen(request_url, timeout=10.0) as response:
-                assert response.status == 200
-                content = response.read().decode('utf-8')
+                # Fetch the xkcd home page from the ProjectServer
+                archive_url_path = '/_/https/xkcd.com/'
+                request_url = f'{server_url}{archive_url_path}'
+                with urllib.request.urlopen(request_url, timeout=10.0) as response:
+                    assert response.status == 200
+                    content = response.read().decode('utf-8')
 
-            # Ensure it has the expected page title
-            title_match = re.search(r'<title>([^<]*)</title>', content)
-            assert title_match is not None, 'Page has no <title> tag'
-            assertIn('xkcd', title_match.group(1))
+                # Ensure it has the expected page title
+                title_match = re.search(r'<title>([^<]*)</title>', content)
+                assert title_match is not None, 'Page has no <title> tag'
+                assertIn('xkcd', title_match.group(1))
 
-            # Ensure it links to the expected comic image
-            assertRegex(content, r'imgs\.xkcd\.com')
+                # Ensure it links to the expected comic image
+                assertRegex(content, r'imgs\.xkcd\.com')
+        
+        with subtests.test(layer='ui'):
+            # (UI does not support using env var credentials)
+            pass
 
 
-def test_can_open_project_with_credentialful_s3_url_as_readonly_and_serve_a_resource_revision() -> None:
+@awith_subtests
+async def test_can_open_project_with_credentialful_s3_url_as_readonly_and_serve_a_resource_revision(subtests: SubtestsContext) -> None:
     s3_url = 's3://fake-access-key:fake-secret-key@test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
-    
+
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
             _fake_s3_root(
                 project_dirpath,
@@ -85,90 +115,145 @@ def test_can_open_project_with_credentialful_s3_url_as_readonly_and_serve_a_reso
                 key_prefix='Archive/TestProject.crystalproj',
                 ) as fake_s3_root:
 
-        # Intentionally do NOT set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY,
-        # to verify that the credentials embedded in the s3:// URL are used.
-        with _crystal_running_with_fake_s3(
-                s3_url, fake_s3_root,
-                extra_args=['--readonly'],
-                omit_env_var_credentials=True,
-                ) as crystal:
-            server_url = _wait_for_server_url(crystal)
+        with subtests.test(layer='model'):
+            with _crystal_running_with_fake_s3(
+                    s3_url, fake_s3_root,
+                    extra_args=['--readonly'],
+                    # Verify credentials in s3:// URL are used
+                    omit_env_var_credentials=True,
+                    ) as crystal:
+                server_url = _wait_for_server_url(crystal)
 
-            # Fetch the xkcd home page from the ProjectServer
-            archive_url_path = '/_/https/xkcd.com/'
-            request_url = f'{server_url}{archive_url_path}'
-            with urllib.request.urlopen(request_url, timeout=10.0) as response:
-                assert response.status == 200
-                content = response.read().decode('utf-8')
+                # Fetch the xkcd home page from the ProjectServer
+                archive_url_path = '/_/https/xkcd.com/'
+                request_url = f'{server_url}{archive_url_path}'
+                with urllib.request.urlopen(request_url, timeout=10.0) as response:
+                    assert response.status == 200
+                    content = response.read().decode('utf-8')
 
-            # Ensure it has the expected page title
-            title_match = re.search(r'<title>([^<]*)</title>', content)
-            assert title_match is not None, 'Page has no <title> tag'
-            assertIn('xkcd', title_match.group(1))
+                # Ensure it has the expected page title
+                title_match = re.search(r'<title>([^<]*)</title>', content)
+                assert title_match is not None, 'Page has no <title> tag'
+                assertIn('xkcd', title_match.group(1))
 
-            # Ensure it links to the expected comic image
-            assertRegex(content, r'imgs\.xkcd\.com')
+                # Ensure it links to the expected comic image
+                assertRegex(content, r'imgs\.xkcd\.com')
+
+        with subtests.test(layer='ui'):
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+                def verify_credential_controls_disabled(dialog: OpenProjectFromS3Dialog) -> None:
+                    # Verify credential controls are disabled (credentials detected in URL)
+                    assert not dialog._use_profile_radio.Enabled
+                    assert not dialog._use_manual_radio.Enabled
+
+                (mw, project) = await _open_project_from_s3_in_ui(
+                    s3_url,
+                    fill_more_options=verify_credential_controls_disabled)
+                await _ensure_can_serve_a_resource_revision(mw, project)
 
 
 # === Test: Credential Problem Cases ===
 
-# Usual case, to test: credentialless s3 url and no env var credentials
-async def test_when_open_project_with_no_credentials_then_raises_PermissionError_with_instructions_to_fix() -> None:
+@awith_subtests
+async def test_when_open_project_with_no_credentials_then_raises_PermissionError_with_instructions_to_fix(subtests: SubtestsContext) -> None:
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
 
-    with xtempfile.TemporaryDirectory() as fake_s3_root, \
-            _fake_s3(fake_s3_root, omit_env_var_credentials=True):
-        try:
-            with Project(s3_url, readonly=True):
-                pass
-        except PermissionError as e:
-            error_message = str(e)
+    with subtests.test(layer='model'):
+        # Credentialless s3 url with no env var credentials, a common case
+        with xtempfile.TemporaryDirectory() as fake_s3_root, \
+                _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+            try:
+                with Project(s3_url, readonly=True):
+                    pass
+            except PermissionError as e:
+                error_message = str(e)
+            else:
+                raise AssertionError('Expected PermissionError but Project opened successfully')
+
+        # Ensure instructions mention AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY environment variables
+        assertIn('AWS_ACCESS_KEY_ID', error_message)
+        assertIn('AWS_SECRET_ACCESS_KEY', error_message)
+        
+        # Ensure instructions mention "aws configure" and the "default" profile
+        assertIn('aws configure', error_message)
+        assertIn('"default"', error_message)
+        
+        # Ensure instructions mention "aws configure --profile CUSTOM" and a CUSTOM profile
+        assertIn('aws configure --profile', error_message)
+        
+        # Ensure instructions mention path to credentials file set by "aws configure"
+        # Windows uses %USERPROFILE%\.aws\credentials, POSIX uses ~/.aws/credentials
+        if is_windows():
+            assertIn(r'.aws\credentials', error_message)
         else:
-            raise AssertionError('Expected PermissionError but Project opened successfully')
+            assertIn('.aws/credentials', error_message)
+        
+        # Ensure instructions mention credentials in an s3:// URL
+        assertIn('s3://', error_message)
+    
+    with subtests.test(layer='ui'):
+        # Selects "Enter credentials manually" radio button
+        # but enter no credentials before pressing "Open" button
+        with xtempfile.TemporaryDirectory() as fake_s3_root, \
+                _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+            captured_message = await _open_project_from_s3_in_ui_expecting_error(
+                s3_url,
+                error_dialog_name='cr-access-denied',
+                # credentials=None: leave empty (don't fill in access key or secret)
+                fill_more_options=lambda d: (
+                    # No profiles available -> manual credentials is pre-selected
+                    assertEqual(True, d._use_manual_radio.Value)))
 
-    # Ensure instructions mention AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY environment variables
-    assertIn('AWS_ACCESS_KEY_ID', error_message)
-    assertIn('AWS_SECRET_ACCESS_KEY', error_message)
-    
-    # Ensure instructions mention "aws configure" and the "default" profile
-    assertIn('aws configure', error_message)
-    assertIn('"default"', error_message)
-    
-    # Ensure instructions mention "aws configure --profile CUSTOM" and a CUSTOM profile
-    assertIn('aws configure --profile', error_message)
-    
-    # Ensure instructions mention path to credentials file set by "aws configure"
-    # Windows uses %USERPROFILE%\.aws\credentials, POSIX uses ~/.aws/credentials
-    if is_windows():
-        assertIn(r'.aws\credentials', error_message)
-    else:
-        assertIn('.aws/credentials', error_message)
-    
-    # Ensure instructions mention credentials in an s3:// URL
-    assertIn('s3://', error_message)
+        # Ensure shows appropriate informative error dialog
+        assertIn('AWS_ACCESS_KEY_ID', captured_message)
+        assertIn('AWS_SECRET_ACCESS_KEY', captured_message)
+        assertIn('aws configure', captured_message)
+        assertIn('"default"', captured_message)
+        if is_windows():
+            assertIn(r'.aws\credentials', captured_message)
+        else:
+            assertIn('.aws/credentials', captured_message)
+        assertIn('s3://', captured_message)
 
 
-async def test_when_open_project_with_invalid_credentials_then_raises_PermissionError_with_informative_message() -> None:
+@awith_subtests
+async def test_when_open_project_with_invalid_credentials_then_raises_PermissionError_with_informative_message(subtests: SubtestsContext) -> None:
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
 
-    with xtempfile.TemporaryDirectory() as fake_s3_root, \
-            _fake_s3(fake_s3_root, invalid_credentials=True):
-        try:
-            with Project(s3_url, readonly=True):
-                pass
-        except PermissionError as e:
-            error_message = str(e)
-        else:
-            raise AssertionError('Expected PermissionError but Project opened successfully')
+    with subtests.test(layer='model'):
+        with xtempfile.TemporaryDirectory() as fake_s3_root, \
+                _fake_s3(fake_s3_root, invalid_credentials=True):
+            try:
+                with Project(s3_url, readonly=True):
+                    pass
+            except PermissionError as e:
+                error_message = str(e)
+            else:
+                raise AssertionError('Expected PermissionError but Project opened successfully')
 
-    assertIn('InvalidClientTokenId', error_message)
+        assertIn('InvalidClientTokenId', error_message)
+    
+    with subtests.test(layer='ui'):
+        with xtempfile.TemporaryDirectory() as fake_s3_root, \
+                _fake_s3(fake_s3_root, omit_env_var_credentials=True, invalid_credentials=True):
+            captured_message = await _open_project_from_s3_in_ui_expecting_error(
+                s3_url,
+                error_dialog_name='cr-access-denied',
+                credentials=S3Filesystem.Credentials('invalid-access-key', 'invalid-secret-key'),
+                fill_more_options=lambda d: (
+                    # No profiles available -> manual credentials is pre-selected
+                    assertEqual(True, d._use_manual_radio.Value)))
+
+        # Ensure shows appropriate informative error dialog
+        assertIn('InvalidClientTokenId', captured_message)
 
 
 # === Test: URL Format Cases ===
 
-async def test_given_s3_url_ending_with_crystalproj_slash_then_can_open_project_at_that_s3_url() -> None:
+@awith_subtests
+async def test_given_s3_url_ending_with_crystalproj_slash_then_can_open_project_at_that_s3_url(subtests: SubtestsContext) -> None:
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
-    
+
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
             _fake_s3_root(
                 project_dirpath,
@@ -176,13 +261,26 @@ async def test_given_s3_url_ending_with_crystalproj_slash_then_can_open_project_
                 bucket='test-bucket',
                 key_prefix='Archive/TestProject.crystalproj',
                 ) as fake_s3_root:
-        with _fake_s3(fake_s3_root), Project(s3_url, readonly=True):
-            pass  # opened successfully
+
+        with subtests.test(layer='model'):
+            with _fake_s3(fake_s3_root), Project(s3_url, readonly=True):
+                pass  # opened successfully
+
+        with subtests.test(layer='ui'):
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+                (mw, _) = await _open_project_from_s3_in_ui(
+                    s3_url,
+                    credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'),
+                    fill_more_options=lambda d: (
+                        # No profiles available -> manual credentials is pre-selected
+                        assertEqual(True, d._use_manual_radio.Value)))
+                await mw.close()
 
 
-async def test_given_s3_url_ending_with_crystalproj_then_can_open_project_at_that_s3_url() -> None:
+@awith_subtests
+async def test_given_s3_url_ending_with_crystalproj_then_can_open_project_at_that_s3_url(subtests: SubtestsContext) -> None:
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj?region=us-east-1'
-    
+
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
             _fake_s3_root(
                 project_dirpath,
@@ -190,95 +288,202 @@ async def test_given_s3_url_ending_with_crystalproj_then_can_open_project_at_tha
                 bucket='test-bucket',
                 key_prefix='Archive/TestProject.crystalproj',
                 ) as fake_s3_root:
-        with _fake_s3(fake_s3_root), Project(s3_url, readonly=True):
-            pass  # opened successfully
+
+        with subtests.test(layer='model'):
+            with _fake_s3(fake_s3_root), Project(s3_url, readonly=True):
+                pass  # opened successfully
+
+        with subtests.test(layer='ui'):
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+                (mw, _) = await _open_project_from_s3_in_ui(
+                    s3_url,
+                    credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'),
+                    fill_more_options=lambda d: (
+                        # No profiles available -> manual credentials is pre-selected
+                        assertEqual(True, d._use_manual_radio.Value)))
+                await mw.close()
 
 
-@skip('fails: not yet implemented')
-async def test_given_s3_url_ending_with_crystalopen_then_can_open_project_at_that_s3_url() -> None:
-    # TODO: Call _normalize_project_path here, after adapting it to
-    #       use the Filesystem interface to manipulate paths
-    pass
+@awith_subtests
+async def test_given_s3_url_ending_with_crystalopen_then_can_open_project_at_that_s3_url(subtests: SubtestsContext) -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/OPEN ME.crystalopen?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root:
+
+        with subtests.test(layer='model'):
+            with _fake_s3(fake_s3_root), Project(s3_url, readonly=True):
+                pass  # opened successfully
+
+        with subtests.test(layer='ui'):
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+                (mw, _) = await _open_project_from_s3_in_ui(
+                    s3_url,
+                    credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'),
+                    fill_more_options=lambda d: (
+                        # No profiles available -> manual credentials is pre-selected
+                        assertEqual(True, d._use_manual_radio.Value)))
+                await mw.close()
 
 
-async def test_given_s3_url_not_pointing_to_a_project_when_open_project_then_raises_ProjectFormatError() -> None:
+@awith_subtests
+async def test_given_s3_url_not_pointing_to_a_project_when_open_project_then_raises_ProjectFormatError(subtests: SubtestsContext) -> None:
     s3_url = 's3://test-bucket/Archive/NotAProject/?region=us-east-1'
 
-    with xtempfile.TemporaryDirectory() as fake_s3_root, \
-            _fake_s3(fake_s3_root):
-        try:
-            with Project(s3_url, readonly=True):
-                pass
-        except ProjectFormatError:
-            pass  # expected
-        else:
-            raise AssertionError('Expected ProjectFormatError but Project opened successfully')
+    with subtests.test(layer='model'):
+        with xtempfile.TemporaryDirectory() as fake_s3_root, \
+                _fake_s3(fake_s3_root):
+            try:
+                with Project(s3_url, readonly=True):
+                    pass
+            except ProjectFormatError:
+                pass  # expected
+            else:
+                raise AssertionError('Expected ProjectFormatError but Project opened successfully')
+
+    with subtests.test(layer='ui'):
+        with xtempfile.TemporaryDirectory() as fake_s3_root, \
+                _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+            captured_message = await _open_project_from_s3_in_ui_expecting_error(
+                s3_url,
+                error_dialog_name='cr-invalid-project',
+                credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'),
+                fill_more_options=lambda d: (
+                    # No profiles available -> manual credentials is pre-selected
+                    assertEqual(True, d._use_manual_radio.Value)))
+
+        # Ensure shows appropriate informative error dialog
+        assertEqual(
+            'The selected file or directory is not a valid project.',
+            captured_message)
 
 
 # === Test: Writable vs Readonly Case ===
 
-async def test_when_open_project_as_writable_given_s3_url_then_raises_NonLocalFilesystemReadOnlyError() -> None:
+@awith_subtests
+async def test_when_open_project_as_writable_given_s3_url_then_raises_NonLocalFilesystemReadOnlyError(subtests: SubtestsContext) -> None:
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
 
-    with xtempfile.TemporaryDirectory() as fake_s3_root, \
-            _fake_s3(fake_s3_root):
-        try:
-            with Project(s3_url):  # readonly=False by default
-                pass
-        except NonLocalFilesystemReadOnlyError:
-            pass  # expected
-        else:
-            raise AssertionError('Expected NonLocalFilesystemReadOnlyError but Project opened successfully')
+    with subtests.test(layer='model'):
+        with xtempfile.TemporaryDirectory() as fake_s3_root, \
+                _fake_s3(fake_s3_root):
+            try:
+                with Project(s3_url):  # readonly=False by default
+                    pass
+            except NonLocalFilesystemReadOnlyError:
+                pass  # expected
+            else:
+                raise AssertionError('Expected NonLocalFilesystemReadOnlyError but Project opened successfully')
+
+    with subtests.test(layer='ui'):
+        # (No way to attempt to open project from S3 as writable from the UI)
+        pass
 
 
 # === Test: Security Cases ===
 
-async def test_project_path_is_s3_url_with_credentials_removed_given_project_opened_with_credentialful_s3_url() -> None:
+@awith_subtests
+async def test_project_path_is_s3_url_with_credentials_removed_given_project_opened_with_credentialful_s3_url(subtests: SubtestsContext) -> None:
     s3_url = 's3://fake-access-key:fake-secret-key@test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
     expected_path = 's3://test-bucket/Archive/TestProject.crystalproj?region=us-east-1'
 
-    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
-            _fake_s3_root(
-                project_dirpath,
-                region='us-east-1',
-                bucket='test-bucket',
-                key_prefix='Archive/TestProject.crystalproj',
-                ) as fake_s3_root:
-        with _fake_s3(fake_s3_root, omit_env_var_credentials=True), \
-                Project(s3_url, readonly=True) as project:
-            assert project.path == expected_path
+    with subtests.test(layer='model'):
+        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                _fake_s3_root(
+                    project_dirpath,
+                    region='us-east-1',
+                    bucket='test-bucket',
+                    key_prefix='Archive/TestProject.crystalproj',
+                    ) as fake_s3_root:
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True), \
+                    Project(s3_url, readonly=True) as project:
+                assert project.path == expected_path
+
+    with subtests.test(layer='ui'):
+        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                _fake_s3_root(
+                    project_dirpath,
+                    region='us-east-1',
+                    bucket='test-bucket',
+                    key_prefix='Archive/TestProject.crystalproj',
+                    ) as fake_s3_root:
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+                (mw, project) = await _open_project_from_s3_in_ui(s3_url)
+                try:
+                    assert project.path == expected_path
+                finally:
+                    await mw.close()
 
 
 # === Test: Database Management ===
 
-async def test_when_close_project_given_project_opened_from_s3_url_then_deletes_local_copy_of_project_database() -> None:
+@awith_subtests
+async def test_when_close_project_given_project_opened_from_s3_url_then_deletes_local_copy_of_project_database(subtests: SubtestsContext) -> None:
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
 
-    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
-            _fake_s3_root(
-                project_dirpath,
-                region='us-east-1',
-                bucket='test-bucket',
-                key_prefix='Archive/TestProject.crystalproj',
-                ) as fake_s3_root:
+    with subtests.test(layer='model'):
+        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                _fake_s3_root(
+                    project_dirpath,
+                    region='us-east-1',
+                    bucket='test-bucket',
+                    key_prefix='Archive/TestProject.crystalproj',
+                    ) as fake_s3_root:
 
-        captured_db_paths = []  # type: list[str]
-        original_ntf = tempfile.NamedTemporaryFile
-        def capture_db_path(*args, **kwargs):
-            f = original_ntf(*args, **kwargs)
-            captured_db_paths.append(f.name)
-            return f
+            captured_db_paths = []  # type: list[str]
+            original_ntf = tempfile.NamedTemporaryFile
+            def capture_db_path(*args, **kwargs):
+                f = original_ntf(*args, **kwargs)
+                captured_db_paths.append(f.name)
+                return f
 
-        with _fake_s3(fake_s3_root), \
-                patch('crystal.model.project.tempfile.NamedTemporaryFile',
-                      side_effect=capture_db_path):
-            with Project(s3_url, readonly=True):
-                (local_db_path,) = captured_db_paths
-                assert os.path.exists(local_db_path), \
-                    f'Expected local DB copy to exist while project is open: {local_db_path}'
+            with _fake_s3(fake_s3_root), \
+                    patch('crystal.model.project.tempfile.NamedTemporaryFile',
+                          side_effect=capture_db_path):
+                with Project(s3_url, readonly=True):
+                    (local_db_path,) = captured_db_paths
+                    assert os.path.exists(local_db_path), \
+                        f'Expected local DB copy to exist while project is open: {local_db_path}'
 
-        assert not os.path.exists(local_db_path), \
-            f'Expected local DB copy to be deleted after project closed: {local_db_path}'
+            assert not os.path.exists(local_db_path), \
+                f'Expected local DB copy to be deleted after project closed: {local_db_path}'
+
+    with subtests.test(layer='ui'):
+        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                _fake_s3_root(
+                    project_dirpath,
+                    region='us-east-1',
+                    bucket='test-bucket',
+                    key_prefix='Archive/TestProject.crystalproj',
+                    ) as fake_s3_root:
+
+            captured_db_paths = []
+            original_ntf = tempfile.NamedTemporaryFile
+            def capture_db_path(*args, **kwargs):
+                f = original_ntf(*args, **kwargs)
+                captured_db_paths.append(f.name)
+                return f
+
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True), \
+                    patch('crystal.model.project.tempfile.NamedTemporaryFile',
+                          side_effect=capture_db_path):
+                (mw, _) = await _open_project_from_s3_in_ui(
+                    s3_url,
+                    credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'))
+                try:
+                    (local_db_path,) = captured_db_paths
+                    assert os.path.exists(local_db_path), \
+                        f'Expected local DB copy to exist while project is open: {local_db_path}'
+                finally:
+                    await mw.close()
+
+            assert not os.path.exists(local_db_path), \
+                f'Expected local DB copy to be deleted after project closed: {local_db_path}'
 
 
 # === Test: Read ===
@@ -292,6 +497,7 @@ async def test_can_size_resource_revision_given_project_opened_from_s3_url() -> 
 async def test_can_read_resource_revision_given_project_opened_from_s3_url(subtests: SubtestsContext) -> None:
     XKCD_HOME_URL = 'https://xkcd.com/'
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+    s3_url_with_creds = 's3://fake-access-key:fake-secret-key@test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
 
     def _open_and_read_home_revision(project: Project) -> tuple[str, int]:
         home_r = project.get_resource(XKCD_HOME_URL)
@@ -309,8 +515,109 @@ async def test_can_read_resource_revision_given_project_opened_from_s3_url(subte
         assertRegex(content, r'imgs\.xkcd\.com')
         assertEqual(len(content.encode('utf-8')), size)
 
-    # Case: major_version=1 (Flat)
-    with subtests.test(major_version=1):
+    with subtests.test(layer='model'):
+        # Case: major_version=1 (Flat)
+        with subtests.test(major_version=1):
+            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                    _fake_s3_root(
+                        project_dirpath,
+                        region='us-east-1',
+                        bucket='test-bucket',
+                        key_prefix='Archive/TestProject.crystalproj',
+                        ) as fake_s3_root:
+                with _fake_s3(fake_s3_root), \
+                        Project(s3_url, readonly=True) as project:
+                    assertEqual(1, project.major_version)
+                    (content, size) = _open_and_read_home_revision(project)
+                    _assert_matches_xkcd_home_content(content, size)
+
+        # Case: major_version=2 (Hierarchical)
+        with subtests.test(major_version=2):
+            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+                # Upgrade v1 -> v2 by opening writable
+                with Project(project_dirpath) as project:
+                    assertEqual(2, project.major_version)
+
+                with _fake_s3_root(
+                        project_dirpath,
+                        region='us-east-1',
+                        bucket='test-bucket',
+                        key_prefix='Archive/TestProject.crystalproj',
+                        ) as fake_s3_root:
+                    with _fake_s3(fake_s3_root), \
+                            Project(s3_url, readonly=True) as project:
+                        assertEqual(2, project.major_version)
+                        (content, size) = _open_and_read_home_revision(project)
+                        _assert_matches_xkcd_home_content(content, size)
+
+        # Case: major_version=3 (Pack16)
+        if True:
+            # Case: Pack16 where revision is inside pack file (at pack_filepath)
+            with subtests.test(major_version=3, case='revision inside pack file'):
+                with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+                    _upgrade_project_to_v3(project_dirpath)
+
+                    with _fake_s3_root(
+                            project_dirpath,
+                            region='us-east-1',
+                            bucket='test-bucket',
+                            key_prefix='Archive/TestProject.crystalproj',
+                            ) as fake_s3_root:
+                        with _fake_s3(fake_s3_root), \
+                                Project(s3_url, readonly=True) as project:
+                            assertEqual(3, project.major_version)
+                            # Home page is revision ID 1, inside pack 00f_.zip
+                            (content, size) = _open_and_read_home_revision(project)
+                            _assert_matches_xkcd_home_content(content, size)
+
+            # Case: Pack16 where revision is inside unrepaired pack file (at movedaside_pack_filepath)
+            with subtests.test(major_version=3, case='revision inside unrepaired pack file'):
+                with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+                    _upgrade_project_to_v3(project_dirpath)
+
+                    # Move pack file to .replacing to simulate unrepaired state
+                    pack_filepath = _pack_filepath_for_revision(project_dirpath, revision_id=1)
+                    replacing_filepath = pack_filepath + RENAME_SUFFIX
+                    os.rename(pack_filepath, replacing_filepath)
+                    assert not os.path.exists(pack_filepath)
+                    assert os.path.exists(replacing_filepath)
+
+                    with _fake_s3_root(
+                            project_dirpath,
+                            region='us-east-1',
+                            bucket='test-bucket',
+                            key_prefix='Archive/TestProject.crystalproj',
+                            ) as fake_s3_root:
+                        with _fake_s3(fake_s3_root), \
+                                Project(s3_url, readonly=True) as project:
+                            assertEqual(3, project.major_version)
+                            (content, size) = _open_and_read_home_revision(project)
+                            _assert_matches_xkcd_home_content(content, size)
+
+            # Case: Pack16 where revision is individual file
+            with subtests.test(major_version=3, case='revision as individual file'):
+                with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
+                    _upgrade_project_to_v3(project_dirpath)
+
+                    # Extract revision from pack to individual file, then remove from pack
+                    _extract_revision_from_pack_to_individual_file(
+                        project_dirpath, revision_id=1)
+
+                    with _fake_s3_root(
+                            project_dirpath,
+                            region='us-east-1',
+                            bucket='test-bucket',
+                            key_prefix='Archive/TestProject.crystalproj',
+                            ) as fake_s3_root:
+                        with _fake_s3(fake_s3_root), \
+                                Project(s3_url, readonly=True) as project:
+                            assertEqual(3, project.major_version)
+                            (content, size) = _open_and_read_home_revision(project)
+                            _assert_matches_xkcd_home_content(content, size)
+
+    # NOTE: Only check the major_version=1 case.
+    #       Sufficient coverage for other cases exists in layer='model' above.
+    with subtests.test(layer='ui', major_version=1):
         with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
                 _fake_s3_root(
                     project_dirpath,
@@ -318,95 +625,343 @@ async def test_can_read_resource_revision_given_project_opened_from_s3_url(subte
                     bucket='test-bucket',
                     key_prefix='Archive/TestProject.crystalproj',
                     ) as fake_s3_root:
-            with _fake_s3(fake_s3_root), \
-                    Project(s3_url, readonly=True) as project:
-                assertEqual(1, project.major_version)
-                (content, size) = _open_and_read_home_revision(project)
-                _assert_matches_xkcd_home_content(content, size)
-
-    # Case: major_version=2 (Hierarchical)
-    with subtests.test(major_version=2):
-        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-            # Upgrade v1 -> v2 by opening writable
-            with Project(project_dirpath) as project:
-                assertEqual(2, project.major_version)
-
-            with _fake_s3_root(
-                    project_dirpath,
-                    region='us-east-1',
-                    bucket='test-bucket',
-                    key_prefix='Archive/TestProject.crystalproj',
-                    ) as fake_s3_root:
-                with _fake_s3(fake_s3_root), \
-                        Project(s3_url, readonly=True) as project:
-                    assertEqual(2, project.major_version)
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+                (mw, project) = await _open_project_from_s3_in_ui(s3_url_with_creds)
+                try:
+                    assertEqual(1, project.major_version)
                     (content, size) = _open_and_read_home_revision(project)
                     _assert_matches_xkcd_home_content(content, size)
+                finally:
+                    await mw.close()
 
-    # Case: major_version=3 (Pack16)
-    if True:
-        # Case: Pack16 where revision is inside pack file (at pack_filepath)
-        with subtests.test(major_version=3, case='revision inside pack file'):
-            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-                _upgrade_project_to_v3(project_dirpath)
 
-                with _fake_s3_root(
-                        project_dirpath,
-                        region='us-east-1',
-                        bucket='test-bucket',
-                        key_prefix='Archive/TestProject.crystalproj',
-                        ) as fake_s3_root:
-                    with _fake_s3(fake_s3_root), \
-                            Project(s3_url, readonly=True) as project:
-                        assertEqual(3, project.major_version)
-                        # Home page is revision ID 1, inside pack 00f_.zip
-                        (content, size) = _open_and_read_home_revision(project)
-                        _assert_matches_xkcd_home_content(content, size)
+# === Test: UI: Open Project from S3 Dialog ===
 
-        # Case: Pack16 where revision is inside unrepaired pack file (at movedaside_pack_filepath)
-        with subtests.test(major_version=3, case='revision inside unrepaired pack file'):
-            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-                _upgrade_project_to_v3(project_dirpath)
+@awith_subtests
+async def test_can_open_s3_dialog_from_file_menu(subtests: SubtestsContext) -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+    credentials = S3Filesystem.Credentials('fake-access-key', 'fake-secret-key')
 
-                # Move pack file to .replacing to simulate unrepaired state
-                pack_filepath = _pack_filepath_for_revision(project_dirpath, revision_id=1)
-                replacing_filepath = pack_filepath + RENAME_SUFFIX
-                os.rename(pack_filepath, replacing_filepath)
-                assert not os.path.exists(pack_filepath)
-                assert os.path.exists(replacing_filepath)
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root:
 
-                with _fake_s3_root(
-                        project_dirpath,
-                        region='us-east-1',
-                        bucket='test-bucket',
-                        key_prefix='Archive/TestProject.crystalproj',
-                        ) as fake_s3_root:
-                    with _fake_s3(fake_s3_root), \
-                            Project(s3_url, readonly=True) as project:
-                        assertEqual(3, project.major_version)
-                        (content, size) = _open_and_read_home_revision(project)
-                        _assert_matches_xkcd_home_content(content, size)
+        with subtests.test(when='before_project_opened'):
+            # Trigger from minimal menubar (no project open yet)
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+                (mw, _) = await _open_project_from_s3_in_ui(
+                    s3_url, credentials=credentials)
+                await mw.close()
 
-        # Case: Pack16 where revision is individual file
-        with subtests.test(major_version=3, case='revision as individual file'):
-            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
-                _upgrade_project_to_v3(project_dirpath)
+        with subtests.test(when='after_project_opened'):
+            # Trigger from regular menubar (project already open in MainWindow)
+            with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+                (mw1, _) = await _open_project_from_s3_in_ui(
+                    s3_url, credentials=credentials)
 
-                # Extract revision from pack to individual file, then remove from pack
-                _extract_revision_from_pack_to_individual_file(
-                    project_dirpath, revision_id=1)
+                async def start_open_from_main_window() -> None:
+                    # Open S3 dialog from regular menubar, then wait for the current
+                    # MainWindow to be disposed before waiting for the next
+                    # MainWindow to appear, via MainWindow.wait_for()
+                    await mw1.start_open_project_from_s3_with_menuitem()
+                    await mw1.wait_for_dispose()
 
-                with _fake_s3_root(
-                        project_dirpath,
-                        region='us-east-1',
-                        bucket='test-bucket',
-                        key_prefix='Archive/TestProject.crystalproj',
-                        ) as fake_s3_root:
-                    with _fake_s3(fake_s3_root), \
-                            Project(s3_url, readonly=True) as project:
-                        assertEqual(3, project.major_version)
-                        (content, size) = _open_and_read_home_revision(project)
-                        _assert_matches_xkcd_home_content(content, size)
+                (mw2, _) = await _open_project_from_s3_in_ui(
+                    s3_url, credentials=credentials,
+                    start_open_func=start_open_from_main_window)
+                await mw2.close()
+
+
+async def test_given_open_project_from_s3_dialog_and_url_is_valid_when_blur_url_field_then_open_button_is_enabled() -> None:
+    with xtempfile.TemporaryDirectory() as fake_s3_root, \
+            _fake_s3(fake_s3_root):
+        dialog = OpenProjectFromS3Dialog(None)
+        try:
+            # Set URL to valid s3:// URL
+            dialog._url_field.Value = 's3://test-bucket/Archive/Test.crystalproj/'
+
+            # Simulate URL field blur
+            dialog._validate_url_and_update_controls()
+
+            # Verify Open button is enabled
+            assert dialog._open_button.Enabled
+
+            # Verify no URL error is shown
+            assert not dialog._url_error_label.IsShown()
+        finally:
+            dialog.Destroy()
+
+
+async def test_given_open_project_from_s3_dialog_and_url_is_invalid_when_blur_url_field_then_inline_error_is_shown_and_open_button_is_disabled() -> None:
+    with xtempfile.TemporaryDirectory() as fake_s3_root, \
+            _fake_s3(fake_s3_root):
+        dialog = OpenProjectFromS3Dialog(None)
+        try:
+            # Set URL to invalid (not an s3:// URL)
+            dialog._url_field.Value = 'http://not-an-s3-url.com/foo'
+
+            # Simulate URL field blur
+            dialog._validate_url_and_update_controls()
+
+            # Verify inline error is shown
+            assert dialog._url_error_label.IsShown()
+            assertIn('Not a valid S3 URL', dialog._url_error_label.Label)
+
+            # Verify Open button is disabled
+            assert not dialog._open_button.Enabled
+        finally:
+            dialog.Destroy()
+
+
+async def test_given_open_project_from_s3_dialog_and_url_contains_embedded_credentials_when_blur_url_field_then_credential_fields_are_disabled() -> None:
+    s3_url_with_creds = 's3://fake-key:fake-secret@test-bucket/Archive/Test.crystalproj/'
+    check_focused = should_check_focused_windows()
+
+    with xtempfile.TemporaryDirectory() as fake_s3_root, \
+            _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+        dialog = OpenProjectFromS3Dialog(None)
+        try:
+            initial_height = dialog.Size.Height  # capture
+            
+            # Set URL with embedded credentials
+            dialog._url_field.Value = s3_url_with_creds
+
+            if check_focused:
+                # Simulate Tab navigation away from URL field,
+                # which triggers _on_url_blur -> _validate_url_and_update_controls.
+                # This exercises the tricky interaction where:
+                # 1. URL blur disables credential controls (including radio buttons)
+                # 2. Focus moves to _use_profile_radio (now disabled)
+                # 3. _on_radio_focused_while_disabled navigates past disabled radios
+                dialog.Show()
+                SetFocus(dialog._url_field)
+                press_tab_in_window_to_navigate_focus(dialog)
+            else:
+                # Directly trigger what blur would trigger
+                dialog._validate_url_and_update_controls()
+
+            # Verify credential controls are disabled (credentials come from URL)
+            assert not dialog._use_profile_radio.Enabled
+            assert not dialog._use_manual_radio.Enabled
+            assert not dialog._access_key_id_field.Enabled
+            assert not dialog._secret_access_key_field.Enabled
+            assert not dialog._profile_choice.Enabled
+
+            # Verify "Credentials provided in URL" label is shown
+            assert dialog._embedded_creds_label.IsShown()
+
+            # Verify dialog height resized to accommodate the label
+            assert dialog.Size.Height > initial_height, \
+                f'Expected dialog height to increase after showing embedded creds label'
+
+            # Verify Open button is enabled (URL is valid)
+            assert dialog._open_button.Enabled
+
+            if check_focused:
+                # Verify focus landed on an enabled control
+                # (not trapped on a disabled radio button)
+                focused = dialog.FindFocus()
+                assert focused is not None
+                assert focused.Enabled, \
+                    f'Focus landed on disabled control: {focused.Name}'
+                assert not isinstance(focused, wx.RadioButton), \
+                    f'Focus should not be trapped on a radio button: {focused.Name}'
+        finally:
+            dialog.Destroy()
+
+
+async def test_given_open_project_from_s3_dialog_and_no_aws_profiles_exist_then_profile_option_is_disabled_and_manual_credentials_is_selected() -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root:
+        with _fake_s3(fake_s3_root, profiles=[]):
+            def verify_no_profiles(dialog: OpenProjectFromS3Dialog) -> None:
+                # Profile radio is disabled (no profiles available)
+                assert not dialog._use_profile_radio.Enabled
+                
+                # Manual credentials radio is selected
+                assert dialog._use_manual_radio.Value
+                
+                # Profile dropdown is disabled
+                assert not dialog._profile_choice.Enabled
+
+            (mw, _) = await _open_project_from_s3_in_ui(
+                s3_url,
+                credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'),
+                fill_more_options=verify_no_profiles)
+            await mw.close()
+
+
+async def test_given_open_project_from_s3_dialog_and_default_aws_profile_exists_then_profile_option_is_enabled_and_dropdown_contains_all_aws_profiles_and_default_aws_profile_is_preselected_and_profile_credentials_is_selected() -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root:
+        with _fake_s3(fake_s3_root, profiles=['default', 'staging', 'production']):
+            def verify_default_profile(dialog: OpenProjectFromS3Dialog) -> None:
+                # Profile radio is enabled and selected
+                assert dialog._use_profile_radio.Enabled
+                assert dialog._use_profile_radio.Value
+                
+                # Dropdown contains all profiles
+                profile_items = [dialog._profile_choice.GetString(i)
+                    for i in range(dialog._profile_choice.Count)]
+                assertEqual(['default', 'staging', 'production'], profile_items)
+                
+                # "default" profile is preselected
+                assertEqual('default', dialog._profile_choice.GetStringSelection())
+
+            (mw, _) = await _open_project_from_s3_in_ui(
+                s3_url,
+                credentials=S3Filesystem.ProfileCredentials('default'),
+                fill_more_options=verify_default_profile)
+            await mw.close()
+
+
+async def test_given_open_project_from_s3_dialog_and_aws_profile_exists_but_default_profile_does_not_exist_then_profile_option_is_enabled_and_dropdown_contains_all_aws_profiles_and_first_aws_profile_is_preselected_and_profile_credentials_is_selected() -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root:
+        with _fake_s3(fake_s3_root, profiles=['staging', 'production']):
+            def verify_first_profile(dialog: OpenProjectFromS3Dialog) -> None:
+                # Profile radio is enabled and selected
+                assert dialog._use_profile_radio.Enabled
+                assert dialog._use_profile_radio.Value
+                
+                # Dropdown contains all profiles
+                profile_items = [dialog._profile_choice.GetString(i)
+                    for i in range(dialog._profile_choice.Count)]
+                assertEqual(['staging', 'production'], profile_items)
+                
+                # First profile is preselected (no "default" exists)
+                assertEqual('staging', dialog._profile_choice.GetStringSelection())
+
+            (mw, _) = await _open_project_from_s3_in_ui(
+                s3_url,
+                credentials=S3Filesystem.ProfileCredentials('staging'),
+                fill_more_options=verify_first_profile)
+            await mw.close()
+
+
+async def test_given_open_project_from_s3_dialog_and_profile_credentials_is_selected_and_valid_credentials_provided_when_press_open_button_then_can_serve_a_resource_revision() -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root:
+        with _fake_s3(fake_s3_root, profiles=['default', 'other']):
+            def verify_profile_radio_preselected(dialog: OpenProjectFromS3Dialog) -> None:
+                # Verify profile radio is pre-selected (because profiles exist)
+                assert dialog._use_profile_radio.Value
+                assert dialog._profile_choice.GetStringSelection() == 'default'
+
+            (mw, project) = await _open_project_from_s3_in_ui(
+                s3_url,
+                credentials=S3Filesystem.ProfileCredentials('default'),
+                fill_more_options=verify_profile_radio_preselected)
+            await _ensure_can_serve_a_resource_revision(mw, project)
+
+
+@skip('covered by: test_when_open_project_with_no_credentials_then_raises_PermissionError_with_instructions_to_fix')
+async def test_given_open_project_from_s3_dialog_and_manual_credentials_is_selected_and_no_credentials_provided_when_press_open_button_then_shows_permission_error_dialog() -> None:
+    pass
+
+
+async def test_given_open_project_from_s3_dialog_and_manual_credentials_is_selected_and_incomplete_credentials_provided_when_press_open_button_then_shows_error_dialog() -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with xtempfile.TemporaryDirectory() as fake_s3_root, \
+            _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+        captured_message = None  # type: str | None
+
+        def show_modal_func(dialog: wx.Dialog) -> int:
+            nonlocal captured_message
+            if dialog.Name == 'cr-open-project-from-s3-dialog':
+                assert isinstance(dialog, OpenProjectFromS3Dialog)
+
+                dialog._url_field.Value = s3_url
+                dialog._validate_url_and_update_controls()
+
+                # Fill only Access Key ID (no Secret Access Key) — incomplete
+                dialog._access_key_id_field.Value = 'fake-access-key'
+
+                # Verify manual credentials radio is pre-selected (no profiles exist)
+                assert dialog._use_manual_radio.Value
+
+                # _validate_inputs() will detect incomplete creds
+                # and show an error dialog (intercepted below)
+                result = dialog._validate_inputs()
+                assert result is None  # validation failed
+
+                return wx.ID_CANCEL
+            elif dialog.Name == 'cr-open-project-from-s3-dialog__incomplete-creds-error':
+                assert isinstance(dialog, wx.MessageDialog)
+                captured_message = dialog.Message
+                return wx.ID_OK
+            else:
+                raise AssertionError(f'Unexpected dialog: {dialog.Name!r}')
+
+        with patch('crystal.util.wx_dialog.ShowModal', show_modal_func), \
+                patch('crystal.browser.open_project_from_s3.ShowModal', show_modal_func):
+            ocd = await OpenOrCreateDialog.wait_for()
+            await ocd.start_open_project_from_s3_with_menuitem()
+            await wait_for(lambda: captured_message is not None)
+
+        assert captured_message is not None
+        assertEqual(
+            'Please enter both Access Key ID and Secret Access Key, '
+            'or leave both empty to use default AWS credentials.',
+            captured_message)
+
+
+@skip('covered by: test_when_open_project_with_invalid_credentials_then_raises_PermissionError_with_informative_message')
+async def test_given_open_project_from_s3_dialog_and_manual_credentials_is_selected_and_invalid_credentials_provided_when_press_open_button_then_shows_permission_error_dialog() -> None:
+    pass
+
+
+async def test_given_open_project_from_s3_dialog_and_manual_credentials_is_selected_and_valid_credentials_provided_when_press_open_button_then_can_serve_a_resource_revision() -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root:
+        with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+            (mw, project) = await _open_project_from_s3_in_ui(
+                s3_url,
+                credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'),
+                fill_more_options=lambda d: (
+                    # Verify manual radio is pre-selected (because no profiles exist)
+                    assertEqual(True, d._use_manual_radio.Value)))
+            await _ensure_can_serve_a_resource_revision(mw, project)
 
 
 # === Test: UI: Main Window ===
@@ -564,6 +1119,7 @@ def _fake_s3(
         *,
         omit_env_var_credentials: bool = False,
         invalid_credentials: bool = False,
+        profiles: list[str] | None = None,
         ) -> Iterator[None]:
     """
     Context in which a fake S3 backend replaces "boto3" and "botocore".
@@ -574,6 +1130,8 @@ def _fake_s3(
         env_add['AWS_SECRET_ACCESS_KEY'] = 'fake-secret-key'
     if invalid_credentials:
         env_add['CRYSTAL_FAKE_S3_INVALID_CREDENTIALS'] = '1'
+    if profiles is not None:
+        env_add['CRYSTAL_FAKE_S3_PROFILES'] = ','.join(profiles)
     env_remove = (
         ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']
         if omit_env_var_credentials
@@ -672,3 +1230,170 @@ def _wait_for_server_url(crystal) -> str:
         f'Never saw "Server started at:" in first {MAX_LINES} lines. '
         f'Read so far: {banner!r}'
     )
+
+
+# === Utility: Fake S3: UI ===
+
+async def _open_project_from_s3_in_ui(
+        s3_url: str,
+        credentials: 'S3Filesystem.Credentials | S3Filesystem.ProfileCredentials | None' = None,
+        fill_more_options: 'Callable[[OpenProjectFromS3Dialog], None] | None' = None,
+        start_open_func: 'Callable[[], Awaitable[None]] | None' = None,
+        ) -> 'tuple[MainWindow, Project]':
+    """
+    Opens a project from S3 via the UI dialog, returning (mw, project).
+
+    Arguments:
+    * s3_url -- the S3 URL to open (may include embedded credentials)
+    * credentials -- optional credentials to fill into the dialog:
+        - Credentials: fills in manual access key + secret access key fields
+        - ProfileCredentials: selects the profile radio and chooses the named profile
+        - None: leaves credential fields untouched (use when creds are embedded in URL)
+    * fill_more_options -- optional callback to make extra assertions or interactions
+        on the dialog after the URL and credentials are filled
+    * start_open_func -- optional async function to open the S3 dialog.
+        If None (default), waits for OpenOrCreateDialog and clicks its S3 menu item.
+        If provided, calls start_open_func() instead (e.g. to open from a MainWindow).
+    """
+    def fill_and_accept_s3_dialog(dialog: wx.Dialog) -> int:
+        assert isinstance(dialog, OpenProjectFromS3Dialog)
+
+        dialog._url_field.Value = s3_url
+        dialog._validate_url_and_update_controls()
+
+        if isinstance(credentials, S3Filesystem.Credentials):
+            dialog._access_key_id_field.Value = credentials.access_key_id
+            dialog._secret_access_key_field.Value = credentials.secret_access_key
+        elif isinstance(credentials, S3Filesystem.ProfileCredentials):
+            dialog._use_profile_radio.Value = True
+            dialog._profile_choice.SetStringSelection(credentials.profile_name)
+        elif credentials is None:
+            pass
+        else:
+            assert_never(credentials)
+
+        if fill_more_options is not None:
+            fill_more_options(dialog)
+
+        result = dialog._validate_inputs()
+        assert result is not None
+        (dialog.plain_s3_url, dialog.credentials) = result
+
+        return wx.ID_OK
+
+    with patch('crystal.util.wx_dialog.ShowModal',
+            mocked_show_modal('cr-open-project-from-s3-dialog', fill_and_accept_s3_dialog)):
+        if start_open_func is not None:
+            await start_open_func()
+        else:
+            ocd = await OpenOrCreateDialog.wait_for()
+            await ocd.start_open_project_from_s3_with_menuitem()
+        mw = await MainWindow.wait_for()
+    
+    project = await wait_for_and_return(lambda: Project._last_opened_project)
+    assert project.readonly
+    return (mw, project)
+
+
+async def _open_project_from_s3_in_ui_expecting_error(
+        s3_url: str,
+        error_dialog_name: str,
+        credentials: 'S3Filesystem.Credentials | S3Filesystem.ProfileCredentials | None' = None,
+        fill_more_options: 'Callable[[OpenProjectFromS3Dialog], None] | None' = None,
+        ) -> str:
+    """
+    Opens a project from S3 via the UI dialog, expecting an error dialog.
+    Returns the error dialog's message string.
+
+    Arguments:
+    * s3_url -- the S3 URL to open (may include embedded credentials)
+    * error_dialog_name -- the Name of the expected error dialog
+        (e.g. 'cr-access-denied', 'cr-invalid-project')
+    * credentials -- optional credentials to fill into the dialog:
+        - Credentials: fills in manual access key + secret access key fields
+        - ProfileCredentials: selects the profile radio and chooses the named profile
+        - None: leaves credential fields untouched (use when creds are embedded in URL)
+    * fill_more_options -- optional callback to make extra assertions or interactions
+        on the dialog after the URL and credentials are filled
+    """
+    captured_message = None  # type: str | None
+
+    def show_modal_func(dialog: wx.Dialog) -> int:
+        nonlocal captured_message
+        if dialog.Name == 'cr-open-project-from-s3-dialog':
+            assert isinstance(dialog, OpenProjectFromS3Dialog)
+
+            dialog._url_field.Value = s3_url
+            dialog._validate_url_and_update_controls()
+
+            if isinstance(credentials, S3Filesystem.Credentials):
+                dialog._access_key_id_field.Value = credentials.access_key_id
+                dialog._secret_access_key_field.Value = credentials.secret_access_key
+            elif isinstance(credentials, S3Filesystem.ProfileCredentials):
+                dialog._use_profile_radio.Value = True
+                dialog._profile_choice.SetStringSelection(credentials.profile_name)
+            elif credentials is None:
+                pass
+            else:
+                assert_never(credentials)
+
+            if fill_more_options is not None:
+                fill_more_options(dialog)
+
+            result = dialog._validate_inputs()
+            assert result is not None
+            (dialog.plain_s3_url, dialog.credentials) = result
+
+            return wx.ID_OK
+        elif dialog.Name == error_dialog_name:
+            assert isinstance(dialog, wx.MessageDialog)
+            captured_message = dialog.Message
+            return wx.ID_OK
+        else:
+            raise AssertionError(f'Unexpected dialog: {dialog.Name!r}')
+
+    with patch('crystal.util.wx_dialog.ShowModal', show_modal_func):
+        ocd = await OpenOrCreateDialog.wait_for()
+        await ocd.start_open_project_from_s3_with_menuitem()
+        await wait_for(lambda: captured_message is not None)
+
+    assert captured_message is not None
+    return captured_message
+
+
+# === Utility: Happy Path Tests ===
+
+async def _ensure_can_serve_a_resource_revision(mw: MainWindow, project: Project) -> None:
+    """
+    Verifies that the given xkcd project opened in mw can serve the home page.
+
+    Selects the Home page root resource, clicks View, and asserts that an HTTP
+    request to the started ProjectServer returns the expected HTML contents.
+
+    Closes mw when done (or if an assertion fails).
+    """
+    try:
+        # Select the Home page root resource in the entity tree
+        root_ti = TreeItem.GetRootItem(mw.entity_tree.window)
+        home_ti = root_ti.GetFirstChild()
+        assert home_ti is not None
+        home_ti.SelectItem()
+
+        # Click View to start the ProjectServer and open a browser
+        home_url = 'https://xkcd.com/'
+        with assert_does_open_webbrowser_to(lambda: get_request_url(
+                home_url,
+                project_default_url_prefix=project.default_url_prefix)):
+            click_button(mw.view_button)
+
+        # Fetch the xkcd home page from the ProjectServer
+        home_page = await fetch_archive_url(home_url)
+        assert home_page.status == 200
+
+        # Ensure it has the expected page title
+        assertRegex(home_page.content, r'<title>[^<]*xkcd[^<]*</title>')
+
+        # Ensure it links to the expected comic image
+        assertRegex(home_page.content, r'imgs\.xkcd\.com')
+    finally:
+        await mw.close()
