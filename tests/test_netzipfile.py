@@ -1,5 +1,6 @@
 """Unit tests for netzipfile module."""
 
+import sys
 from typing import BinaryIO
 
 from crystal.util import netzipfile
@@ -35,6 +36,37 @@ def test_can_read_entry_given_deflate_compressed_zip() -> None:
     content = b'The quick brown fox jumps over the lazy dog' * 100
     entries = {'compressed.txt': content}
     data = _create_deflate_zip(entries)
+    nzf = NetZipFile(_create_open_range_func(data))
+
+    assert nzf.open('compressed.txt').read() == content
+
+
+def test_can_read_entry_given_bzip2_compressed_zip() -> None:
+    content = b'The quick brown fox jumps over the lazy dog' * 100
+    entries = {'compressed.txt': content}
+    data = _create_bzip2_zip(entries)
+    nzf = NetZipFile(_create_open_range_func(data))
+
+    assert nzf.open('compressed.txt').read() == content
+
+
+def test_can_read_entry_given_lzma_compressed_zip() -> None:
+    content = b'The quick brown fox jumps over the lazy dog' * 100
+    entries = {'compressed.txt': content}
+    data = _create_lzma_zip(entries)
+    nzf = NetZipFile(_create_open_range_func(data))
+
+    assert nzf.open('compressed.txt').read() == content
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 14),
+    reason='compression.zstd is only available in Python 3.14+',
+)
+def test_can_read_entry_given_zstd_compressed_zip() -> None:
+    content = b'The quick brown fox jumps over the lazy dog' * 100
+    entries = {'compressed.txt': content}
+    data = _create_zstd_zip(entries)
     nzf = NetZipFile(_create_open_range_func(data))
 
     assert nzf.open('compressed.txt').read() == content
@@ -206,6 +238,33 @@ def _create_deflate_zip(entries: dict[str, bytes]) -> bytes:
     """Build a deflate-compressed zip file in memory."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED, allowZip64=False) as zf:
+        for (name, data) in entries.items():
+            zf.writestr(name, data)
+    return buf.getvalue()
+
+
+def _create_bzip2_zip(entries: dict[str, bytes]) -> bytes:
+    """Build a bzip2-compressed zip file in memory."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_BZIP2, allowZip64=False) as zf:
+        for (name, data) in entries.items():
+            zf.writestr(name, data)
+    return buf.getvalue()
+
+
+def _create_lzma_zip(entries: dict[str, bytes]) -> bytes:
+    """Build an LZMA-compressed zip file in memory."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_LZMA, allowZip64=False) as zf:
+        for (name, data) in entries.items():
+            zf.writestr(name, data)
+    return buf.getvalue()
+
+
+def _create_zstd_zip(entries: dict[str, bytes]) -> bytes:
+    """Build a zstandard-compressed zip file in memory."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_ZSTANDARD, allowZip64=False) as zf:
         for (name, data) in entries.items():
             zf.writestr(name, data)
     return buf.getvalue()

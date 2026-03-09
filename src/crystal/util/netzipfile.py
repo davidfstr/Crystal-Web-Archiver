@@ -12,10 +12,17 @@ Performance:
 
 from __future__ import annotations
 
+import bz2
 import io
+import lzma
 import struct
 from typing import BinaryIO, Literal, Protocol
 import zlib
+
+try:
+    import compression.zstd as _zstd  # Python 3.14+
+except ImportError:
+    _zstd = None  # type: ignore[assignment]
 
 
 # === Public API ===
@@ -61,11 +68,13 @@ class NetZipFile:
         """
         Opens the named entry for reading.
 
-        Handles both stored (uncompressed) and deflate-compressed entries.
+        Handles stored, deflate, bzip2, lzma, and zstandard compressed entries.
 
         Raises:
         * KeyError -- if entry_name is not found in the zip file.
         * ValueError -- if the entry uses an unsupported compression method.
+        * RuntimeError -- if the entry uses a compression method whose
+            supporting module is not available (e.g. zstandard on Python < 3.14).
         """
         entry = self._entries.get(entry_name)
         if entry is None:
@@ -363,6 +372,28 @@ def _open_entry_data(open_range: OpenRangeCallable, entry: _CdEntry) -> BinaryIO
                 _LimitedReader(stream, entry.compressed_size)  # type: ignore[arg-type]
             )
         )
+    elif entry.compression_method == 12:
+        return io.BufferedReader(
+            _Bzip2Reader(
+                _LimitedReader(stream, entry.compressed_size)  # type: ignore[arg-type]
+            )
+        )
+    elif entry.compression_method == 14:
+        return io.BufferedReader(
+            _LzmaReader(
+                _LimitedReader(stream, entry.compressed_size)  # type: ignore[arg-type]
+            )
+        )
+    elif entry.compression_method == 93:
+        if _zstd is None:
+            raise RuntimeError(
+                'Zstandard compression requires Python 3.14+ (compression.zstd module)'
+            )
+        return io.BufferedReader(
+            _ZstdReader(
+                _LimitedReader(stream, entry.compressed_size)  # type: ignore[arg-type]
+            )
+        )
     else:
         raise ValueError(
             f'Unsupported compression method: {entry.compression_method}'
@@ -435,6 +466,165 @@ class _DeflateReader(io.RawIOBase):
             return len_buf
         else:
             # NOTE: Use a memoryview to avoid creating a temporary slice
+            b[:] = memoryview(self._buf)[:want]
+            self._buf_pos = want
+            return want
+
+
+class _Bzip2Reader(io.RawIOBase):
+    # Chunk size for reading compressed data from the underlying stream
+    _READ_CHUNK = 65536
+
+    def __init__(self, raw: BinaryIO) -> None:
+        self._raw = raw
+        self._decompressor = bz2.BZ2Decompressor()
+        self._buf = bytearray()  # decompressed bytes not yet consumed by caller
+        self._buf_pos = 0        # read cursor into _buf; advance instead of slicing
+        self._done = False       # True once decompressor is exhausted
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
+        # Trim bytes consumed by the previous call, keeping memory usage bounded.
+        if self._buf_pos > 0:
+            del self._buf[:self._buf_pos]
+            self._buf_pos = 0
+
+        # Fill the internal buffer until we have enough decompressed bytes or
+        # reach the end of the compressed stream.
+        want = len(b)  # cache
+        while len(self._buf) < want and not self._done:
+            chunk = self._raw.read(self._READ_CHUNK)
+            if chunk:
+                self._buf.extend(self._decompressor.decompress(chunk))
+            else:
+                self._done = True
+
+        # Copy min(want, len(self._buf)) bytes from the start of self._buf to b.
+        if (len_buf := len(self._buf)) <= want:
+            b[:len_buf] = self._buf
+            self._buf_pos = len_buf
+            return len_buf
+        else:
+            b[:] = memoryview(self._buf)[:want]
+            self._buf_pos = want
+            return want
+
+
+class _LzmaReader(io.RawIOBase):
+    # Chunk size for reading compressed data from the underlying stream
+    _READ_CHUNK = 65536
+
+    def __init__(self, raw: BinaryIO) -> None:
+        self._raw = raw
+        self._decompressor = _LzmaZipDecompressor()
+        self._buf = bytearray()  # decompressed bytes not yet consumed by caller
+        self._buf_pos = 0        # read cursor into _buf; advance instead of slicing
+        self._done = False       # True once decompressor is exhausted
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
+        # Trim bytes consumed by the previous call, keeping memory usage bounded.
+        if self._buf_pos > 0:
+            del self._buf[:self._buf_pos]
+            self._buf_pos = 0
+
+        # Fill the internal buffer until we have enough decompressed bytes or
+        # reach the end of the compressed stream.
+        want = len(b)  # cache
+        while len(self._buf) < want and not self._done:
+            chunk = self._raw.read(self._READ_CHUNK)
+            if chunk:
+                self._buf.extend(self._decompressor.decompress(chunk))
+            else:
+                self._done = True
+
+        # Copy min(want, len(self._buf)) bytes from the start of self._buf to b.
+        if (len_buf := len(self._buf)) <= want:
+            b[:len_buf] = self._buf
+            self._buf_pos = len_buf
+            return len_buf
+        else:
+            b[:] = memoryview(self._buf)[:want]
+            self._buf_pos = want
+            return want
+
+
+class _LzmaZipDecompressor:
+    """
+    Handles the ZIP LZMA stream format, which prepends a 4-byte header
+    (2 bytes version + 2 bytes properties size) and the LZMA properties
+    before the raw LZMA compressed data.
+
+    Mirrors the LZMADecompressor class used in Python's own zipfile module.
+    """
+
+    def __init__(self) -> None:
+        self._decomp: lzma.LZMADecompressor | None = None
+        self._unconsumed = b''
+
+    def decompress(self, data: bytes) -> bytes:
+        if self._decomp is None:
+            self._unconsumed += data
+            if len(self._unconsumed) <= 4:
+                return b''
+            (psize,) = struct.unpack('<H', self._unconsumed[2:4])
+            if len(self._unconsumed) <= 4 + psize:
+                return b''
+            # NOTE: lzma._decode_filter_properties is a private CPython function
+            # used here following the same pattern as Python's own zipfile module
+            # (see Lib/zipfile/__init__.py LZMADecompressor class).
+            self._decomp = lzma.LZMADecompressor(
+                lzma.FORMAT_RAW,
+                filters=[lzma._decode_filter_properties(  # type: ignore[attr-defined]
+                    lzma.FILTER_LZMA1, self._unconsumed[4:4 + psize]
+                )],
+            )
+            data = self._unconsumed[4 + psize:]
+            self._unconsumed = b''  # release buffered header bytes
+        return self._decomp.decompress(data)
+
+
+class _ZstdReader(io.RawIOBase):
+    # Chunk size for reading compressed data from the underlying stream
+    _READ_CHUNK = 65536
+
+    def __init__(self, raw: BinaryIO) -> None:
+        self._raw = raw
+        assert _zstd is not None
+        self._decompressor = _zstd.ZstdDecompressor()
+        self._buf = bytearray()  # decompressed bytes not yet consumed by caller
+        self._buf_pos = 0        # read cursor into _buf; advance instead of slicing
+        self._done = False       # True once decompressor is exhausted
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, b: bytearray | memoryview) -> int:  # type: ignore[override]
+        # Trim bytes consumed by the previous call, keeping memory usage bounded.
+        if self._buf_pos > 0:
+            del self._buf[:self._buf_pos]
+            self._buf_pos = 0
+
+        # Fill the internal buffer until we have enough decompressed bytes or
+        # reach the end of the compressed stream.
+        want = len(b)  # cache
+        while len(self._buf) < want and not self._done:
+            chunk = self._raw.read(self._READ_CHUNK)
+            if chunk:
+                self._buf.extend(self._decompressor.decompress(chunk))
+            else:
+                self._done = True
+
+        # Copy min(want, len(self._buf)) bytes from the start of self._buf to b.
+        if (len_buf := len(self._buf)) <= want:
+            b[:len_buf] = self._buf
+            self._buf_pos = len_buf
+            return len_buf
+        else:
             b[:] = memoryview(self._buf)[:want]
             self._buf_pos = want
             return want
