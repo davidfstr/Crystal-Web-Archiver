@@ -491,6 +491,11 @@ class CrystalLintRules(BaseChecker):
         for (module_name, _) in node.names:
             if module_name == 'pytest' and self._is_in_e2e_tests_layer(node):
                 self.add_message('no-pytest-in-e2e-tests', node=node)
+        
+        # import pathlib (in model layer)
+        for (module_name, _) in node.names:
+            if module_name == 'pathlib' and self._is_in_model_layer(node):
+                self.add_message('no-direct-filesystem-access-in-model', node=node)
     
     _BANNED_FILESYSTEM_IMPORTS = frozenset({
         'flush_renames_in_directory',
@@ -517,6 +522,10 @@ class CrystalLintRules(BaseChecker):
                 if name in self._BANNED_FILESYSTEM_IMPORTS:
                     self.add_message('no-direct-filesystem-access-in-model', node=node)
                     break
+
+        # from pathlib import ... (in model layer)
+        if self._is_in_model_layer(node) and node.modname == 'pathlib':
+            self.add_message('no-direct-filesystem-access-in-model', node=node)
     
     # === Visit Attribute (wx constants + banned os attr reads) ===
 
