@@ -135,7 +135,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
 
       - name: Install Playwright browsers
         run: poetry run playwright install chromium
@@ -320,7 +320,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
 
       - name: Install Playwright browsers
         run: poetry run playwright install chromium
@@ -427,7 +427,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
 
       - name: Install Playwright browsers
         run: ${POETRY_RUN}playwright install chromium
@@ -706,7 +706,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
 
       - name: Install Playwright browsers
         run: poetry run playwright install chromium
@@ -782,7 +782,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~\AppData\Local\ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
 
       - name: Install Playwright browsers
         run: poetry run playwright install chromium
