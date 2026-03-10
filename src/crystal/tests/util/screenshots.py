@@ -1,6 +1,7 @@
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from crystal.util.xos import is_mac_os
+import crystal
+from crystal.util.xos import is_linux, is_mac_os
 from functools import wraps
 import os
 import subprocess
@@ -21,7 +22,16 @@ def take_error_screenshot() -> None:
     # Take screenshot if screenshots directory path defined
     screenshots_dirpath = os.environ.get('CRYSTAL_SCREENSHOTS_DIRPATH')
     if screenshots_dirpath is None:
-        return
+        if getattr(sys, 'frozen', None) is None and not is_linux():
+            # If running Crystal from source, default to a local '.screenshots' directory
+            screenshots_dirpath = os.path.join(
+                os.path.dirname(crystal.__file__),
+                os.path.pardir,
+                os.path.pardir,
+                '.screenshots')
+        else:
+            print('*** Cannot take screenshot because CRYSTAL_SCREENSHOTS_DIRPATH not defined', file=sys.stderr)
+            return
     
     os.makedirs(screenshots_dirpath, exist_ok=True)
     
