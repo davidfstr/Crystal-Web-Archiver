@@ -755,6 +755,44 @@ class TestNoDirectDatabaseRollbackInMemory:
         _assert_no_message_emitted(code, 'no-direct-database-rollback')
 
 
+# === C9017: no-direct-filesystem-access-in-model ===
+
+class TestNoDirectFilesystemAccessInModelInMemory:
+    """In-memory tests for the no-direct-filesystem-access-in-model rule (C9017)."""
+
+    def test_import_pathlib_in_model_is_flagged(self) -> None:
+        code = dedent(
+            '''\
+            import pathlib
+            '''
+        )
+        _assert_message_emitted_in_model(code, 'no-direct-filesystem-access-in-model')
+
+    def test_from_pathlib_import_in_model_is_flagged(self) -> None:
+        code = dedent(
+            '''\
+            from pathlib import Path
+            '''
+        )
+        _assert_message_emitted_in_model(code, 'no-direct-filesystem-access-in-model')
+
+    def test_import_pathlib_outside_model_is_allowed(self) -> None:
+        code = dedent(
+            '''\
+            import pathlib
+            '''
+        )
+        _assert_no_message_emitted(code, 'no-direct-filesystem-access-in-model')
+
+    def test_from_pathlib_import_outside_model_is_allowed(self) -> None:
+        code = dedent(
+            '''\
+            from pathlib import Path
+            '''
+        )
+        _assert_no_message_emitted(code, 'no-direct-filesystem-access-in-model')
+
+
 # === Utilities ===
 
 # Counter for generating unique fake filenames
@@ -768,6 +806,20 @@ def _assert_message_emitted(code: str, message_id: str) -> None:
     message_id should be the symbolic name (e.g. 'tuple-missing-parens').
     """
     messages = _run_checker_on_code(code)
+    message_ids = [msg.msg_id for msg in messages]
+    assert message_id in message_ids, (
+        f'Expected message {message_id} not found. Got: {message_ids}'
+    )
+
+
+def _assert_message_emitted_in_model(code: str, message_id: str) -> None:
+    """
+    Assert that checker emits the specified message given the specified code,
+    simulating a file in the model layer (crystal/model/).
+    
+    message_id should be the symbolic name (e.g. 'no-direct-filesystem-access-in-model').
+    """
+    messages = _run_checker_on_code_in_model(code)
     message_ids = [msg.msg_id for msg in messages]
     assert message_id in message_ids, (
         f'Expected message {message_id} not found. Got: {message_ids}'
@@ -812,6 +864,26 @@ def _run_checker_on_code(code: str) -> list[pylint.testutils.MessageTest]:
         test_case.walk(module)
         
         # Return collected messages
+        return test_case.linter.release_messages()
+
+
+def _run_checker_on_code_in_model(code: str) -> list[pylint.testutils.MessageTest]:
+    """
+    Run a pylint checker on code, simulating a file in the model layer (crystal/model/).
+    """
+    fake_filename = f'/src/crystal/model/test_file_{next(_fake_filename_counter)}.py'
+    
+    code_lines = tuple(code.splitlines(keepends=True))
+    with mock.patch('crystal.lint.rules._read_source_lines', return_value=code_lines):
+        test_case = _InMemoryCheckerTestCase()
+        test_case.CHECKER_CLASS = CrystalLintRules
+        test_case.setup_method()
+        
+        module = astroid.parse(code, module_name=fake_filename)
+        module.file = fake_filename
+        
+        test_case.walk(module)
+        
         return test_case.linter.release_messages()
 
 
