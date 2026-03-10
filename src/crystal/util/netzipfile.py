@@ -68,13 +68,13 @@ class NetZipFile:
         """
         Opens the named entry for reading.
 
-        Handles stored, deflate, bzip2, lzma, and zstandard compressed entries.
+        Handles both stored (uncompressed) and compressed entries.
 
         Raises:
         * KeyError -- if entry_name is not found in the zip file.
         * ValueError -- if the entry uses an unsupported compression method.
         * RuntimeError -- if the entry uses a compression method whose
-            supporting module is not available (e.g. zstandard on Python < 3.14).
+            supporting module is not available (e.g. zstandard on Python <3.14).
         """
         entry = self._entries.get(entry_name)
         if entry is None:
