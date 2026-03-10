@@ -2,13 +2,14 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 import crystal
 from crystal.util.xos import is_linux, is_mac_os
+from crystal.util.xthreading import fg_call_and_wait
 from functools import wraps
 import os
 import subprocess
 import sys
-import tempfile
 from typing import TypeVar
 from typing_extensions import ParamSpec
+
 
 _P = ParamSpec('_P')
 _T = TypeVar('_T')
@@ -19,11 +20,16 @@ def take_error_screenshot() -> None:
     Takes a screenshot, just before an exception that will likely fail
     an automated test is about to be thrown.
     """
-    # Take screenshot if screenshots directory path defined
+    # Take screenshot if screenshots directory path defined or guessable
     screenshots_dirpath = os.environ.get('CRYSTAL_SCREENSHOTS_DIRPATH')
     if screenshots_dirpath is None:
-        if getattr(sys, 'frozen', None) is None and not is_linux():
-            # If running Crystal from source, default to a local '.screenshots' directory
+        # TODO: Does not correctly detect when running from source on Linux.
+        #       Find a way to do that too.
+        running_from_source = (
+            getattr(sys, 'frozen', None) is None and 
+            not is_linux()
+        )
+        if running_from_source:
             screenshots_dirpath = os.path.join(
                 os.path.dirname(crystal.__file__),
                 os.path.pardir,
@@ -35,12 +41,23 @@ def take_error_screenshot() -> None:
     
     os.makedirs(screenshots_dirpath, exist_ok=True)
     
-    screenshot_filename = os.environ.get('CRYSTAL_SCREENSHOT_ID', 'screenshot') + '.png'
-    screenshot_filepath = os.path.abspath(os.path.join(screenshots_dirpath, screenshot_filename))
+    screenshot_id = os.environ.get('CRYSTAL_SCREENSHOT_ID', 'screenshot')
+    screenshot_filepath = os.path.abspath(os.path.join(
+        screenshots_dirpath, screenshot_filename := f'{screenshot_id}.png'))
+    snapshot_filepath = os.path.abspath(os.path.join(
+        screenshots_dirpath, snapshot_filename := f'{screenshot_id}.snapshot.txt'))
+    
     print_screenshot_messages = os.environ.get('CRYSTAL_NO_SCREENSHOT_MESSAGES', 'False') != 'True'
     if print_screenshot_messages:
-        print('*** Saving screenshot to: ' + screenshot_filepath, file=sys.stderr)
+        abs_screenshots_dirpath_sep = os.path.abspath(os.path.join(screenshots_dirpath, ''))
+        print(
+            f'📷 Saving screenshot and snapshot to: {abs_screenshots_dirpath_sep}\n'
+            f'    - {screenshot_filename} (best for humans; image)\n'
+            f'    - {snapshot_filename} (best for AIs; accessibility tree)',
+            file=sys.stderr
+        )
     
+    # Save screenshot
     try:
         if is_mac_os():
             # Use screencapture directly on macOS
@@ -66,6 +83,12 @@ def take_error_screenshot() -> None:
     else:
         if not os.path.exists(screenshot_filepath):
             print('*** Screenshot not saved. Is this macOS and the Screen Recording permission has not been granted?', file=sys.stderr)
+    
+    # Save snapshot
+    with open(snapshot_filepath, 'w') as snapshot_file:
+        from crystal.ui.nav import T
+        snapshot_file.write('>>> T\n')
+        snapshot_file.write(fg_call_and_wait(lambda: repr(T)))
 
 
 @contextmanager

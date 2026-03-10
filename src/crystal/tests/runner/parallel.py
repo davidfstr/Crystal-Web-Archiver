@@ -665,6 +665,7 @@ def _run_worker(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,  # merge stderr into stdout
             text=True,
+            encoding='utf-8',
             bufsize=1,  # line buffered
             env={
                 **os.environ,

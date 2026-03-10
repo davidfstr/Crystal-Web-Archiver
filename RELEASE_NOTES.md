@@ -52,6 +52,11 @@ Release Notes ⋮
     * wxPython is now never even loaded in headless mode.
       Therefore Crystal can now be run (in headless mode) if wxPython isn't installed.
 
+* Development improvements
+    * WaitTimeout failures during automated tests take image screenshots 
+      and text snapshots automatically when running remotely,
+      improving debuggability for AI coding agents.
+
 [Projects on AWS S3]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Projects-on-AWS-S3
 
 ### v2.2.0 (January 27, 2026)
