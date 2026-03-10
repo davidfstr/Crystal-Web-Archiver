@@ -264,7 +264,8 @@ def _create_lzma_zip(entries: dict[str, bytes]) -> bytes:
 def _create_zstd_zip(entries: dict[str, bytes]) -> bytes:
     """Build a zstandard-compressed zip file in memory."""
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_ZSTANDARD, allowZip64=False) as zf:
+    compression: int = zipfile.ZIP_ZSTANDARD  # type: ignore[attr-defined]
+    with zipfile.ZipFile(buf, 'w', compression=compression, allowZip64=False) as zf:
         for (name, data) in entries.items():
             zf.writestr(name, data)
     return buf.getvalue()
