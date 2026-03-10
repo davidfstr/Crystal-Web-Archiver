@@ -785,9 +785,8 @@ class Project(ListenableMixin):
                     # HACK: Must also set icon location as a brittle absolute path
                     #       because Desktop Items doesn't understand the
                     #       'metadata::custom-icon-name' GIO attribute.
-                    crystalproj_png_icon_url = 'file://' + url_quote(
-                        resources_.get_filepath('docicon.png'),
-                        safe='/',
+                    crystalproj_png_icon_url = lfs.as_uri(
+                        resources_.get_filepath('docicon.png')
                     )
                     try:
                         gio.set(self.path, 'metadata::custom-icon', crystalproj_png_icon_url)

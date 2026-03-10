@@ -309,6 +309,9 @@ class LocalFilesystem(_AbstractFilesystem):
         * OSError
         """
         shutil.copystat(src, dst)
+    
+    def as_uri(self, path: str) -> str:
+        return pathlib.Path(path).as_uri()
 
 
 class S3Filesystem(_AbstractFilesystem):
