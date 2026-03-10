@@ -12,10 +12,17 @@ Performance:
 
 from __future__ import annotations
 
+import bz2
 import io
+import lzma
 import struct
 from typing import BinaryIO, Literal, Protocol
 import zlib
+
+try:
+    import compression.zstd as _zstd  # Python 3.14+
+except ImportError:
+    _zstd = None  # type: ignore[assignment]
 
 
 # === Public API ===
@@ -61,11 +68,13 @@ class NetZipFile:
         """
         Opens the named entry for reading.
 
-        Handles both stored (uncompressed) and deflate-compressed entries.
+        Handles both stored (uncompressed) and compressed entries.
 
         Raises:
         * KeyError -- if entry_name is not found in the zip file.
         * ValueError -- if the entry uses an unsupported compression method.
+        * RuntimeError -- if the entry uses a compression method whose
+            supporting module is not available (e.g. zstandard on Python <3.14).
         """
         entry = self._entries.get(entry_name)
         if entry is None:
@@ -359,8 +368,34 @@ def _open_entry_data(open_range: OpenRangeCallable, entry: _CdEntry) -> BinaryIO
         )
     elif entry.compression_method == 8:
         return io.BufferedReader(
-            _DeflateReader(
-                _LimitedReader(stream, entry.compressed_size)  # type: ignore[arg-type]
+            _CompressedReader(
+                _LimitedReader(stream, entry.compressed_size),  # type: ignore[arg-type]
+                zlib.decompressobj(-15)  # wbits=-15: raw deflate (no zlib header), as used in ZIP
+            )
+        )
+    elif entry.compression_method == 12:
+        return io.BufferedReader(
+            _CompressedReader(
+                _LimitedReader(stream, entry.compressed_size),  # type: ignore[arg-type]
+                bz2.BZ2Decompressor()
+            )
+        )
+    elif entry.compression_method == 14:
+        return io.BufferedReader(
+            _CompressedReader(
+                _LimitedReader(stream, entry.compressed_size),  # type: ignore[arg-type]
+                _LzmaZipDecompressor()
+            )
+        )
+    elif entry.compression_method == 93:
+        if _zstd is None:
+            raise RuntimeError(
+                'Zstandard compression requires Python 3.14+ (compression.zstd module)'
+            )
+        return io.BufferedReader(
+            _CompressedReader(
+                _LimitedReader(stream, entry.compressed_size),  # type: ignore[arg-type]
+                _zstd.ZstdDecompressor()
             )
         )
     else:
@@ -392,14 +427,17 @@ class _LimitedReader(io.RawIOBase):
         return actual
 
 
-class _DeflateReader(io.RawIOBase):
+class _Decompressor(Protocol):
+    def decompress(self, data: bytes) -> bytes: ...
+
+
+class _CompressedReader(io.RawIOBase):
     # Chunk size for reading compressed data from the underlying stream
     _READ_CHUNK = 65536
 
-    def __init__(self, raw: BinaryIO) -> None:
+    def __init__(self, raw: BinaryIO, decompressor: _Decompressor) -> None:
         self._raw = raw
-        # wbits=-15: raw deflate (no zlib header), as used in ZIP
-        self._decompressor = zlib.decompressobj(-15)
+        self._decompressor = decompressor
         self._buf = bytearray()  # decompressed bytes not yet consumed by caller
         self._buf_pos = 0        # read cursor into _buf; advance instead of slicing
         self._done = False       # True once decompressor is exhausted
@@ -424,7 +462,9 @@ class _DeflateReader(io.RawIOBase):
                 self._buf.extend(self._decompressor.decompress(chunk))
             else:
                 # No more compressed data; flush any remaining decompressed bytes
-                self._buf.extend(self._decompressor.flush())
+                # (e.g. zlib.decompressobj requires an explicit flush call)
+                if hasattr(self._decompressor, 'flush'):
+                    self._buf.extend(self._decompressor.flush())  # type: ignore[attr-defined]
                 self._done = True
 
         # Copy min(want, len(self._buf)) bytes from the start of self._buf to b.
@@ -438,3 +478,41 @@ class _DeflateReader(io.RawIOBase):
             b[:] = memoryview(self._buf)[:want]
             self._buf_pos = want
             return want
+
+
+class _LzmaZipDecompressor:
+    """
+    Handles the ZIP LZMA stream format, which prepends a 4-byte header
+    (2 bytes version + 2 bytes properties size) and the LZMA properties
+    before the raw LZMA compressed data.
+
+    Mirrors the LZMADecompressor class used in Python's own zipfile module.
+    """
+
+    def __init__(self) -> None:
+        self._decomp: lzma.LZMADecompressor | None = None
+        self._unconsumed = b''
+
+    def decompress(self, data: bytes) -> bytes:
+        if self._decomp is None:
+            self._unconsumed += data
+            if len(self._unconsumed) <= 4:
+                return b''
+            (psize,) = struct.unpack('<H', self._unconsumed[2:4])
+            if len(self._unconsumed) <= 4 + psize:
+                return b''
+            # NOTE: lzma._decode_filter_properties is a private CPython function
+            # used here following the same pattern as Python's own zipfile module
+            # (see Lib/zipfile/__init__.py LZMADecompressor class).
+            self._decomp = lzma.LZMADecompressor(
+                lzma.FORMAT_RAW,
+                filters=[lzma._decode_filter_properties(  # type: ignore[attr-defined]
+                    lzma.FILTER_LZMA1, self._unconsumed[4:4 + psize]
+                )],
+            )
+            data = self._unconsumed[4 + psize:]
+            self._unconsumed = b''  # release buffered header bytes
+        return self._decomp.decompress(data)
+
+
+
