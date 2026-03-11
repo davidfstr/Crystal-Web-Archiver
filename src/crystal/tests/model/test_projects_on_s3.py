@@ -16,6 +16,7 @@ from crystal.model import Project, ProjectFormatError
 from crystal.model.pack16 import open_pack_entry, rewrite_pack_without_entry
 from crystal.model.project import MigrationType, NonLocalFilesystemNotSupported, NonLocalFilesystemReadOnlyError
 from crystal.model.resource_revision import ResourceRevision
+from crystal.progress.interface import CancelOpenProject, OpenProjectProgressListener
 from crystal.server import get_request_url
 from crystal.tests.util.asserts import assertEqual, assertIn, assertRegex
 from crystal.tests.util.cli import (
@@ -150,6 +151,72 @@ async def test_can_open_project_with_credentialful_s3_url_as_readonly_and_serve_
                     s3_url,
                     fill_more_options=verify_credential_controls_disabled)
                 await _ensure_can_serve_a_resource_revision(mw, project)
+
+
+# === Test: Database Download Progress ===
+
+async def test_given_project_on_s3_when_open_then_downloading_database_progress_is_reported() -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root, \
+            _fake_s3(fake_s3_root):
+        progress_calls = []  # type: list[tuple[int, int, float]]
+
+        class RecordingProgressListener(OpenProjectProgressListener):
+            def downloading_database_progress(
+                    self,
+                    bytes_downloaded: int,
+                    total_bytes: int,
+                    bytes_per_second: float,
+                    ) -> None:
+                progress_calls.append((bytes_downloaded, total_bytes, bytes_per_second))
+
+        with Project(s3_url, readonly=True, progress_listener=RecordingProgressListener()):
+            pass
+
+        assert len(progress_calls) >= 1, 'Expected at least one downloading_database_progress call'
+        (final_bytes_downloaded, final_total_bytes, _) = progress_calls[-1]
+        assert final_bytes_downloaded == final_total_bytes, (
+            f'Expected final progress call to report 100% completion '
+            f'({final_bytes_downloaded} != {final_total_bytes})')
+        for (bytes_downloaded, total_bytes, _) in progress_calls:
+            assert 0 <= bytes_downloaded <= total_bytes
+
+
+async def test_given_project_on_s3_when_cancel_during_database_download_then_CancelOpenProject_is_raised() -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root, \
+            _fake_s3(fake_s3_root):
+
+        class CancelOnFirstProgressListener(OpenProjectProgressListener):
+            def downloading_database_progress(
+                    self,
+                    bytes_downloaded: int,
+                    total_bytes: int,
+                    bytes_per_second: float,
+                    ) -> None:
+                raise CancelOpenProject()
+
+        try:
+            with Project(s3_url, readonly=True, progress_listener=CancelOnFirstProgressListener()):
+                pass
+        except CancelOpenProject:
+            pass  # Expected
+        else:
+            raise AssertionError('Expected CancelOpenProject to be raised but project opened successfully')
 
 
 # === Test: Credential Problem Cases ===

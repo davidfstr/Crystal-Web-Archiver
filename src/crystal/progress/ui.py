@@ -158,6 +158,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         self._root_resource_count = None
         self._resource_group_count = None
         self._entity_tree_node_count = None
+        self._db_download_value_shift = None  # type: Optional[int]
     
     # === Phase 0 ===
 
@@ -173,7 +174,40 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         """
         self._show_noncancelable_indeterminate_message(
             'Downloading database...')
-    
+
+    @override
+    def downloading_database_progress(
+            self,
+            bytes_downloaded: int,
+            total_bytes: int,
+            bytes_per_second: float,
+            ) -> None:
+        """
+        Called periodically during the database download to report progress.
+
+        Raises:
+        * CancelOpenProject
+        """
+        if self._db_download_value_shift is None:
+            # Switch from indeterminate to cancelable determinate mode
+            self._update_can_cancel(True, 'Downloading database...')
+
+            # Calculate how much to down-shift to fit in a C int (32-bit signed integer)
+            max_value = max(total_bytes, 1)
+            value_shift = 0
+            while max_value > 2**31 - 1:
+                max_value >>= 1
+                value_shift += 1
+            self._db_download_value_shift = value_shift
+
+            assert self._dialog is not None
+            self._dialog.SetRange(max(total_bytes >> value_shift, 1))
+
+        self._update(
+            bytes_downloaded >> self._db_download_value_shift,
+            f'Downloading database: {format_byte_size(bytes_downloaded)} of {format_byte_size(total_bytes)} '
+            f'({format_byte_size(int(bytes_per_second))}/s)')
+
     def _show_noncancelable_indeterminate_message(self, initial_message: str) -> None:
         # HACK: wxGTK does not reliably update wx.ProgressDialog's message
         #       immediately after it is shown. So be sure to initialize

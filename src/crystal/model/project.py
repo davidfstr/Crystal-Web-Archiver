@@ -329,6 +329,7 @@ class Project(ListenableMixin):
                             self._mark_dirty_if_untitled,
                             expect_writable=create,
                             downloading_database=progress_listener.downloading_database,
+                            downloading_database_progress=progress_listener.downloading_database_progress,
                         ) as (self._db, self._readonly, self._database_is_on_ssd, self._db_tmp_file):
                     # Create new project content, if missing
                     if create:
@@ -403,6 +404,7 @@ class Project(ListenableMixin):
             mark_dirty_func: Callable[[], None],
             expect_writable: bool,
             downloading_database: Callable[[], None],
+            downloading_database_progress: Callable[[int, int, float], None],
             ) -> Iterator[Tuple[DatabaseConnection, bool, bool, IO[bytes] | None]]:
         """
         Opens the project database before entering the context,
@@ -436,7 +438,8 @@ class Project(ListenableMixin):
                 raise NonLocalFilesystemReadOnlyError()
 
             # Download the remote database locally
-            # TODO: Show incremental progress while copying database locally
+            db_s3_path = fs.join(project_path, cls._DB_FILENAME)
+            total_db_bytes = fs.getsize(db_s3_path)
             downloading_database()
             local_db_file = tempfile.NamedTemporaryFile(
                 'wb',
@@ -444,8 +447,42 @@ class Project(ListenableMixin):
                 delete=False,  # required on Windows: avoids FILE_FLAG_DELETE_ON_CLOSE which prevents sqlite3.connect()
             )
             try:
-                with fs.open(fs.join(project_path, cls._DB_FILENAME), 'rb') as remote_db_file:
-                    shutil.copyfileobj(remote_db_file, local_db_file)
+                with fs.open(db_s3_path, 'rb') as remote_db_file:
+                    # Copy in chunks to allow progress reporting and cancellation
+                    TARGET_MAX_DELAY_BETWEEN_REPORTS = 0.5  # seconds
+                    bytes_downloaded = 0
+                    last_report_time = time.monotonic()
+                    last_report_bytes = 0
+                    while True:
+                        chunk = remote_db_file.read(COPY_BUFSIZE)
+                        if not chunk:
+                            break
+                        local_db_file.write(chunk)
+                        bytes_downloaded += len(chunk)
+
+                        current_time = time.monotonic()  # capture
+                        if (current_time - last_report_time) >= TARGET_MAX_DELAY_BETWEEN_REPORTS:
+                            elapsed = current_time - last_report_time
+                            bytes_per_second = (bytes_downloaded - last_report_bytes) / elapsed
+                            downloading_database_progress(
+                                bytes_downloaded,
+                                total_db_bytes,
+                                bytes_per_second,
+                            )  # may raise CancelOpenProject
+                            last_report_time = current_time
+                            last_report_bytes = bytes_downloaded
+                    # Final progress report at 100%
+                    elapsed = time.monotonic() - last_report_time
+                    bytes_per_second = (
+                        (bytes_downloaded - last_report_bytes) / elapsed
+                        if elapsed > 0
+                        else 0.0
+                    )
+                    downloading_database_progress(
+                        bytes_downloaded,
+                        total_db_bytes,
+                        bytes_per_second,
+                    )  # may raise CancelOpenProject
                 local_db_file.flush()
             except:
                 local_db_file.close()
@@ -3298,6 +3335,7 @@ class Project(ListenableMixin):
                         mark_dirty_func=self._mark_dirty_if_untitled,
                         expect_writable=False,
                         downloading_database=lambda: None,
+                        downloading_database_progress=lambda *_: None,
                     ) as (self._db, new_readonly, self._database_is_on_ssd, self._db_tmp_file):
                 if new_readonly != old_readonly:
                     self._readonly = new_readonly

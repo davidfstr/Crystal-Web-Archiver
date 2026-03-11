@@ -30,7 +30,10 @@ class OpenProjectProgressListener:
     
     def downloading_database(self) -> None:
         pass
-    
+
+    def downloading_database_progress(self, bytes_downloaded: int, total_bytes: int, bytes_per_second: float) -> None:
+        pass
+
     def upgrading_project(self, message: str) -> None:
         pass
     
