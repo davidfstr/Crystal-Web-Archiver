@@ -96,8 +96,13 @@ def should_check_focused_windows() -> bool:
     # - local environments like macOS and Linux,
     #   where wiggling the mouse can cause inconsistent focus statuses
     return not (
-        (is_ci() or not is_ci()) and  # i.e., True
-        (is_mac_os() or is_linux())
+        (
+            is_ci() and
+            (is_mac_os() or is_linux())
+        ) or (
+            not is_ci() and
+            (is_mac_os() or is_linux())
+        )
     )
 
 
