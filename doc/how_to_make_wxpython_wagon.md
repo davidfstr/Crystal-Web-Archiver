@@ -146,7 +146,7 @@ sed -i 's/from urllib import urlopen/from urllib.request import urlopen/' $WAGON
 ```bash
 # Compile wagon
 cd /usr/src  # shared folder with Docker host
-time wagon create wxPython==4.2.4  # use version from pyproject.toml
+time wagon create wxPython==4.2.5  # use version from pyproject.toml
     # real  81m6.382s (Python 3.9)
     # real  ~80m+ (Python 3.12.9)
     # real  ~80m+ (Python 3.13.5)
@@ -156,11 +156,11 @@ time wagon create wxPython==4.2.4  # use version from pyproject.toml
 If using a locally built Python from source:
 
 ```bash
-time ./python -m wagon create wxPython==4.2.4  # use version from pyproject.toml
+time ./python -m wagon create wxPython==4.2.5  # use version from pyproject.toml
 ```
 
 * Upload the .wgn file as a release artifact to a release tag on GitHub,
-  such as the [v1.4.0b tag](https://github.com/davidfstr/Crystal-Web-Archiver/releases/tag/v1.4.0b)
+  such as the [v1.5.0b tag](https://github.com/davidfstr/Crystal-Web-Archiver/releases/tag/v1.5.0b)
 
 * Copy the URL for that .wgn to ci.yaml, replacing the old .wgn
 
@@ -170,3 +170,31 @@ time ./python -m wagon create wxPython==4.2.4  # use version from pyproject.toml
 * Ensure the job completes successfully. In particular ensure that the
   "Install dependency wxPython from wagon" step does successfully install
   and the "Install remaining dependencies with Poetry" step does not timeout.
+
+### Troubleshooting: Building wxPython < 4.2.5
+
+wxPython versions before 4.2.5 have a build incompatibility with setuptools >= 81.
+The symptom is a `TypeError` during the wheel packaging step (after compilation
+succeeds):
+
+```
+File "<string>", line 249, in wx_copy_file
+TypeError: copy_file() takes from 2 to 7 positional arguments but 8 were given
+```
+
+This was fixed in wxPython 4.2.5 (commit 1dec4c8, Feb 6, 2026) which updated
+the monkey-patched `copy_file` and `copy_tree` functions in `setup.py` to match
+the new distutils API.
+
+Note that pip creates an **isolated build environment** (per PEP 517) and
+downloads the latest setuptools from PyPI into it, regardless of what setuptools
+version is installed globally. So simply running `pip install "setuptools<81"`
+before building will **not** help.
+
+If you must build wxPython < 4.2.5, an **untested** workaround is to disable
+pip's build isolation so it uses a globally pinned older setuptools:
+
+```bash
+pip install "setuptools<81" wheel
+pip wheel wxPython==4.2.4 --no-build-isolation --no-cache-dir
+```
