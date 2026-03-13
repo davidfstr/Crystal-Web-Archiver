@@ -26,6 +26,7 @@ from crystal.tests.util.cli import (
     read_until,
 )
 from crystal.tests.util.fake_boto3 import install as install_fake_boto3
+from crystal.tests.util.fake_boto3.boto3 import HttpRequestToS3
 from crystal.tests.util.mark import should_check_focused_windows
 from crystal.tests.util.save_as import save_as_with_ui, save_as_without_ui
 from crystal.tests.util.server import (
@@ -217,6 +218,125 @@ async def test_given_project_on_s3_when_cancel_during_database_download_then_Can
             pass  # Expected
         else:
             raise AssertionError('Expected CancelOpenProject to be raised but project opened successfully')
+
+
+# === Test: Bucket Region Resolve Efficiency ===
+
+# NOTE: Also covers the "correct region" case
+@awith_subtests
+async def test_given_s3_operation_when_region_incorrect_or_missing_then_first_operation_makes_4_http_requests_and_subsequent_operations_make_1(subtests: SubtestsContext) -> None:
+    CORRECT_REGION = 'us-east-2'
+    INCORRECT_REGION = 'us-east-1'
+    BUCKET = 'test-bucket'
+    KEY_PREFIX = 'Archive/TestProject.crystalproj'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region=CORRECT_REGION,
+                bucket=BUCKET,
+                key_prefix=KEY_PREFIX,
+                ) as fake_s3_root, \
+            _fake_s3(fake_s3_root):
+        
+        # Operation 2 & 3, shared across following subtests
+        def _operation_2_and_3(
+                s3_url: str,
+                fs: S3Filesystem,
+                http_requests: list[HttpRequestToS3]) -> None:
+            # Operation 2, with cached correct region
+            # - Expect 1 HTTP request
+            fs.getsize(s3_url)
+            assertEqual([
+                (CORRECT_REGION, 'HEAD', f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite'),
+            ], http_requests)
+            http_requests[:] = []
+            
+            # Operation 3, with cached correct region
+            # - Expect 1 HTTP request
+            fs.getsize(s3_url)
+            assertEqual([
+                (CORRECT_REGION, 'HEAD', f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite'),
+            ], http_requests)
+            http_requests[:] = []
+        
+        with subtests.test(case='correct_region'):
+            s3_url = f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite?region={CORRECT_REGION}'
+
+            with _s3_http_requests_monitored(BUCKET, CORRECT_REGION) as http_requests:
+                fs = S3Filesystem()
+
+                # Operation 1, with correct region
+                # - Expect 1 HTTP request
+                fs.getsize(s3_url)
+                assertEqual([
+                    (CORRECT_REGION, 'HEAD', f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite'),
+                ], http_requests)
+                http_requests[:] = []
+                
+                _operation_2_and_3(s3_url, fs, http_requests)
+        
+        with subtests.test(case='missing_region'):
+            DEFAULT_REGION = 'us-east-1'  # parse_s3_url() defaults to us-east-1 when no region in URL
+            s3_url = f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite'
+
+            with _s3_http_requests_monitored(BUCKET, CORRECT_REGION) as http_requests:
+                fs = S3Filesystem()
+
+                # Operation 1, with missing (defaulted) region
+                # - Expect 4 HTTP requests for the region-discovery pattern
+                fs.getsize(s3_url)
+                assertEqual([
+                    (DEFAULT_REGION, 'HEAD', f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite'),
+                    (DEFAULT_REGION, 'HEAD', f's3://{BUCKET}/'),
+                    (CORRECT_REGION, 'HEAD', f's3://{BUCKET}/'),
+                    (CORRECT_REGION, 'HEAD', f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite'),
+                ], http_requests)
+                http_requests[:] = []
+                
+                _operation_2_and_3(s3_url, fs, http_requests)
+
+        with subtests.test(case='incorrect_region'):
+            s3_url = f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite?region={INCORRECT_REGION}'
+
+            with _s3_http_requests_monitored(BUCKET, CORRECT_REGION) as http_requests:
+                fs = S3Filesystem()
+
+                # Operation 1, with incorrect region
+                # - Expect 4 HTTP requests for the region-discovery pattern
+                fs.getsize(s3_url)
+                assertEqual([
+                    (INCORRECT_REGION, 'HEAD', f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite'),
+                    (INCORRECT_REGION, 'HEAD', f's3://{BUCKET}/'),
+                    (CORRECT_REGION, 'HEAD', f's3://{BUCKET}/'),
+                    (CORRECT_REGION, 'HEAD', f's3://{BUCKET}/{KEY_PREFIX}/database.sqlite'),
+                ], http_requests)
+                http_requests[:] = []
+                
+                _operation_2_and_3(s3_url, fs, http_requests)
+
+
+@skip('covered by: test_given_s3_operation_when_region_incorrect_or_missing_then_first_operation_makes_4_http_requests_and_subsequent_operations_make_1: Operations 2+')
+async def test_given_missing_or_incorrect_bucket_region_when_non_first_s3_operation_on_bucket_then_makes_1_http_request_with_correct_region() -> None:
+    pass
+
+
+@skip('covered by: test_given_s3_operation_when_region_incorrect_or_missing_then_first_operation_makes_4_http_requests_and_subsequent_operations_make_1: case="correct_region"')
+async def test_given_correct_bucket_region_when_operation_on_bucket_then_makes_1_http_request() -> None:
+    pass
+
+
+@contextmanager
+def _s3_http_requests_monitored(bucket: str, correct_region: str) -> Iterator[list[HttpRequestToS3]]:
+    from crystal.tests.util.fake_boto3.boto3 import _FakeS3Client
+
+    _FakeS3Client.CORRECT_REGION_FOR_BUCKET = {bucket: correct_region}
+    _FakeS3Client.http_requests = []
+    try:
+        yield _FakeS3Client.http_requests
+    finally:
+        _FakeS3Client.CORRECT_REGION_FOR_BUCKET = {}
+        _FakeS3Client.http_requests[:] = []
 
 
 # === Test: Credential Problem Cases ===
