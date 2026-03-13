@@ -7,10 +7,12 @@ from crystal.filesystem.local import (
     RENAME_SUFFIX,
 )
 from dataclasses import dataclass
+from functools import lru_cache
 import os
 import os.path
 import pathlib
 import shutil
+import threading
 from typing import BinaryIO, ClassVar, Literal, NamedTuple, TypeAlias, assert_never
 import urllib.parse
 
@@ -324,17 +326,17 @@ class S3Filesystem(_AbstractFilesystem):
       to be created. There is no makedirs() command.
     - Queries like "does X directory exist" are not supported.
     """
-    def __init__(self, credentials: 'Credentials | ProfileCredentials | None' = None) -> None:
-        try:
-            import boto3
-            import s3_parse_url
-        except ImportError:
-            raise ImportError(
-                'S3 support for Crystal is not installed. '
-                'Try "poetry install --with=s3".'
-            )
-        self._credentials = credentials
+    _MAX_CACHED_S3_CLIENTS = 4
     
+    def __init__(self, credentials: 'Credentials | ProfileCredentials | None' = None) -> None:
+        self._credentials = credentials
+        
+        self._s3_client_cache_lock = threading.Lock()
+        # NOTE: _bucket_name is used in the cache key for @lru_cache
+        def _create_cached(_bucket_name: str, region_hint: str):
+            return self._create_s3_client(region_hint)
+        self._s3_client_cache = lru_cache(maxsize=self._MAX_CACHED_S3_CLIENTS)(_create_cached)
+
     # === Filesystem API ===
     
     @classmethod
@@ -421,8 +423,8 @@ class S3Filesystem(_AbstractFilesystem):
                 raise ValueError(f'Invalid range: {start}-{end}')
             range_header = f'bytes={start}-{end}'
 
-        (bucket, key, region) = self.parse_url(path)
-        s3_client = self._create_s3_client(region)
+        (bucket, key, region_hint) = self.parse_url(path)
+        s3_client = self._get_or_create_s3_client(bucket, region_hint)
         try:
             if range_header is None:
                 resp = s3_client.get_object(Bucket=bucket, Key=key)
@@ -469,8 +471,8 @@ class S3Filesystem(_AbstractFilesystem):
         """
         import botocore.exceptions
 
-        (bucket, key, region) = self.parse_url(path)
-        s3_client = self._create_s3_client(region)
+        (bucket, key, region_hint) = self.parse_url(path)
+        s3_client = self._get_or_create_s3_client(bucket, region_hint)
         try:
             resp = s3_client.head_object(Bucket=bucket, Key=key)
         except botocore.exceptions.ClientError as e:
@@ -594,11 +596,14 @@ class S3Filesystem(_AbstractFilesystem):
         if bucket_name == '':
             raise ValueError(f'Invalid S3 URL bucket: {path!r}')
 
-        region = parsed.region
-        if region is None or region == '':
+        region_hint = parsed.region
+        # TODO: Is the exception below reachable?
+        #       I suspect parse_s3_url() *always* returns a region, 
+        #       even if it infers the default region (us-east-1).
+        if region_hint is None or region_hint == '':
             raise ValueError(f'S3 URL must include exactly one region: {path!r}')
 
-        return (bucket_name, parsed.key, region)
+        return (bucket_name, parsed.key, region_hint)
 
     @classmethod
     def format_url(cls,
@@ -609,7 +614,19 @@ class S3Filesystem(_AbstractFilesystem):
         return f's3://{bucket_name}/{key}?region={region}'
     
     # === Utility ===
-    
+
+    def _get_or_create_s3_client(self, bucket_name: str, region_hint: str):
+        """
+        Returns a cached boto3 S3 client for the given bucket,
+        creating one if necessary.
+
+        Caches up to _MAX_CACHED_S3_CLIENTS clients 
+        (one per unique (bucket_name, region_hint) pair),
+        evicting the least-recently-used one when the cache is full.
+        """
+        with self._s3_client_cache_lock:
+            return self._s3_client_cache(bucket_name, region_hint)
+
     def _create_s3_client(self, region: str):
         """Creates a boto3 S3 client using this filesystem's credentials."""
         import boto3
