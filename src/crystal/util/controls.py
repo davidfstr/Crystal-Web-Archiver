@@ -242,20 +242,13 @@ def _capture_window_screenshot_to_file(filepath: str, window: wx.Window) -> None
         if result != 0:
             raise RuntimeError(f'screencapture command failed with exit code: {result}')
     else:
-        # On other platforms, use PIL ImageGrab
-        try:
-            from PIL import ImageGrab
-        except ImportError:
-            raise ImportError(
-                'Unable to save screenshot because PIL/Pillow is not available.'
-            )
-        
-        # Capture the screen region
-        bbox = (rect.x, rect.y, rect.x + rect.width, rect.y + rect.height)
-        image = ImageGrab.grab(bbox=bbox)
-        
-        # Save the image
-        image.save(filepath, 'PNG')
+        # On other platforms, use mss
+        import mss
+        import mss.tools
+        with mss.mss() as sct:
+            region = {'left': rect.x, 'top': rect.y, 'width': rect.width, 'height': rect.height}
+            sct_img = sct.grab(region)
+            mss.tools.to_png(sct_img.rgb, sct_img.size, output=filepath)
 
 
 def _capture_fullscreen_screenshot_to_file(filepath: str) -> None:
@@ -271,20 +264,12 @@ def _capture_fullscreen_screenshot_to_file(filepath: str) -> None:
         if result != 0:
             raise RuntimeError(f'screencapture command failed with exit code: {result}')
     else:
-        # Capture entire screen on non-macOS platforms using pyscreeze
-        try:
-            import PIL  # noqa: F401
-        except ImportError:
-            raise ImportError(
-                'Unable to save screenshot because PIL is not available, '
-                'which pyscreeze depends on.'
-            )
-        try:
-            import pyscreeze
-        except ImportError:
-            raise ImportError('Unable to save screenshot because pyscreeze is not available.')
-        
-        pyscreeze.screenshot(filepath)
+        # Capture entire screen on non-macOS platforms using mss
+        import mss
+        import mss.tools
+        with mss.mss() as sct:
+            sct_img = sct.grab(sct.monitors[1])
+            mss.tools.to_png(sct_img.rgb, sct_img.size, output=filepath)
 
 
 def _get_top_level_window_containing(window: wx.Window) -> wx.Window | None:

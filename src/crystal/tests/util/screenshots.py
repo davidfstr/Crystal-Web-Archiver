@@ -65,19 +65,16 @@ def take_error_screenshot() -> None:
             if result != 0:
                 print(f'*** screencapture command failed with exit code: {result}', file=sys.stderr)
         else:
-            # Use PIL/pyscreeze on other platforms
+            # Use mss on other platforms
             try:
-                import PIL
+                import mss
+                import mss.tools
             except ImportError:
-                print('*** Unable to save screenshot because PIL is not available, which pyscreeze depends on.', file=sys.stderr)
+                print('*** Unable to save screenshot because mss is not available.', file=sys.stderr)
                 return
-            try:
-                import pyscreeze
-            except ImportError:
-                print('*** Unable to save screenshot because pyscreeze is not available.', file=sys.stderr)
-                return
-            
-            pyscreeze.screenshot(screenshot_filepath)
+            with mss.mss() as sct:
+                sct_img = sct.grab(sct.monitors[1])
+                mss.tools.to_png(sct_img.rgb, sct_img.size, output=screenshot_filepath)
     except Exception as e:
         print(f'*** Failed to save screenshot: {e}', file=sys.stderr)
     else:

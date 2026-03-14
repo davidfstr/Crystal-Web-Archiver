@@ -58,6 +58,7 @@ Release Notes ⋮
     * WaitTimeout failures during automated tests take image screenshots 
       and text snapshots automatically when running remotely,
       improving debuggability for AI coding agents.
+    * For taking screenshots during tests, replace pyscreeze (which has a dependency on the heavy PIL library) with mss.
 
 [Projects on AWS S3]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Projects-on-AWS-S3
 
