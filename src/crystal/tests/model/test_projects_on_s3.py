@@ -45,6 +45,7 @@ from crystal.util.xos import is_windows
 from io import TextIOBase
 import os
 import re
+import subprocess
 import tempfile
 from typing import assert_never
 import wx
@@ -1174,8 +1175,20 @@ def _fake_s3_root(project_dirpath: str, *, region: str, bucket: str, key_prefix:
         target_parent = os.path.join(fake_s3_root, region, bucket, os.path.dirname(key_prefix))
         os.makedirs(target_parent, exist_ok=True)
         
-        symlink_path = os.path.join(fake_s3_root, region, bucket, key_prefix)
-        os.symlink(project_dirpath, symlink_path)
+        symlink_path = os.path.normpath(os.path.join(fake_s3_root, region, bucket, key_prefix))
+        try:
+            os.symlink(project_dirpath, symlink_path)
+        except OSError as e:
+            if is_windows() and getattr(e, 'winerror', None) == 1314:
+                # Fallback to a directory junction on Windows when the symlink
+                # privilege (SeCreateSymbolicLinkPrivilege) is not held.
+                # Junctions don't require any special privileges.
+                subprocess.check_call(
+                    ['cmd', '/c', 'mklink', '/J', symlink_path, project_dirpath],
+                    stdout=subprocess.DEVNULL,
+                )
+            else:
+                raise
         
         yield fake_s3_root
 
