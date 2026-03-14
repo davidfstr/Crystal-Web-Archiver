@@ -65,12 +65,14 @@ def take_error_screenshot() -> None:
             if result != 0:
                 print(f'*** screencapture command failed with exit code: {result}', file=sys.stderr)
         else:
-            # Use PIL/pyscreeze on other platforms
-            try:
-                import PIL
-            except ImportError:
-                print('*** Unable to save screenshot because PIL is not available, which pyscreeze depends on.', file=sys.stderr)
-                return
+            # Use pyscreeze on other platforms
+            if is_linux():
+                # pyscreeze requires PIL on Linux
+                try:
+                    import PIL
+                except ImportError:
+                    print('*** Unable to save screenshot because PIL is not available, which pyscreeze depends on.', file=sys.stderr)
+                    return
             try:
                 import pyscreeze
             except ImportError:
