@@ -82,7 +82,7 @@ def take_error_screenshot() -> None:
             print('*** Screenshot not saved. Is this macOS and the Screen Recording permission has not been granted?', file=sys.stderr)
     
     # Save snapshot
-    with open(snapshot_filepath, 'w') as snapshot_file:
+    with open(snapshot_filepath, 'w', encoding='utf-8') as snapshot_file:
         from crystal.ui.nav import T
         snapshot_file.write('>>> T\n')
         snapshot_file.write(fg_call_and_wait(lambda: repr(T)))

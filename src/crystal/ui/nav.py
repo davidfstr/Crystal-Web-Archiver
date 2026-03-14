@@ -1347,7 +1347,9 @@ class TreeItemNavigator(Navigator[TreeItem]):
         )
         
         if item.ItemHasChildren():
-            if item.IsExpanded():
+            # NOTE: Don't query IsExpanded() on a root tree item on Windows.
+            #       Raises a wxAssertionError.
+            if item_is_root or item.IsExpanded():
                 prefix = '▼ 📂 '  # down triangle + open folder
             else:
                 prefix = '▶︎ 📁 '  # left triangle + closed folder
@@ -1362,14 +1364,18 @@ class TreeItemNavigator(Navigator[TreeItem]):
             details.append(('IsRoot', repr(True)))
         if hidden:
             details.append(('Visible', repr(False)))
-        if item.IsSelected():
+        # NOTE: Don't query IsSelected() on a root tree item on Windows.
+        #       Raises a wxAssertionError.
+        if not item_is_root and item.IsSelected():
             details.append(('IsSelected', repr(True)))
         if (icon_tooltip := item.Tooltip('icon')) is not None:
             details.append(('IconTooltip', repr(icon_tooltip)))
         if (c := item.TextColour).IsOk():
             hex_color_str = f'#{c.Red():02x}{c.Green():02x}{c.Blue():02x}'
             details.append(('TextColour', repr(hex_color_str)))
-        if item.Bold:
+        # NOTE: Don't query .Bold on a root tree item on Windows.
+        #       Raises a wxAssertionError.
+        if not item_is_root and item.Bold:
             details.append(('IsBold', repr(True)))
         
         # Format constructor-like call syntax with key details
@@ -1428,7 +1434,9 @@ class TreeItemNavigator(Navigator[TreeItem]):
     def _children_of(cls,
             item: TreeItem,
             ) -> list[TreeItem]:
-        if item.IsExpanded() or item.IsRoot():
+        # NOTE: Don't query IsExpanded() on a root tree item on Windows.
+        #       Raises a wxAssertionError.
+        if item.IsRoot() or item.IsExpanded():
             return cls._all_children_of(item)
         else:
             return []
