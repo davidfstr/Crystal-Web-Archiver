@@ -13,7 +13,7 @@ import math
 import re
 from re import Pattern
 from typing import (
-    cast, List, Optional, TYPE_CHECKING, TypeAlias, Union,
+    cast, TYPE_CHECKING, TypeAlias,
 )
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 # ------------------------------------------------------------------------------
 # ResourceGroup
 
-ResourceGroupSource: TypeAlias = Union['RootResource', 'ResourceGroup', None]
+ResourceGroupSource: TypeAlias = 'RootResource | ResourceGroup | None'
 
 class ResourceGroup(ListenableMixin):
     """
@@ -78,12 +78,12 @@ class ResourceGroup(ListenableMixin):
         self._name = name
         self.url_pattern = url_pattern
         self._url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
-        self._source = None  # type: Union[ResourceGroupSource, EllipsisType]
+        self._source = None  # type: ResourceGroupSource | EllipsisType
         self._do_not_download = do_not_download
-        self.last_downloaded_member = None  # type: Optional[Resource]
+        self.last_downloaded_member = None  # type: Resource | None
         
         # Calculate members on demand rather than up front
-        self._members = None  # type: Optional[List[Resource]]
+        self._members = None  # type: list[Resource] | None
         
         if project._loading:
             assert _id is not None
@@ -415,7 +415,7 @@ class ResourceGroup(ListenableMixin):
     # === Utility ===
 
     def __repr__(self):
-        return 'ResourceGroup({},{})'.format(repr(self.name), repr(self.url_pattern))
+        return f'ResourceGroup({repr(self.name)},{repr(self.url_pattern)})'
 
 
 # ------------------------------------------------------------------------------

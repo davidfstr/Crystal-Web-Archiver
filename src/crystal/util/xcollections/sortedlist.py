@@ -1,5 +1,5 @@
 from sortedcontainers import SortedList
-from typing_extensions import override
+from typing import override
 
 
 class BlackHoleSortedList(SortedList):

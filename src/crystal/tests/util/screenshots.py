@@ -7,8 +7,7 @@ from functools import wraps
 import os
 import subprocess
 import sys
-from typing import TypeVar
-from typing_extensions import ParamSpec
+from typing import ParamSpec, TypeVar
 
 
 _P = ParamSpec('_P')

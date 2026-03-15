@@ -17,7 +17,6 @@ from crystal.lint.rules import (
 )
 import sys
 from pathlib import Path
-from typing import Tuple
 
 
 def main() -> int:
@@ -46,7 +45,7 @@ def main() -> int:
         return 0
 
 
-def fix_file(file_path: Path, check_only: bool = False) -> Tuple[bool, int]:
+def fix_file(file_path: Path, check_only: bool = False) -> tuple[bool, int]:
     """
     Fix double-quoted strings in a file.
     

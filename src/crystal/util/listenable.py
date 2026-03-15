@@ -1,6 +1,5 @@
 import os
 import sys
-from typing import List
 
 
 class ListenableMixin:
@@ -16,7 +15,7 @@ class ListenableMixin:
     )
     
     def __init__(self, *args, **kwargs) -> None:
-        self.listeners = []  # type: List[object]
+        self.listeners = []  # type: list[object]
         super().__init__(*args, **kwargs)
     
     def __del__(self) -> None:

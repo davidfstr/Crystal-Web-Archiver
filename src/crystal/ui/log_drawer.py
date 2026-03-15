@@ -11,7 +11,7 @@ from enum import Enum
 from functools import cached_property
 from io import TextIOBase
 from threading import Lock
-from typing import Dict, List, Optional, TextIO, cast
+from typing import TextIO, cast
 import wx
 from wx.richtext import RichTextCtrl
 
@@ -33,7 +33,7 @@ _COLOR_CODES = OrderedDict([
     (cli.TERMINAL_FG_YELLOW, _hexcolor_to_color('#AEAD24')),
     (cli.TERMINAL_FG_CYAN,   _hexcolor_to_color('#33BBC7')),
     (cli.TERMINAL_FG_PURPLE, _hexcolor_to_color('#D43BD2')),
-])  # type: Dict[str, wx.Colour]
+])  # type: dict[str, wx.Colour]
 _RESET_CODE = cli.TERMINAL_RESET
 
 
@@ -78,8 +78,8 @@ class LogDrawer(wx.Frame):
         
         self._ignore_next_activate = False
         self._leading_plus_trailing_offset = self._INITIAL_LEADING_PLUS_TRAILING_OFFSET
-        self._last_height = None  # type: Optional[int]
-        self._height_before_closed = None  # type: Optional[int]
+        self._last_height = None  # type: int | None
+        self._height_before_closed = None  # type: int | None
         self._parent_will_be_maximized_after_next_resize = False
         self._parent_maximized_size = None
         self._parent_content_container = None  # non-None iff self maximized
@@ -410,7 +410,7 @@ class _LogDrawerWriter(TextIOBase):
     def __init__(self, drawer: LogDrawer) -> None:
         self._drawer = drawer
         self._print_buffer_lock = Lock()
-        self._print_buffer = []  # type: List[str]
+        self._print_buffer = []  # type: list[str]
     
     def write(self, text: str) -> int:
         # Send text to sys.stdout

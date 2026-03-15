@@ -27,13 +27,12 @@ import sys
 import tempfile
 import textwrap
 import time
-from typing import List
 from unittest import SkipTest, skip
 from unittest.mock import ANY
 import urllib
 
 
-_EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: List[str]
+_EXPECTED_PROXY_PUBLIC_MEMBERS = []  # type: list[str]
 
 _EXPECTED_PROJECT_PUBLIC_MEMBERS = [
     'FILE_EXTENSION',

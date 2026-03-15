@@ -3,7 +3,7 @@ Building a Package for Distribution
 
 macOS 13 and later:
 1. Install the prerequisites:
-    * Python >=3.11,<3.12, from Mac installer on python.org
+    * Python >=3.13,<3.14, from Mac installer on python.org
     * Poetry 2.1.1: https://python-poetry.org/
         $ python -m pip install poetry==2.1.1
 2. Run the following commands in a Terminal window from this directory:
@@ -14,7 +14,7 @@ macOS 13 and later:
 
 Windows 11 and later:
 1. Install the prerequisites:
-    * Python >=3.11,<3.12, from Windows installer on python.org
+    * Python >=3.13,<3.14, from Windows installer on python.org
         - Do select the option to alter the system PATH.
         - Ensure Python works in Command Prompt:
             $ python -V

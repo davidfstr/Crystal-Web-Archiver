@@ -8,7 +8,6 @@ from crystal.util.wx_dialog import (
 )
 from crystal.util.wx_window import SetFocus
 from crystal.util.xthreading import fg_affinity
-from typing import Optional
 import wx
 
 
@@ -24,7 +23,7 @@ class NewAliasDialog:
     _ID_TARGET_IS_EXTERNAL = 101
     
     # NOTE: Only changed when tests are running
-    _last_opened: 'Optional[NewAliasDialog]'=None
+    _last_opened: 'NewAliasDialog | None'=None
     
     _source_url_prefix_field: wx.TextCtrl
     _target_url_prefix_field: wx.TextCtrl

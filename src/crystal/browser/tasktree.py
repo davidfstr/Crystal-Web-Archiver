@@ -28,7 +28,7 @@ from crystal.util.xthreading import (
     fg_call_and_wait, fg_call_later, is_foreground_thread,
 )
 from crystal.util.xtraceback import format_exception_for_ui_user
-from typing import List, Optional, Tuple, assert_never
+from typing import assert_never
 import wx
 
 
@@ -55,7 +55,7 @@ class TaskTree:
         self.tree.root = self.root.tree_node
         
         self._view_url_func = view_url_func
-        self._right_clicked_node = None  # type: Optional[TaskTreeNode]
+        self._right_clicked_node = None  # type: TaskTreeNode | None
         
         self.tree.peer.SetInitialSize((750, 200))
         
@@ -277,7 +277,7 @@ class TaskTreeNode:
         self._visible_children_offset = 0
         self._first_incomplete_child_index = 0
         self._ignore_complete_events = False
-        self._crash_reason_and_tooltip = None  # type: Optional[Tuple[BaseException, str]]
+        self._crash_reason_and_tooltip = None  # type: tuple[BaseException, str] | None
         
         # NOTE: Transition to foreground thread here BEFORE making very many
         #       calls to self.task_did_append_child() so that we don't need to
@@ -289,7 +289,7 @@ class TaskTreeNode:
         fg_call_and_wait(fg_task)
     
     @staticmethod
-    def for_node_view(node_view: NodeView) -> 'Optional[TaskTreeNode]':
+    def for_node_view(node_view: NodeView) -> 'TaskTreeNode | None':
         node = node_view.delegate
         if node is None:
             return None
@@ -596,7 +596,7 @@ class TaskTreeNode:
             )
             
             # Commit changes to the children list
-            new_children = []  # type: List[NodeView]
+            new_children = []  # type: list[NodeView]
             if first_more_node.more_count != 0:
                 new_children.append(first_more_node)
             new_children.extend(intermediate_nodes)

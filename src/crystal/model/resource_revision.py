@@ -29,7 +29,7 @@ import sys
 from tempfile import NamedTemporaryFile
 import threading
 from typing import (
-    BinaryIO, IO, Optional, TYPE_CHECKING, TypedDict, assert_never, cast,
+    BinaryIO, IO, TYPE_CHECKING, TypedDict, assert_never, cast,
 )
 from urllib.parse import urlparse
 
@@ -560,7 +560,7 @@ class ResourceRevision:
         return json.dumps(cls._encode_error_dict(error))
     
     @staticmethod
-    def _encode_error_dict(error: Exception | None) -> Optional[DownloadErrorDict]:
+    def _encode_error_dict(error: Exception | None) -> DownloadErrorDict | None:
         if error is None:
             error_dict = None
         elif isinstance(error, _PersistedError):
@@ -602,7 +602,7 @@ class ResourceRevision:
         return self.resource.url
     
     @property
-    def error_dict(self) -> Optional[DownloadErrorDict]:
+    def error_dict(self) -> DownloadErrorDict | None:
         return self._encode_error_dict(self.error)
     
     def _ensure_has_body(self) -> None:
@@ -1205,7 +1205,7 @@ class ResourceRevision:
         doc: Document | None
         links: list[Link]
         (doc, links) = (None, [])
-        content_type_with_options = None  # type: Optional[str]
+        content_type_with_options = None  # type: str | None
         if self.is_html and self.has_body:
             with self.open() as body:
                 doc_and_links = parse_html_and_links(
@@ -1463,7 +1463,7 @@ class ResourceRevision:
                     pass
     
     def __repr__(self) -> str:
-        return "<ResourceRevision {} for '{}'>".format(self._id, self.resource.url)
+        return f"<ResourceRevision {self._id} for '{self.resource.url}'>"
     
     def __str__(self) -> str:
         return f'Revision {self._id} for URL {self.resource.url}'

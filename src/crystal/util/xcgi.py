@@ -1,5 +1,3 @@
-
-
 # NOTE: py2app doesn't appear to bundle the email.message module correctly,
 #       which is used by the Python 3.11+ version of parse_header().
 #       

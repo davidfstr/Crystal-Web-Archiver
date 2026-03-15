@@ -23,10 +23,10 @@ from crystal.util.xthreading import (
 )
 import itertools
 from typing import (
-    Any, Dict, Generic, Iterable, List, Literal, Optional, Tuple, TYPE_CHECKING, TypeVar, Union,
+    Any, Generic, Literal, TYPE_CHECKING, TypeVar,
 )
-from typing_extensions import deprecated
 from urllib.parse import urlparse, urlunparse
+from warnings import deprecated
 
 if TYPE_CHECKING:
     from crystal.task import (
@@ -112,9 +112,9 @@ class Resource:
     
     project: Project
     _url: str
-    _download_body_task_ref: Optional[_WeakTaskRef[DownloadResourceBodyTask]]
-    _download_task_ref: Optional[_WeakTaskRef[DownloadResourceTask]]
-    _download_task_noresult_ref: Optional[_WeakTaskRef[DownloadResourceTask]]
+    _download_body_task_ref: _WeakTaskRef[DownloadResourceBodyTask] | None
+    _download_task_ref: _WeakTaskRef[DownloadResourceTask] | None
+    _download_task_noresult_ref: _WeakTaskRef[DownloadResourceTask] | None
     _already_downloaded_this_session: bool
     _definitely_has_no_revisions: bool
     _id: int  # or None if not finished initializing or deleted
@@ -125,7 +125,7 @@ class Resource:
     def __new__(cls, 
             project: Project,
             url: str,
-            _id: Union[None, int]=None,
+            _id: None | int=None,
             *, _external_ok: bool=False,
             ) -> Resource:
         """
@@ -422,7 +422,7 @@ class Resource:
         
         # 1. Create Resources in memory initially, deferring any database INSERTs
         # 2. Identify new resources that need to be inserted in the database
-        resource_for_new_url = OrderedDict()  # type: Dict[str, Resource]
+        resource_for_new_url = OrderedDict()  # type: dict[str, Resource]
         resources_already_created = []
         for url in urls:
             # Get/create Resource in memory and normalize its URL
@@ -493,7 +493,7 @@ class Resource:
                     rows = list(c.execute(
                         f'insert into resource (url) values {placeholders} returning id',
                         normalized_urls)
-                    )  # type: List[Tuple[int]]
+                    )  # type: list[tuple[int]]
         return [id for (id,) in rows]
     
     # === Properties ===
@@ -712,7 +712,7 @@ class Resource:
         (task, _) = self.get_or_create_download_body_task()
         return task
     
-    def get_or_create_download_body_task(self) -> Tuple[DownloadResourceBodyTask, bool]:
+    def get_or_create_download_body_task(self) -> tuple[DownloadResourceBodyTask, bool]:
         """
         Gets/creates a Task to download this resource's body.
         
@@ -852,7 +852,7 @@ class Resource:
             *, needs_result: bool=True,
             is_embedded: bool=False,
             _get_only: bool=False,
-            ) -> Tuple[DownloadResourceTask, bool]:
+            ) -> tuple[DownloadResourceTask, bool]:
         """
         Gets/creates a Task to download this resource and all its embedded resources.
         Returns the task and whether it was created.
@@ -963,7 +963,7 @@ class Resource:
                     f'select request_cookie, error, metadata, id '
                         f'from resource_revision where resource_id=? order by id {ordering}',
                     (self._id,)
-                )  # type: Iterable[Tuple[Any, Any, Any, Any]]
+                )  # type: Iterable[tuple[Any, Any, Any, Any]]
             except Exception as e:
                 if is_no_such_column_error_for('request_cookie', e):
                     # Fetch from <=1.2.0 database schema
@@ -971,7 +971,7 @@ class Resource:
                         f'select error, metadata, id '
                             f'from resource_revision where resource_id=? order by id {ordering}',
                         (self._id,)
-                    )  # type: Iterable[Tuple[Any, Any, Any]]
+                    )  # type: Iterable[tuple[Any, Any, Any]]
                     rows = ((None, c0, c1, c2) for (c0, c1, c2) in old_rows)
                 else:
                     raise
@@ -1140,7 +1140,7 @@ class Resource:
     # === Utility ===
     
     def __repr__(self):
-        return 'Resource({})'.format(repr(self.url))
+        return f'Resource({repr(self.url)})'
 
 
 class _TaskNotFoundException(Exception):

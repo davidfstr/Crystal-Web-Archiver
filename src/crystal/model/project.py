@@ -65,10 +65,9 @@ import time
 from tqdm import tqdm
 import traceback
 from typing import (
-    assert_never, cast, Dict, IO, Literal, List, Optional, Self, Tuple,
-    TYPE_CHECKING, TypeAlias, TypeVar, Union,
+    assert_never, cast, IO, Literal, override, Self,
+    TYPE_CHECKING, TypeAlias, TypeVar,
 )
-from typing_extensions import override
 import threading
 from urllib.parse import quote as url_quote
 import uuid
@@ -93,7 +92,7 @@ _PROFILE_MIGRATE_REVISIONS_V1_TO_V2 = False
 _PROFILE_MIGRATE_REVISIONS_V2_TO_V3 = False
 
 
-_OptionalStr = TypeVar('_OptionalStr', bound=Optional[str])
+_OptionalStr = TypeVar('_OptionalStr', bound=str | None)
 
 
 # ------------------------------------------------------------------------------
@@ -285,16 +284,16 @@ class Project(ListenableMixin):
         self._is_untitled = is_untitled
         self._is_dirty = is_dirty
         self._properties_loaded = False
-        self._properties = dict()               # type: Dict[str, Optional[str]]
-        self._resource_for_url = WeakValueDictionary()  # type: Union[WeakValueDictionary[str, Resource], OrderedDict[str, Resource]]
-        self._resource_for_id = WeakValueDictionary()   # type: Union[WeakValueDictionary[int, Resource], OrderedDict[int, Resource]]
-        self._unsaved_resources = []            # type: List[Resource]
-        self._sorted_resource_urls = None       # type: Optional[SortedList[str]]
-        self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
-        self._resource_groups = []              # type: List[ResourceGroup]
-        self._aliases = []                      # type: List[Alias]
+        self._properties = dict()               # type: dict[str, str | None]
+        self._resource_for_url = WeakValueDictionary()  # type: WeakValueDictionary[str, Resource] | OrderedDict[str, Resource]
+        self._resource_for_id = WeakValueDictionary()   # type: WeakValueDictionary[int, Resource] | OrderedDict[int, Resource]
+        self._unsaved_resources = []            # type: list[Resource]
+        self._sorted_resource_urls = None       # type: SortedList[str] | None
+        self._root_resources = OrderedDict()    # type: dict[Resource, RootResource]
+        self._resource_groups = []              # type: list[ResourceGroup]
+        self._aliases = []                      # type: list[Alias]
         
-        self._min_fetch_date = None  # type: Optional[datetime.datetime]
+        self._min_fetch_date = None  # type: datetime.datetime | None
         
         progress_listener.opening_project()
         
@@ -362,7 +361,7 @@ class Project(ListenableMixin):
         self._start_scheduler()
         
         # Define initial configuration
-        self._request_cookie = None  # type: Optional[str]
+        self._request_cookie = None  # type: str | None
         
         self._check_url_collection_invariants()
         
@@ -405,7 +404,7 @@ class Project(ListenableMixin):
             expect_writable: bool,
             downloading_database: Callable[[], None],
             downloading_database_progress: Callable[[int, int, float], None],
-            ) -> Iterator[Tuple[DatabaseConnection, bool, bool, IO[bytes] | None]]:
+            ) -> Iterator[tuple[DatabaseConnection, bool, bool, IO[bytes] | None]]:
         """
         Opens the project database before entering the context,
         but closes it if an exception is raised in the context.
@@ -979,7 +978,7 @@ class Project(ListenableMixin):
 
         # Move revisions to appropriate locations in new revisions directory
         lfs_sep = lfs.sep  # cache
-        last_new_revision_parent_relpath = None  # type: Optional[str]
+        last_new_revision_parent_relpath = None  # type: str | None
         def migrate_revision(row: tuple) -> None:
             (id,) = row
             old_revision_filepath = (
@@ -1246,7 +1245,7 @@ class Project(ListenableMixin):
         except NoRevisionBodyError:
             # No body expected. No rollback could have been attempted.
             return
-        except (OSError, IOError):
+        except OSError:
             # Database or filesystem potentially corrupt?
             # Abort further repair attempts.
             return
@@ -1289,7 +1288,7 @@ class Project(ListenableMixin):
                 # No body expected
                 raise AssertionError(
                     'Revision not expecting a body should have been filtered out')
-            except (OSError, IOError):
+            except OSError:
                 # Body is corrupted or inaccessible
                 unreadable_body_count += 1
         if unreadable_body_count != 0:
@@ -1560,7 +1559,7 @@ class Project(ListenableMixin):
                 elif source_type == 'resource_group':
                     source_obj = self._get_resource_group_with_id(source_id)
                 else:
-                    raise ProjectFormatError('Resource group {} has invalid source type "{}".'.format(group._id, source_type))
+                    raise ProjectFormatError(f'Resource group {group._id} has invalid source type "{source_type}".')
                 group.init_source(source_obj)
             
             # Load Aliases
@@ -1825,7 +1824,7 @@ class Project(ListenableMixin):
         return self._get_property('default_url_prefix', None)
     def _set_default_url_prefix(self, value: str | None) -> None:
         self._set_property('default_url_prefix', value)
-    default_url_prefix = cast(Optional[str], property(_get_default_url_prefix, _set_default_url_prefix))
+    default_url_prefix = cast(str | None, property(_get_default_url_prefix, _set_default_url_prefix))
     
     def _get_entity_title_format(self) -> EntityTitleFormat:
         value = self._get_property('entity_title_format', 'url_name')
@@ -2566,7 +2565,7 @@ class Project(ListenableMixin):
             rg.last_downloaded_member = last_downloaded_member
         
         # Restore tasks
-        tasks = []  # type: List[Task]
+        tasks = []  # type: list[Task]
         for hibernated_task in hibernated_tasks:
             if hibernated_task['type'] == 'DownloadResourceTask':
                 r = self._get_resource_with_id(int(hibernated_task['resource_id']))
@@ -2702,7 +2701,7 @@ class Project(ListenableMixin):
     
     # === Events: Root Task Lifecycle ===
     
-    def _root_task_did_change(self, old_root_task: 'RootTask', new_root_task: 'RootTask') -> None:
+    def _root_task_did_change(self, old_root_task: RootTask, new_root_task: RootTask) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'project_root_task_did_change'):
@@ -2713,7 +2712,7 @@ class Project(ListenableMixin):
     @fg_affinity
     def save_as(self,
             new_path: str,
-            progress_listener: Optional['SaveAsProgressListener'] = None
+            progress_listener: SaveAsProgressListener | None = None
             ) -> Future[None]:
         """
         Saves this project to the specified path soon, which must not already exist.
@@ -2742,8 +2741,8 @@ class Project(ListenableMixin):
     @fg_affinity
     def _save_as_coro(self,
             new_path: str, 
-            progress_listener: Optional['SaveAsProgressListener'] = None
-            ) -> Generator[SwitchToThread, None, None]:
+            progress_listener: SaveAsProgressListener | None = None
+            ) -> Generator[SwitchToThread]:
         # TODO: Add support for non-local filesystems to
         #       {_save_as_coro, _copytree_of_project_with_progress}
         if not isinstance(self._fs, LocalFilesystem):
@@ -2876,7 +2875,7 @@ class Project(ListenableMixin):
     def _copytree_of_project_with_progress(
             src_fs_path: FilesystemPath,
             dst_project_dirpath: str,
-            progress_listener: 'SaveAsProgressListener | None' = None
+            progress_listener: SaveAsProgressListener | None = None
             ) -> None:
         """
         Copies an entire directory tree to a new location with progress reporting.

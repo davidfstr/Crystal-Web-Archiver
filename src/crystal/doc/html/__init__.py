@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from crystal.doc.generic import Document, Link
 import re
-from typing import BinaryIO, Literal, Tuple, TypeAlias
+from typing import BinaryIO, Literal, TypeAlias
 
 # HTML parsing library to use. See comparison between options at: 
 # https://beautiful-soup-4.readthedocs.io/en/latest/#installing-a-parser
@@ -14,7 +14,7 @@ HtmlParserType: TypeAlias = Literal['lxml', 'html_parser']
 
 HTML_PARSER_TYPE_CHOICES = (
     HtmlParserType.__args__  # type: ignore[attr-defined]
-)  # type: Tuple[HtmlParserType, ...]
+)  # type: tuple[HtmlParserType, ...]
 
 
 _FRAMESET_RE = re.compile(rb'(?i)<\s*frameset')

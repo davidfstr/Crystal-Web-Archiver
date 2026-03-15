@@ -24,7 +24,6 @@ import re
 import socket
 import sys
 import threading
-from typing import List, Optional
 import unittest.mock
 from zipfile import ZipFile
 
@@ -70,7 +69,7 @@ def served_project_from_filepath(
             raise ValueError('Expected fetch_date_of_resources_set_to to be an aware datetime')
     
     must_alter_fetch_date = (fetch_date_of_resources_set_to is not None)
-    project_server = None  # type: Optional[ProjectServer]
+    project_server = None  # type: ProjectServer | None
     project = fg_call_and_wait(lambda: Project(project_dirpath, readonly=True if not must_alter_fetch_date else False))
     try:
         # Alter the fetch date of every ResourceRevision in the project
@@ -120,7 +119,7 @@ class MockHttpServer:
     port: int
     
     def __init__(self, routes={}) -> None:
-        self.requested_paths = []  # type: List[str]
+        self.requested_paths = []  # type: list[str]
         
         mock_server = self  # capture
         class RequestHandler(BaseHTTPRequestHandler):
@@ -203,7 +202,7 @@ class MockFtpServer:
                    Example: {'/test.txt': b'Hello World'}
         """
         self.files = files
-        self.requested_paths = []  # type: List[str]
+        self.requested_paths = []  # type: list[str]
         
         self._port = 2121  # Non-standard FTP port for testing
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -227,7 +226,7 @@ class MockFtpServer:
                 self._server_socket.settimeout(0.5)
                 try:
                     (client_socket, address) = self._server_socket.accept()
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 
                 # Handle client in a separate thread
@@ -361,7 +360,7 @@ class MockFtpServer:
         self._server_socket.close()
         self._server_thread.join(timeout=2.0)
     
-    def __enter__(self) -> 'MockFtpServer':
+    def __enter__(self) -> MockFtpServer:
         return self
     
     def __exit__(self, *args) -> None:
@@ -464,7 +463,7 @@ class WebPage:
         self._status = status
         self._headers = headers
         self._content_bytes = content_bytes
-        self._content = None  # type: Optional[str]
+        self._content = None  # type: str | None
     
     # === High-Level Attributes ===
     

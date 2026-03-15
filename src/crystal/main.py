@@ -28,8 +28,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, BinaryIO, TextIO, cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING
-from typing_extensions import override
+from typing import Any, BinaryIO, TextIO, cast, Never, ParamSpec, TypeVar, TYPE_CHECKING, override
 
 if TYPE_CHECKING:
     from crystal.browser import MainWindow
@@ -48,10 +47,10 @@ _RT = TypeVar('_RT')
 _project_to_open_soon: tuple[str, bool] | None = None
 # Interrupts prompt_for_prompt() to open _project_path_to_open_soon.
 # None if prompt_for_prompt() is not running.
-_interrupt_prompt_for_project_to_open_project: Optional[Callable[[], None]] = None
+_interrupt_prompt_for_project_to_open_project: Callable[[], None] | None = None
 
 # Exposes internal last_window state to tests
-_get_last_window: 'Callable[[], MainWindow | None]'
+_get_last_window: Callable[[], MainWindow | None]
 
 # ------------------------------------------------------------------------------
 # Main
@@ -537,8 +536,8 @@ def _main2(args: list[str]) -> None:
         from crystal.util.test_mode import set_tests_are_running
         set_tests_are_running()
     
-    last_window = None  # type: Optional[MainWindow]
-    systemexit_during_first_launch = None  # type: Optional[SystemExit]
+    last_window = None  # type: MainWindow | None
+    systemexit_during_first_launch = None  # type: SystemExit | None
     
     # Expose internal last_window state to tests
     if tests_are_running:
@@ -713,7 +712,7 @@ def _main2(args: list[str]) -> None:
             # Allow the logout/shutdown to proceed
             event.Skip()
     
-    app = None  # type: Optional[wx.App]
+    app = None  # type: wx.App | None
     from crystal.util.quitting import is_quitting
     from crystal.util.xthreading import set_foreground_thread
     set_foreground_thread(threading.current_thread())
@@ -1264,7 +1263,7 @@ def _prompt_to_open_project(
     from crystal.util.xos import is_linux, is_mac_os, is_windows
     import wx
     
-    project_path = None  # type: Optional[str]
+    project_path = None  # type: str | None
     
     class OpenAsDirectoryHook(wx.FileDialogCustomizeHook):
         def AddCustomControls(self, customizer: wx.FileDialogCustomize):  # override
@@ -1384,7 +1383,7 @@ def _load_project(
         project_path: str,
         progress_listener: OpenProjectProgressListener,
         # NOTE: Used by automated tests
-        *, _show_modal_func: Optional[Callable[[wx.Dialog], int]]=None,
+        *, _show_modal_func: Callable[[wx.Dialog], int] | None=None,
         **project_kwargs: object
         ) -> Project:
     """
@@ -1446,7 +1445,7 @@ def _load_project(
 def _show_access_denied_dialog(
         e: PermissionError,
         # NOTE: Used by automated tests
-        _show_modal_func: Optional[Callable[[wx.Dialog], int]]=None,
+        _show_modal_func: Callable[[wx.Dialog], int] | None=None,
         ) -> None:
     from crystal.util.wx_dialog import position_dialog_initially
     import wx
@@ -1469,7 +1468,7 @@ def _show_access_denied_dialog(
 def _show_invalid_project_dialog(
         *, project_is_likely_corrupted: bool=False,
         # NOTE: Used by automated tests
-        _show_modal_func: Optional[Callable[[wx.Dialog], int]]=None,
+        _show_modal_func: Callable[[wx.Dialog], int] | None=None,
         ) -> None:
     from crystal.util.wx_dialog import (
         position_dialog_initially, set_dialog_or_frame_icon_if_appropriate,

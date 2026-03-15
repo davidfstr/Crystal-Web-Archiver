@@ -4,7 +4,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 import sqlite3
 from typing import Self
-from typing_extensions import deprecated
+from warnings import deprecated
 
 # Whether to print each database query
 VERBOSE_QUERIES = False
@@ -182,7 +182,7 @@ def get_column_names_of_table(c: DatabaseCursor, table_name: str) -> list[str]:
         column_name
         for (_, column_name, column_type, _, _, _)
         # NOTE: Cannot use regular '?' placeholder in this PRAGMA
-        in c.execute('PRAGMA table_info({})'.format(table_name))
+        in c.execute(f'PRAGMA table_info({table_name})')
     ]
 
 

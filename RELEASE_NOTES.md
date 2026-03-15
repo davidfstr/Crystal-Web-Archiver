@@ -60,6 +60,13 @@ Release Notes ⋮
       improving debuggability for AI coding agents.
     * For taking screenshots during tests, replace pyscreeze (which has a dependency on the heavy PIL library) with mss.
 
+* Support changes **(Breaking Change)**
+    * Python 3.13+ is now the minimum Python version.
+      Drop support for Python 3.11 and 3.12.
+    * Fix install on Linux (from source) to work again by
+      upgrading wxPython 4.2.4 -> 4.2.5, which is compatible with
+      the latest version of Python's setuptools.
+
 [Projects on AWS S3]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Projects-on-AWS-S3
 
 ### v2.2.0 (January 27, 2026)

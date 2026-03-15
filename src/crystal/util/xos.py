@@ -2,7 +2,6 @@ import math
 import os
 import platform
 import subprocess
-from typing import Optional
 
 # === OS Detection ===
 
@@ -49,7 +48,7 @@ def mac_version() -> list[int] | None:
 
 # === Linux Distro Detection ===
 
-_is_gnome = None  # type: Optional[bool]
+_is_gnome = None  # type: bool | None
 
 def is_gnome() -> bool:
     global _is_gnome

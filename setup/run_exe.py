@@ -7,7 +7,6 @@ import socket
 import subprocess
 import sys
 import threading
-from typing import Optional
 
 _POLL_INTERVAL = 1  # seconds
 
@@ -81,7 +80,7 @@ def _run_with_socket(exe_filepath: str, remaining_args: list[str]) -> None:
             server_socket.settimeout(5.0)  # seconds
             try:
                 (client_socket, _) = server_socket.accept()
-            except socket.timeout:
+            except TimeoutError:
                 print('Error: Subprocess did not connect to socket within timeout', file=sys.stderr)
                 process.kill()
                 sys.exit(1)
@@ -89,7 +88,7 @@ def _run_with_socket(exe_filepath: str, remaining_args: list[str]) -> None:
         # Set up bidirectional communication with client socket
         with client_socket:
             # Thread to forward stdin to socket
-            stdin_thread_exception = None  # type: Optional[Exception]
+            stdin_thread_exception = None  # type: Exception | None
             def forward_stdin():
                 nonlocal stdin_thread_exception
                 try:
@@ -156,7 +155,7 @@ def _run_with_socket(exe_filepath: str, remaining_args: list[str]) -> None:
     sys.exit(process_returncode)
 
 
-def _run_with_file(exe_filepath: str, remaining_args: list[str], stdouterr_filepath: Optional[str]) -> None:
+def _run_with_file(exe_filepath: str, remaining_args: list[str], stdouterr_filepath: str | None) -> None:
     """Run executable with file-based stdout/stderr communication (no stdin)."""
     with ExitStack() as stack:
         # Create temporary file if path not provided
@@ -184,7 +183,7 @@ def _run_with_file(exe_filepath: str, remaining_args: list[str], stdouterr_filep
             env['CRYSTAL_ARGUMENTS'] = ' '.join(remaining_args)
             env['CRYSTAL_STDOUTERR_FILE'] = stdouterr_filepath
             
-            process_returncode = None  # type: Optional[int]
+            process_returncode = None  # type: int | None
             def run_process():
                 nonlocal process_returncode
                 process = subprocess.run([exe_filepath], check=False, env=env)

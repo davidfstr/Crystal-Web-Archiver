@@ -1,8 +1,8 @@
+from collections.abc import Callable
 import importlib.util
 import inspect
 import os
 import sys
-from typing import Callable
 
 
 def tests_are_running() -> bool:

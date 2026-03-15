@@ -2,7 +2,6 @@ from crystal.doc.css import CssDocument
 from crystal.doc.css import parse_css_and_links as try_parse_css_and_links
 from crystal.doc.generic import Document, Link
 from textwrap import dedent
-from typing import List, Tuple
 
 # === Tests ===
 
@@ -61,7 +60,7 @@ def test_recognizes_import_string_link() -> None:
 def _parse_css_and_links(
         css_bytes: bytes, 
         *, declared_charset: str | None=None,
-        ) -> 'Tuple[Document, List[Link]]':
+        ) -> 'tuple[Document, list[Link]]':
     result = try_parse_css_and_links(css_bytes, declared_charset)
     assert result is not None
     return result

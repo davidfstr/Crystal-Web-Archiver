@@ -13,7 +13,7 @@ import os
 import re
 import subprocess
 import sys
-from typing import TYPE_CHECKING, List, Literal, Optional, TypeAlias, assert_never
+from typing import TYPE_CHECKING, Literal, TypeAlias, assert_never
 from unittest.mock import patch
 import wx
 
@@ -88,7 +88,7 @@ class ElementNotInteractableException(Exception):
 # General: Screenshot
 
 # NOTE: This function is exposed to AI agents in the shell
-async def screenshot(window: wx.Window | 'Navigator' | 'Snapshot' | None = None) -> 'ScreenshotResult':
+async def screenshot(window: wx.Window | Navigator | Snapshot | None = None) -> ScreenshotResult:
     """
     Takes a screenshot of the specified wx.Window,
     or of all top-level windows if no window is provided.
@@ -350,7 +350,7 @@ def click_radio_button(radio: wx.RadioButton) -> None:
 # wx.TreeCtrl
 
 def get_children_of_tree_item(tree: wx.TreeCtrl, tii: wx.TreeItemId) -> list[TreeItem]:
-    children = []  # type: List[TreeItem]
+    children = []  # type: list[TreeItem]
     next_child_tii = tree.GetFirstChild(tii)[0]
     while next_child_tii.IsOk():
         children.append(TreeItem(tree, next_child_tii))
@@ -515,7 +515,7 @@ class TreeItem:
     # === Operations ===
     
     async def right_click_showing_popup_menu(self, show_popup_menu: Callable[[wx.Menu], None]) -> None:
-        raised_exc = None  # type: Optional[Exception]
+        raised_exc = None  # type: Exception | None
         def PopupMenu(menu: wx.Menu, *args, **kwargs) -> bool:
             nonlocal raised_exc
             PopupMenu.called = True  # type: ignore[attr-defined]

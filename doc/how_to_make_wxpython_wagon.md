@@ -3,7 +3,10 @@
 It is important to precompile wxPython for Linux Continuous Integration jobs
 because it otherwise takes about 40 minutes to compile wxPython from source.
 
-To compile a new wagon containing wxPython:
+To compile a new wagon containing wxPython, using existing scripts 
+(⭐RECOMMENDED), read <doc/how_to_make_wxpython_wagon/README.md>.
+
+To compile a new wagon containing wxPython, manually:
 
 * Start a Linux container
 

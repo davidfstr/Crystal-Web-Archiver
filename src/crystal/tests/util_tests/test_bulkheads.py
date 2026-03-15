@@ -53,7 +53,6 @@ from crystal.util.xthreading import (
 from io import StringIO
 import sys
 import threading
-from typing import List, Tuple
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -1677,7 +1676,7 @@ async def _step_scheduler_with_unit_from_PRRL_and_crash_task(prrl_task: Task, ho
     _PRRL_call_result__1_link = (
         [create_external_link('/', type_title='Simulated Link', title=None, embedded=True)],
         [home_r]
-    )  # type: Tuple[List[Link], List[Resource]]
+    )  # type: tuple[list[Link], list[Resource]]
     
     assert not prrl_task.complete
     # 1. Force ParseResourceRevisionLinks to return 1 embedded link.

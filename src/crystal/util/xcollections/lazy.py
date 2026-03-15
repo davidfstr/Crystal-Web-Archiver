@@ -1,6 +1,6 @@
 from collections.abc import Callable, Iterator, Sequence
 from enum import Enum
-from typing import Generic, List, Literal, overload, TypeVar, Union
+from typing import Generic, Literal, overload, TypeVar
 
 _E = TypeVar('_E')
 
@@ -43,7 +43,7 @@ class AppendableLazySequence(Generic[_E], Sequence[_E]):
         self._materializeitem_func = materializeitem_func
         self._unmaterializeitem_func = unmaterializeitem_func
         self._len_func = len_func
-        self._cached_prefix = []  # type: List[Union[_E, UnmaterializedItem]]
+        self._cached_prefix = []  # type: list[_E | UnmaterializedItem]
     
     @property
     def cached_prefix_len(self) -> int:

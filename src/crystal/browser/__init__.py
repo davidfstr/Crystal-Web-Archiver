@@ -67,7 +67,7 @@ import os
 import sqlite3
 import time
 import traceback
-from typing import Optional, assert_never, assert_type
+from typing import assert_never, assert_type
 import webbrowser
 import wx
 
@@ -90,7 +90,7 @@ class MainWindow(CloakMixin):
     task_tree: TaskTree
     
     # NOTE: Only changed when tests are running
-    _last_created: 'Optional[MainWindow]'=None
+    _last_created: 'MainWindow | None'=None
     
     @fg_affinity
     def __init__(self,
@@ -112,8 +112,8 @@ class MainWindow(CloakMixin):
         
         self._closed = False
         self.project = project
-        self._log_drawer = None  # type: Optional[LogDrawer]
-        self._project_server = None  # type: Optional[ProjectServer]
+        self._log_drawer = None  # type: LogDrawer | None
+        self._project_server = None  # type: ProjectServer | None
         
         try:
             self._create_actions()
@@ -833,7 +833,7 @@ class MainWindow(CloakMixin):
         self.entity_tree = EntityTree(parent, self.project, progress_listener)
         self.entity_tree.peer.Hide()
         bind(self.entity_tree.peer, wx.EVT_TREE_SEL_CHANGED, self._on_selected_entity_changed)
-        self._entity_tree_scroll_end_timer = None  # type: Optional[Timer]
+        self._entity_tree_scroll_end_timer = None  # type: Timer | None
         if is_windows():
             # On Windows, repaint callout when tree is scrolled or repainted,
             # because tree draws over callout despite its z-order position

@@ -8,7 +8,7 @@ from crystal.util.xtime import avoid_calling_time_monotonic
 import datetime
 import os
 import time
-from typing import Literal, Optional, TYPE_CHECKING, TypeVar
+from typing import Literal, TYPE_CHECKING, TypeVar
 import warnings
 import wx
 
@@ -281,7 +281,7 @@ def window_condition(
     Truthy return value is the window.
     """
     def window() -> wx.Window | None:
-        window = wx.FindWindowByName(name)  # type: Optional[wx.Window]
+        window = wx.FindWindowByName(name)  # type: wx.Window | None
         if window is None:
             return None
         if not hidden_ok and not window.IsShown():

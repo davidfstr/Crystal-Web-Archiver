@@ -13,18 +13,18 @@ from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.wx_window import SetFocus
 from crystal.util.xos import is_linux, is_mac_os, is_windows, is_wx_gtk
 from crystal.util.xthreading import fg_affinity, fg_call_later
-from typing import Literal, Optional, TypeAlias, Union
+from typing import Literal, TypeAlias
 import wx
 
 
-ChangePrefixCommand: TypeAlias = Union[
+ChangePrefixCommand: TypeAlias = (
     # Set prefix
-    tuple[Literal['domain', 'directory'], str],
+    tuple[Literal['domain', 'directory'], str] |
     # Clear prefix
-    None,
+    None |
     # Leave prefix unchanged
-    EllipsisType,
-]
+    EllipsisType
+)
 
 
 _WINDOW_INNER_PADDING = 10
@@ -50,7 +50,7 @@ class NewRootUrlDialog:
     _VERBOSE_URL_CLEANING = False
     
     # NOTE: Only changed when tests are running
-    _last_opened: 'Optional[NewRootUrlDialog]'=None
+    _last_opened: 'NewRootUrlDialog | None'=None
     
     _url_field: wx.TextCtrl
     _name_field: wx.TextCtrl
@@ -97,8 +97,8 @@ class NewRootUrlDialog:
         self._on_close_callback = on_close or (lambda: None)
         
         self._url_field_focused = False
-        self._last_cleaned_url = initial_url if is_edit else None  # type: Optional[str]
-        self._url_cleaner = None  # type: Optional[UrlCleaner]
+        self._last_cleaned_url = initial_url if is_edit else None  # type: str | None
+        self._url_cleaner = None  # type: UrlCleaner | None
         self._was_ok_pressed = False
         self._is_destroying_or_destroyed = False
 

@@ -6,7 +6,6 @@ from crystal.util.xthreading import (
     bg_affinity, fg_affinity, start_thread_switching_coroutine, SwitchToThread,
 )
 import os
-from typing import Tuple
 from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
 
@@ -40,7 +39,7 @@ class UrlCleaner:
         )
     
     @fg_affinity
-    def _run(self, url_candidates: list[str]) -> Generator[SwitchToThread, None, None]:
+    def _run(self, url_candidates: list[str]) -> Generator[SwitchToThread]:
         assert len(url_candidates) >= 1
         
         self._on_running_changed_func(True)
@@ -114,7 +113,7 @@ def _candidate_urls_from_user_input(url_input: str) -> list[str]:
         # 1. try https:// then http://
         # 2. try variations on www
         if url_parts.scheme == '':
-            scheme_candidates = ('https', 'http')  # type: Tuple[str, ...]
+            scheme_candidates = ('https', 'http')  # type: tuple[str, ...]
             
             # Reparse (netloc='', path='DOMAIN/PATH')
             #      to (netloc='DOMAIN', path='PATH')
@@ -133,7 +132,7 @@ def _candidate_urls_from_user_input(url_input: str) -> list[str]:
             # 1. If has www, then try non-www domain if www domain fails
             # 2. If missing www, then try it if non-www domain fails
             if url_parts.netloc.startswith('www.'):
-                netloc_candidates = (url_parts.netloc, url_parts.netloc[len('www.'):])  # type: Tuple[str, ...]
+                netloc_candidates = (url_parts.netloc, url_parts.netloc[len('www.'):])  # type: tuple[str, ...]
             elif url_parts.netloc != '' and not url_parts.netloc.startswith('www.'):
                 netloc_candidates = (url_parts.netloc, 'www.' + url_parts.netloc)
             else:

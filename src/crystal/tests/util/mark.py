@@ -1,6 +1,7 @@
+from collections.abc import Callable
 from functools import wraps
 import os
-from typing import Callable, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
 from unittest import SkipTest
 
 from crystal.util.test_mode import is_parallel

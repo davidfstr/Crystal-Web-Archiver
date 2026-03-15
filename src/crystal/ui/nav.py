@@ -5,7 +5,7 @@ wxPython-based program.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Sequence
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from crystal.util.controls import TreeItem
 from crystal.util.cloak import CloakMixin, cloak
 from crystal.util.xos import is_mac_os
@@ -14,7 +14,7 @@ from crystal.util.xtyping import not_none
 from difflib import SequenceMatcher
 import re
 from typing import (
-    Any, assert_never, Generic, Iterable, Literal, NoReturn, overload, Self,
+    Any, assert_never, Generic, Literal, NoReturn, overload, Self,
     TypeAlias, TypeVar
 )
 import wx
@@ -1531,7 +1531,7 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
     
     def __init__(self,
             peer_description: str,
-            children: list['Snapshot[_P]'],
+            children: list[Snapshot[_P]],
             path: str,
             query: str,
             peer_accessor: str,
@@ -1628,9 +1628,9 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
     #       window with the specified string Name. This behavior would be
     #       consistent with (Window)Navigator's __getitem__ API.
     @overload
-    def __getitem__(self, index: int) -> 'Snapshot[_P]': ...
+    def __getitem__(self, index: int) -> Snapshot[_P]: ...
     @overload
-    def __getitem__(self, index: slice) -> tuple['Snapshot[_P]', ...]: ...
+    def __getitem__(self, index: slice) -> tuple[Snapshot[_P], ...]: ...
     def __getitem__(self, index: int | slice):
         """
         - snapshot[i], where i is an int, returns a snapshot of
@@ -1681,11 +1681,11 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
     
     @staticmethod
     def diff(
-            old: 'Snapshot[_P]',
-            new: 'Snapshot[_P]',
+            old: Snapshot[_P],
+            new: Snapshot[_P],
             name: str = 'S',
             deletion_style: DeletionStyle = _DEFAULT_DELETION_STYLE,
-            ) -> 'SnapshotDiff[_P]':
+            ) -> SnapshotDiff[_P]:
         """
         Compares two snapshots and returns a SnapshotDiff describing all
         changes between them.
@@ -1701,7 +1701,7 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
         Returns:
         * A SnapshotDiff object that can be printed to see all changes
         """
-        def diff_rooted_here() -> 'SnapshotDiff[_P]':
+        def diff_rooted_here() -> SnapshotDiff[_P]:
             return SnapshotDiff(old, new, name, deletion_style)
         
         # If description of each snapshot's peer differs, diff root is here
@@ -1736,7 +1736,7 @@ class Snapshot(Generic[_P], Sequence['Snapshot[_P]']):
             # If multiple children have a non-empty diff, diff root is here
             return diff_rooted_here()
     
-    def __sub__(new: Self, old: 'Snapshot[_P]') -> 'SnapshotDiff[_P]':
+    def __sub__(new: Self, old: Snapshot[_P]) -> SnapshotDiff[_P]:
         """
         Shorthand operator equivalent to .diff, for quick scripts.
         
@@ -1839,7 +1839,7 @@ class SnapshotDiff(Generic[_P]):
             new: Snapshot[_P],
             path: str,
             deletion_style: DeletionStyle,
-            ) -> list['_DiffEntry']:
+            ) -> list[_DiffEntry]:
         """
         Recursively computes all diff entries between two snapshots.
         """
@@ -1872,7 +1872,7 @@ class SnapshotDiff(Generic[_P]):
             new_children: list[Snapshot[_P]],
             parent_path: str,
             deletion_style: DeletionStyle,
-            ) -> list['_DiffEntry']:
+            ) -> list[_DiffEntry]:
         """
         Computes diff entries for children of a node.
         Matches children by identity (peer_obj), then by description.
@@ -2022,7 +2022,7 @@ class SnapshotDiff(Generic[_P]):
             parent_path: str,
             symbol: Literal['+', '-'],
             deletion_style: DeletionStyle = _DEFAULT_DELETION_STYLE,
-            ) -> list['_DiffEntry']:
+            ) -> list[_DiffEntry]:
         """
         Recursively compute diff entries for all descendents of a snapshot node.
         Used when a node is added or removed to show all its children.
@@ -2114,7 +2114,7 @@ class SnapshotDiff(Generic[_P]):
             return f'{parent_path}[{old_idx}→{new_idx}]'
     
     @classmethod
-    def _collapse_shifted_unchanged_runs(cls, entries: list['_DiffEntry']) -> list['_DiffEntry']:
+    def _collapse_shifted_unchanged_runs(cls, entries: list[_DiffEntry]) -> list[_DiffEntry]:
         """
         Merges contiguous moved nodes with unchanged details into range entries.
         
@@ -2236,7 +2236,7 @@ class SnapshotDiff(Generic[_P]):
         return path[:last_bracket]
     
     @classmethod
-    def _collapse_add_and_delete_runs(cls, entries: list['_DiffEntry']) -> list['_DiffEntry']:
+    def _collapse_add_and_delete_runs(cls, entries: list[_DiffEntry]) -> list[_DiffEntry]:
         """
         Collapses long runs of additions (+) or deletions (-) into More() entries.
         
@@ -2418,7 +2418,7 @@ class _DiffEntry:
             *,
             old_range_end: int | None = None,
             new_range_end: int | None = None,
-            descendents: list['_DiffEntry'] | None = None,
+            descendents: list[_DiffEntry] | None = None,
             ) -> None:
         self.path = path
         self.symbol = symbol
@@ -2565,7 +2565,7 @@ class NavigatorSlice(Generic[_P], tuple[Navigator[_P], ...]):  # pylint: disable
     _start: int
     _path: str
     
-    def __new__(cls, start: int, items: Iterable[Navigator[_P]], path: str) -> 'NavigatorSlice':
+    def __new__(cls, start: int, items: Iterable[Navigator[_P]], path: str) -> NavigatorSlice:
         self = super().__new__(cls, tuple(items))  # type: ignore[arg-type, type-var]
         self._start = start
         self._path = path

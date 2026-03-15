@@ -2,7 +2,6 @@ from collections.abc import Callable
 from crystal.browser.icons import add_transparent_left_border
 from crystal.util.wx_bind import bind
 from crystal.util.xos import is_mac_os, is_windows
-from typing import List
 import wx
 
 
@@ -35,8 +34,8 @@ class Action:
         self._button_bitmap = button_bitmap
         self._button_label = button_label
         
-        self._menuitems = []  # type: List[wx.MenuItem]
-        self._buttons = []  # type: List[wx.Button]
+        self._menuitems = []  # type: list[wx.MenuItem]
+        self._buttons = []  # type: list[wx.Button]
     
     # === Properties ===
     

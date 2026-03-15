@@ -32,10 +32,9 @@ from threading import Lock, Thread
 import time
 import types
 from typing import (
-    Any, IO, Literal, Optional, TextIO, TypeAlias, TYPE_CHECKING,
-    TypeVar, assert_never,
+    Any, IO, Literal, TextIO, TypeAlias, TYPE_CHECKING,
+    TypeVar, assert_never, override,
 )
-from typing_extensions import override
 
 if TYPE_CHECKING:
     from crystal.browser import MainWindow
@@ -61,7 +60,7 @@ class Shell:
         """
         self._started = False
         self._stopping = False
-        self._shell_thread = None  # type: Optional[Thread]
+        self._shell_thread = None  # type: Thread | None
         
         # Setup proxy variables for shell
         _Proxy._patch_help()
@@ -258,7 +257,7 @@ class Shell:
 
 class _Proxy:
     _unset_repr: str
-    _value: Optional[object]
+    _value: object | None
     
     @staticmethod
     def _patch_help() -> None:
@@ -557,20 +556,17 @@ class _CrystalInteractiveConsole(code.InteractiveConsole):
             return 'stdio_buffered'
         
         # Is pyrepl usable and should it be used?
-        if sys.version_info >= (3, 13):
-            # _pyrepl module only available in Python 3.13+
-            
-            # NOTE: Duplicates asyncio/__main__.py logic to determine
-            #       whether pyrepl should be used
-            if os.getenv('PYTHON_BASIC_REPL'):
-                # Honor Python's PYTHON_BASIC_REPL environment variable to
-                # force the use of the basic REPL
-                CAN_USE_PYREPL = False
-            else:
-                # NOTE: Notably, cannot use pyrepl if stdin is not a TTY
-                from _pyrepl.main import CAN_USE_PYREPL  # type: ignore[no-redef]
-            if CAN_USE_PYREPL:
-                return 'py_repl'
+        # NOTE: Duplicates asyncio/__main__.py logic to determine
+        #       whether pyrepl should be used
+        if os.getenv('PYTHON_BASIC_REPL'):
+            # Honor Python's PYTHON_BASIC_REPL environment variable to
+            # force the use of the basic REPL
+            CAN_USE_PYREPL = False
+        else:
+            # NOTE: Notably, cannot use pyrepl if stdin is not a TTY
+            from _pyrepl.main import CAN_USE_PYREPL  # type: ignore[no-redef]
+        if CAN_USE_PYREPL:
+            return 'py_repl'
         
         # Fallback to basic REPL
         return 'basic_repl'

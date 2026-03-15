@@ -202,7 +202,7 @@ class RootResource:
     # === Utility ===
     
     def __repr__(self):
-        return 'RootResource({},{})'.format(repr(self.name), repr(self.resource.url))
+        return f'RootResource({repr(self.name)},{repr(self.resource.url)})'
     
     class AlreadyExists(Exception):
         """

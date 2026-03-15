@@ -26,8 +26,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, assert_never, cast, Deque, Optional, Protocol, TypeVar
-from typing_extensions import ParamSpec
+from typing import Any, assert_never, cast, Deque, ParamSpec, Protocol, TypeVar
 
 
 # If True, then the runtime of foreground tasks is tracked to ensure
@@ -54,7 +53,7 @@ _R = TypeVar('_R')
 # ------------------------------------------------------------------------------
 # Access Foreground Thread
 
-_fg_thread = None  # type: Optional[threading.Thread]
+_fg_thread = None  # type: threading.Thread | None
 
 
 def set_foreground_thread(fg_thread: threading.Thread | None) -> None:

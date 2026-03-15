@@ -1,4 +1,3 @@
-
 from ast import literal_eval
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -13,7 +12,7 @@ import re
 from select import select
 import textwrap
 import time
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 import warnings
 from io import BufferedIOBase, TextIOBase, TextIOWrapper
 import os
@@ -621,7 +620,7 @@ def _read_until_inner(
     
     read_buffer = b''
     READ_CHUNK_SIZE = 1024  # arbitrary
-    found_stop_suffix = None  # type: Optional[str]
+    found_stop_suffix = None  # type: str | None
     start_time = time.monotonic()
     hard_timeout_exceeded = False
     try:

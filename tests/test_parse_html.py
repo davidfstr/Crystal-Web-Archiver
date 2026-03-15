@@ -5,7 +5,6 @@ from crystal.doc.html.soup import HtmlDocument
 from crystal.server import _RequestHandler
 from crystal.tests.util.subtests import SubtestsContext, with_subtests
 from textwrap import dedent
-from typing import List, Tuple
 
 # === Tests: Parse/Format Document ===
 
@@ -562,7 +561,7 @@ def _parse_html_and_links(
         html_bytes: bytes, 
         *, declared_charset: str | None=None,
         html_parser_type: HtmlParserType,
-        ) -> 'Tuple[Document, List[Link]]':
+        ) -> 'tuple[Document, list[Link]]':
     result = try_parse_html_and_links(html_bytes, declared_charset, html_parser_type)
     assert result is not None
     return result

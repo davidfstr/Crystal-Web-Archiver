@@ -12,7 +12,7 @@ import json
 import os
 import os.path
 from tempfile import mkstemp
-from typing import Any, Literal, Optional, cast
+from typing import Any, Literal, cast
 
 
 # NOTE: Use the `app_prefs` singleton instance rather than attempting
@@ -328,7 +328,7 @@ class AppPreferences:
     
     # === Properties ===
     
-    unsaved_untitled_project_path = cast(Optional[str], _define_property(
+    unsaved_untitled_project_path = cast(str | None, _define_property(
         'unsaved_untitled_project_path',
         default=None,
         validator=lambda project_path: (

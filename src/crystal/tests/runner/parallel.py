@@ -28,7 +28,7 @@ import tempfile
 import threading
 import time
 import traceback
-from typing import Literal, Optional, assert_never
+from typing import Literal, assert_never
 
 
 # === Main ===
@@ -147,9 +147,9 @@ def run_tests(
     #   - None sentinel to signal end of work
     if worker_task_assignments is not None:
         # Create per-worker queues with assigned tests
-        work_queues: list[Queue[Optional[str]]] = []
+        work_queues: list[Queue[str | None]] = []
         for worker_id in range(num_workers):
-            worker_queue: Queue[Optional[str]] = Queue()
+            worker_queue: Queue[str | None] = Queue()
             
             interrupt_pos = (
                 worker_task_assignments.interrupt_positions[worker_id]
@@ -186,7 +186,7 @@ def run_tests(
         # 3. _SERIAL_MARKER to signal transition to serial mode
         # 4. All serial-only tests (run by the last remaining worker)
         # 5. Final None sentinel for the last worker to terminate
-        shared_work_queue: Queue[Optional[str]] = Queue()
+        shared_work_queue: Queue[str | None] = Queue()
         for test_name in parallel_test_names:
             shared_work_queue.put(test_name)
         # Add sentinel values to stop all but one worker
@@ -218,7 +218,7 @@ def run_tests(
     
     # Run workers in parallel
     start_time = time.monotonic()  # capture
-    worker_results: list[Optional[WorkerResult]] = [None] * num_workers
+    worker_results: list[WorkerResult | None] = [None] * num_workers
     worker_results_lock = threading.Lock()
     worker_interrupt_pipes: list[Pipe] = [
         create_selectable_pipe() for i in range(num_workers)
@@ -348,7 +348,7 @@ def run_tests(
     return is_ok
 
 
-def _parse_worker_tasks_env(num_workers: int, num_tests: int) -> 'Optional[WorkerTaskAssignments]':
+def _parse_worker_tasks_env(num_workers: int, num_tests: int) -> 'WorkerTaskAssignments | None':
     """
     Parse the CRYSTAL_PARALLEL_WORKER_TASKS environment variable.
     
@@ -596,7 +596,7 @@ class TestResult:
     """Result of running a single test."""
     name: str
     status: str  # 'OK', 'SKIP', 'FAILURE', 'ERROR', 'INTERRUPTED'
-    skip_reason: Optional[str]
+    skip_reason: str | None
     output_lines: list[str]
     
     # Tell pytest this class is not a test suite, despite being named "Test*"
@@ -614,7 +614,7 @@ _num_tests_to_display: int | None = None
 @bg_affinity
 def _run_worker(
         worker_id: int,
-        work_queue: Queue[Optional[str]],
+        work_queue: Queue[str | None],
         log_dir: str,
         verbose: bool,
         interrupted_event: threading.Event,
