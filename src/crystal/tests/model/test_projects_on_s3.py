@@ -1361,6 +1361,9 @@ async def _open_project_from_s3_in_ui(
 
         return wx.ID_OK
 
+    from crystal.main import _get_last_window
+    old_main_last_window = _get_last_window()  # capture
+    
     with patch('crystal.util.wx_dialog.ShowModal',
             mocked_show_modal('cr-open-project-from-s3-dialog', fill_and_accept_s3_dialog)):
         if start_open_func is not None:
@@ -1369,6 +1372,9 @@ async def _open_project_from_s3_in_ui(
             ocd = await OpenOrCreateDialog.wait_for()
             await ocd.start_open_project_from_s3_with_menuitem()
         mw = await MainWindow.wait_for()
+    
+    # Wait for relaunch() to assign main.py's last_window
+    await wait_for(lambda: _get_last_window() is not old_main_last_window)
     
     project = await wait_for_and_return(lambda: Project._last_opened_project)
     assert project.readonly

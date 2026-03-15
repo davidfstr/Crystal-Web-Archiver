@@ -50,6 +50,8 @@ _project_to_open_soon: tuple[str, bool] | None = None
 # None if prompt_for_prompt() is not running.
 _interrupt_prompt_for_project_to_open_project: Optional[Callable[[], None]] = None
 
+# Exposes internal last_window state to tests
+_get_last_window: 'Callable[[], MainWindow | None]'
 
 # ------------------------------------------------------------------------------
 # Main
@@ -531,12 +533,17 @@ def _main2(args: list[str]) -> None:
         shell = None
     
     # If will run tests then immediately enter testing mode
-    if parsed_args.test is not None:
+    if (tests_are_running := parsed_args.test is not None):
         from crystal.util.test_mode import set_tests_are_running
         set_tests_are_running()
     
     last_window = None  # type: Optional[MainWindow]
     systemexit_during_first_launch = None  # type: Optional[SystemExit]
+    
+    # Expose internal last_window state to tests
+    if tests_are_running:
+        global _get_last_window
+        _get_last_window = lambda: last_window
     
     # 1. Create wx.App and call app.OnInit(), opening the initial dialog
     # 2. Initialize the foreground thread
