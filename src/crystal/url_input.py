@@ -63,9 +63,8 @@ class UrlCleaner:
                 raise
         finally:
             yield SwitchToThread.FOREGROUND
-            if self._cancelled:
-                return
-            self._finish(cleaned_url)
+            if not self._cancelled:
+                self._finish(cleaned_url)
     
     @fg_affinity
     def _finish(self, cleaned_url: str | None) -> None:
