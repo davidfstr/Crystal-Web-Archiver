@@ -1176,7 +1176,7 @@ async def test_main_window_title_does_not_show_file_extension_given_project_open
 
 # === Test: UI: Save As ===
 
-# TODO: Add support for non-local filesystems to Save As
+# TODO: Add Save As support for non-local filesystems
 @awith_subtests
 async def test_when_save_as_given_project_opened_from_s3_url_then_raises_NonLocalFilesystemNotSupported(subtests: SubtestsContext) -> None:
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
@@ -1224,7 +1224,7 @@ async def test_when_save_as_given_project_opened_from_s3_url_then_raises_NonLoca
                     with patch('crystal.browser.ShowModal',
                             mocked_show_modal('cr-save-error-dialog', capture_message_and_dismiss),
                             ) as mock_show_modal:
-                        await save_as_with_ui(rmw, save_path)
+                        await save_as_with_ui(rmw, save_path, expect_file_dialog=False)
                     assert mock_show_modal.call_count == 1, \
                         f'Expected save error dialog to appear exactly once, got {mock_show_modal.call_count}'
                     assertEqual(

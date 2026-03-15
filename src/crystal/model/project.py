@@ -2738,6 +2738,10 @@ class Project(ListenableMixin):
             uses_future_result=True
         )
     
+    _SAVE_AS_NOT_SUPPORTED_ON_NONLOCAL_FS_ERROR_MESSAGE = (
+        'Save As does not support non-local filesystems yet'
+    )
+    
     @fg_affinity
     def _save_as_coro(self,
             new_path: str, 
@@ -2747,7 +2751,7 @@ class Project(ListenableMixin):
         #       {_save_as_coro, _copytree_of_project_with_progress}
         if not isinstance(self._fs, LocalFilesystem):
             raise NonLocalFilesystemNotSupported(
-                'Save As does not support non-local filesystems yet')
+                self._SAVE_AS_NOT_SUPPORTED_ON_NONLOCAL_FS_ERROR_MESSAGE)
         lfs = self._fs
 
         if lfs.exists(new_path):

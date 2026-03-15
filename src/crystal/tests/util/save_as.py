@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from crystal.browser import MainWindow as RealMainWindow
 from crystal.model import Project
 from crystal.tests.util.controls import (
@@ -32,7 +32,11 @@ async def save_as_without_ui(project: Project, new_project_dirpath: str) -> None
     )
 
 
-async def save_as_with_ui(rmw: RealMainWindow, new_project_dirpath: str) -> None:
+async def save_as_with_ui(
+        rmw: RealMainWindow,
+        new_project_dirpath: str,
+        *, expect_file_dialog: bool = True,
+        ) -> None:
     """
     Performs a Save As operation on a project, waiting for it to complete, using the UI.
 
@@ -40,20 +44,25 @@ async def save_as_with_ui(rmw: RealMainWindow, new_project_dirpath: str) -> None
     If there is no MainWindow then instead use save_as_without_ui().
     """
     project = rmw.project
-    async with wait_for_save_as_to_complete(project):
-        start_save_as_with_ui(rmw, new_project_dirpath)
+    async with (wait_for_save_as_to_complete(project) if expect_file_dialog else nullcontext()):
+        start_save_as_with_ui(
+            rmw, new_project_dirpath, expect_file_dialog=expect_file_dialog)
 
 
 # === Save As (Low Level) ===
 
-def start_save_as_with_ui(rmw: RealMainWindow, new_project_dirpath: str) -> None:
+def start_save_as_with_ui(
+        rmw: RealMainWindow,
+        new_project_dirpath: str,
+        *, expect_file_dialog: bool = True,
+        ) -> None:
     """
     Starts a Save As operation on a project using the UI,
     but does NOT wait for it to complete.
     
     See also: save_as_with_ui()
     """
-    with file_dialog_returning(new_project_dirpath):
+    with file_dialog_returning(new_project_dirpath, expected=expect_file_dialog):
         select_menuitem_now(
             menuitem=rmw._frame.MenuBar.FindItemById(wx.ID_SAVEAS))
 

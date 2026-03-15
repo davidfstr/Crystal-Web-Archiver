@@ -8,7 +8,10 @@ import wx
 # wx.FileDialog
 
 @contextmanager
-def file_dialog_returning(filepath: str | list[str]) -> Iterator[None]:
+def file_dialog_returning(
+        filepath: str | list[str],
+        *, expected: bool = True,
+        ) -> Iterator[None]:
     filepaths = filepath if isinstance(filepath, list) else [filepath]
     
     with patch('wx.FileDialog', spec=True) as MockFileDialog:
@@ -18,10 +21,16 @@ def file_dialog_returning(filepath: str | list[str]) -> Iterator[None]:
         
         yield
         
-        if instance.ShowModal.call_count != len(filepaths):
-            raise AssertionError(
-                f'Expected wx.FileDialog.ShowModal to be called exactly {len(filepaths)} time(s), '
-                f'but it was called {instance.ShowModal.call_count} time(s)')
+        if expected:
+            if instance.ShowModal.call_count != len(filepaths):
+                raise AssertionError(
+                    f'Expected wx.FileDialog.ShowModal to be called exactly {len(filepaths)} time(s), '
+                    f'but it was called {instance.ShowModal.call_count} time(s)')
+        else:
+            if instance.ShowModal.call_count != 0:
+                raise AssertionError(
+                    f'Expected wx.FileDialog.ShowModal to be called exactly 0 time(s), '
+                    f'but it was called {instance.ShowModal.call_count} time(s)')
 
 
 # ------------------------------------------------------------------------------

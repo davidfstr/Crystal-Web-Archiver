@@ -1042,6 +1042,13 @@ class MainWindow(CloakMixin):
         1. Handle Save menu item for untitled projects.
         2. Handle Save As menu item for all projects.
         """
+        # TODO: Add Save As support for non-local filesystems
+        if not isinstance(self.project._fs, LocalFilesystem):
+            e = NonLocalFilesystemNotSupported(
+                Project._SAVE_AS_NOT_SUPPORTED_ON_NONLOCAL_FS_ERROR_MESSAGE)
+            self._show_save_error_dialog(e)
+            return
+        
         # Prompt for a save location
         file_dialog = wx.FileDialog(self._frame,
             message='',
