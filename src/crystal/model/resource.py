@@ -25,9 +25,8 @@ import itertools
 from typing import (
     Any, Dict, Generic, List, Literal, Optional, Tuple, TYPE_CHECKING, TypeVar, Union,
 )
-from collections.abc import Iterable
-from warnings import deprecated
 from urllib.parse import urlparse, urlunparse
+from warnings import deprecated
 
 if TYPE_CHECKING:
     from crystal.task import (

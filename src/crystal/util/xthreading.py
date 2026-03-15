@@ -26,8 +26,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, assert_never, cast, Deque, Optional, Protocol, TypeVar
-from typing import ParamSpec
+from typing import Any, assert_never, cast, Deque, Optional, ParamSpec, Protocol, TypeVar
 
 
 # If True, then the runtime of foreground tasks is tracked to ensure

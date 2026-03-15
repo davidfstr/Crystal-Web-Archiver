@@ -8,8 +8,7 @@ from crystal.util.xos import is_wx_gtk, is_windows
 from crystal.util.xthreading import fg_affinity, fg_call_later, fg_calls_paused, is_foreground_thread
 from functools import wraps
 import time
-from typing import List, Optional, overload, Self, TypeAlias, TypeVar
-from typing import override
+from typing import List, Optional, overload, override, Self, TypeAlias, TypeVar
 import wx
 
 _DELAY_UNTIL_PROGRESS_DIALOG_SHOWS = 100 / 1000  # sec

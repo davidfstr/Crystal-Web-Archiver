@@ -194,19 +194,19 @@ def generic_404_page_html(default_url_prefix: str | None) -> str:
         #       value won't be rewritten if Crystal downloads the 404 page.
         """
         <script>
-            const crDefaultUrlPrefixB64 = {default_url_prefix_b64_json};
+            const crDefaultUrlPrefixB64 = %(default_url_prefix_b64_json)s;
             
             // -----------------------------------------------------------------
             // URL Box
             
             // Calculate the original archive URL based on the request URL
-            document.addEventListener('DOMContentLoaded', async () => {{
+            document.addEventListener('DOMContentLoaded', async () => {
                 const loc = document.location;
-                if (loc.pathname.endsWith('/404.html')) {{
+                if (loc.pathname.endsWith('/404.html')) {
                     // 404 page loaded directly. No original URL exists.
                     // Leave fallback messaging in place.
                     return;
-                }}
+                }
                 
                 const requestPath = loc.pathname + loc.search;
                 const siteRootPath = await locateSiteRootPath(loc.origin, requestPath);
@@ -216,124 +216,124 @@ def generic_404_page_html(default_url_prefix: str | None) -> str:
                     ? tryDecodeBase64Utf8(crDefaultUrlPrefixB64)
                     : null;
                 const archiveUrl = getArchiveUrlWithDup(siteRelRequestPath, crDefaultUrlPrefix);
-                if (archiveUrl === null) {{
+                if (archiveUrl === null) {
                     // Unable to resolve archive URL.
                     // Leave fallback messaging in place.
                     return;
-                }}
+                }
                 
                 // Display the original archive URL
                 const urlBoxLinkDom = document.querySelector('.cr-url-box__link');
                 urlBoxLinkDom.href = archiveUrl;
                 urlBoxLinkDom.innerText = archiveUrl;
-            }});
+            });
             
-            function tryDecodeBase64Utf8(b64Str) {{
-                try {{
+            function tryDecodeBase64Utf8(b64Str) {
+                try {
                     const bytes = Uint8Array.fromBase64(base64);
-                    return new TextDecoder('utf-8').decode(bytes, {{fatal: true}});
-                }} catch (e) {{
-                    if (e instanceof SyntaxError || e instanceof TypeError) {{
+                    return new TextDecoder('utf-8').decode(bytes, {fatal: true});
+                } catch (e) {
+                    if (e instanceof SyntaxError || e instanceof TypeError) {
                         // Invalid base64 or UTF-8
                         return null;
-                    }} else {{
+                    } else {
                         // API unavailable: Uint8Array, TextDecoder
-                        try {{
+                        try {
                             return atob(b64Str);
-                        }} catch (f) {{
-                            if (f instanceof InvalidCharacterError) {{
+                        } catch (f) {
+                            if (f instanceof InvalidCharacterError) {
                                 // Invalid base64 or string is not ASCII.
                                 return null;
-                            }} else {{
+                            } else {
                                 throw f;
-                            }}
-                        }}
-                    }}
-                }}
-            }}
+                            }
+                        }
+                    }
+                }
+            }
             
             // Locates the path to the directory containing the exported site,
             // which also will directly contain the "404.html" page.
-            async function locateSiteRootPath(origin, pathWithinSiteRoot) {{
+            async function locateSiteRootPath(origin, pathWithinSiteRoot) {
                 let pathSegments = pathWithinSiteRoot.split('/').slice(1);
                 pathSegments = pathSegments.slice(0, pathSegments.length - 1);
                 
                 // Check each directory level, starting from root, leading up to pathWithinSiteRoot.
                 // Look for a "404.html" page matching this 404 page.
-                for (let i = 0; i <= pathSegments.length; i++) {{
+                for (let i = 0; i <= pathSegments.length; i++) {
                     const candidateDir = '/' + pathSegments.slice(0, i).join('/') + (i > 0 ? '/' : '');
                     const candidate404Url = origin + candidateDir + '404.html';
                     
                     let content;
-                    try {{
-                        const response = await fetch(candidate404Url, {{
-                            headers: {{
+                    try {
+                        const response = await fetch(candidate404Url, {
+                            headers: {
                                 // If backend is a Crystal server,
                                 // ask it to block when dynamically downloading
                                 // and return the final downloaded page,
                                 // rather than returning an incremental
                                 // Download In Progress page (HTTP 503).
                                 'X-Crystal-Block-When-Downloading': '1'
-                            }}
-                        }});
+                            }
+                        });
                         content = await response.text();
-                    }} catch (fetchError) {{
+                    } catch (fetchError) {
                         // No 404.html page found here
                         continue;
-                    }}
+                    }
                     
                     const match = content.match(/const crDefaultUrlPrefixB64 = ([^;]+);/);
-                    if (!match) {{
+                    if (!match) {
                         // No Crystal 404.html page found here
                         continue;
-                    }}
+                    }
                     
                     let candidateUrlPrefixB64;
-                    try {{
+                    try {
                         candidateUrlPrefixB64 = JSON.parse(match[1]);
-                    }} catch (parseError) {{
+                    } catch (parseError) {
                         // Looks like a Crystal 404.html page, but has a bogus crDefaultUrlPrefixB64.
                         continue;
-                    }}
-                    if (candidateUrlPrefixB64 !== crDefaultUrlPrefixB64) {{
+                    }
+                    if (candidateUrlPrefixB64 !== crDefaultUrlPrefixB64) {
                         // Is a Crystal 404.html page but does not match this 404 page.
                         continue
-                    }}
+                    }
                     
                     return candidateDir;
-                }}
+                }
                 
                 // Fallback to root if no matching Crystal 404 page was found
                 return '/';
-            }}
+            }
             
             // NOTE: Duplicated in get_archive_url_with_dup() and getArchiveUrlWithDup()
-            function getArchiveUrlWithDup(requestPath, defaultUrlPrefix) {{
-                const match = requestPath.match(/{REQUEST_PATH_IN_ARCHIVE_RE_STR}/);
-                if (match) {{
+            function getArchiveUrlWithDup(requestPath, defaultUrlPrefix) {
+                const match = requestPath.match(/%(REQUEST_PATH_IN_ARCHIVE_RE_STR)s/);
+                if (match) {
                     const scheme = match[1];
                     const rest = match[2];
                     const archiveUrl = scheme + '://' + rest;
                     return archiveUrl;
-                }} else {{
+                } else {
                     // If valid default URL prefix is set, use it
-                    if (defaultUrlPrefix !== null && !defaultUrlPrefix.endsWith('/')) {{
-                        if (!requestPath.startsWith('/')) {{
+                    if (defaultUrlPrefix !== null && !defaultUrlPrefix.endsWith('/')) {
+                        if (!requestPath.startsWith('/')) {
                             throw new Error('Expected path to start with /');
-                        }}
+                        }
                         return defaultUrlPrefix + requestPath;
-                    }} else {{
+                    } else {
                         return null;
-                    }}
-                }}
-            }}
+                    }
+                }
+            }
             
             // -----------------------------------------------------------------
         </script>
-        """.format(
-            default_url_prefix_b64_json=json.dumps(default_url_prefix_b64),
-            REQUEST_PATH_IN_ARCHIVE_RE_STR=REQUEST_PATH_IN_ARCHIVE_RE_STR.replace('/', r'\/'),
-        )
+        """ % {
+            'default_url_prefix_b64_json': json.dumps(default_url_prefix_b64),
+            'REQUEST_PATH_IN_ARCHIVE_RE_STR': REQUEST_PATH_IN_ARCHIVE_RE_STR.replace('/', r'\/'),
+        }
     ).strip()
     
     return _base_page_html(
@@ -1330,49 +1330,49 @@ def download_in_progress_html(
     script_html = dedent(
         """
         <script>
-            const ignoreReloadRequests = {ignore_reload_requests_json};
+            const ignoreReloadRequests = %(ignore_reload_requests_json)s;
             
             // NOTE: Patched by tests
-            window.crReload = function() {{
+            window.crReload = function() {
                 window.crDidCallReload = true;
-                if (!ignoreReloadRequests) {{
+                if (!ignoreReloadRequests) {
                     window.location.reload();
-                }}
-            }};
+                }
+            };
             
-            {_DOWNLOAD_PROGRESS_BAR_JS}
+            %(_DOWNLOAD_PROGRESS_BAR_JS)s
             
             // -----------------------------------------------------------------
             // Download Progress Polling
             
-            async function startProgressPolling() {{
-                const taskId = {task_id_json};
+            async function startProgressPolling() {
+                const taskId = %(task_id_json)s;
                 
                 // Start progress tracking using shared functionality
-                runDownloadProgressBar(taskId, {{
-                    onStart: (progressText) => {{
+                runDownloadProgressBar(taskId, {
+                    onStart: (progressText) => {
                         progressText.textContent = 'Preparing download...';
-                    }},
-                    onSuccess: () => {{
+                    },
+                    onSuccess: () => {
                         window.crReload();
-                    }},
-                    onError: () => {{
+                    },
+                    onError: () => {
                         // nothing
-                    }},
+                    },
                     errorMessage: 'Download failed.'
-                }});
-            }}
+                });
+            }
             
             // -----------------------------------------------------------------
             
             // Start polling immediately when page loads
             startProgressPolling();
         </script>
-        """.format(
-            task_id_json=task_id_json,
-            ignore_reload_requests_json=ignore_reload_requests_json,
-            _DOWNLOAD_PROGRESS_BAR_JS=_DOWNLOAD_PROGRESS_BAR_JS,
-        )
+        """ % {
+            'task_id_json': task_id_json,
+            'ignore_reload_requests_json': ignore_reload_requests_json,
+            '_DOWNLOAD_PROGRESS_BAR_JS': _DOWNLOAD_PROGRESS_BAR_JS,
+        }
     ).strip()
     
     return _base_page_html(

@@ -58,7 +58,7 @@ def fix_file(file_path: Path, check_only: bool = False) -> tuple[bool, int]:
     * (has_issues, num_fixes): Whether the file has issues and number of fixes made
     """
     # Read source
-    with open(file_path, encoding='utf-8') as f:
+    with open(file_path, 'r', encoding='utf-8') as f:
         source = f.read()
     
     # Parse AST

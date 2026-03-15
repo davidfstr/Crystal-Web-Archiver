@@ -5,8 +5,7 @@ from concurrent.futures._base import (  # type: ignore[attr-defined]  # private 
 import sys
 import threading
 import weakref
-from typing import Any, Generic, TypeVar
-from typing import override
+from typing import Any, Generic, override, TypeVar
 
 
 _F = TypeVar('_F', bound=Future)

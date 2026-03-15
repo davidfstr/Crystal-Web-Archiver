@@ -17,7 +17,7 @@ Related audit documentation:
 - doc/model_durability_and_atomicity.md
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from crystal.model import Alias, Project, Resource, ResourceRevision, RootResource, ResourceGroup
 from crystal.tests.util.asserts import assertEqual, assertIn, assertNotEqual
 from crystal.tests.util.io_errors import (
@@ -41,7 +41,6 @@ import sqlite3
 from tempfile import NamedTemporaryFile
 import threading
 from typing import TypeVar, assert_never, Literal, Optional
-from collections.abc import Callable
 from unittest import skip
 from unittest.mock import ANY, Mock, patch
 

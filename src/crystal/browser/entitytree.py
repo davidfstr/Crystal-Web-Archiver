@@ -39,9 +39,8 @@ from crystal.util.xthreading import bg_call_later, fg_call_later
 import sys
 import time
 from typing import (
-    assert_never, cast, Dict, final, Literal, Optional, Tuple, TypeAlias, Union,
+    assert_never, cast, Dict, final, Literal, Optional, override, Tuple, TypeAlias, Union,
 )
-from typing import override
 from urllib.parse import urljoin
 import wx
 

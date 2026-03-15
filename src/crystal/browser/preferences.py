@@ -8,9 +8,9 @@ from crystal.util.wx_dialog import (
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_windows, preferences_are_called_settings_in_this_os
+from collections.abc import Callable
 import datetime
 from typing import Dict, TYPE_CHECKING, assert_never
-from collections.abc import Callable
 from tzlocal import get_localzone
 import wx
 

@@ -558,10 +558,10 @@ async def test_the_copy_url_menuitem_actually_copies_the_resource_url() -> None:
             with patch('crystal.browser.tasktree.copy_text_to_clipboard') as mock_copy:
                 # Right-click the task tree node and select "Copy URL"
                 def show_popup(menu: wx.Menu) -> None:
-                    (copy_url_menuitem,) = (
+                    (copy_url_menuitem,) = [
                         mi for mi in menu.MenuItems
                         if mi.ItemLabelText == 'Copy URL'
-                    )
+                    ]
                     select_menuitem_now(menu, copy_url_menuitem.Id)
                 await download_r_ti.right_click_showing_popup_menu(show_popup)
                 
@@ -589,10 +589,10 @@ async def test_the_view_menuitem_actually_opens_the_resource_in_a_browser() -> N
             with assert_does_open_webbrowser_to(lambda: get_request_url(home_url)):
                 # Right-click the task tree node and select "View"
                 def show_popup(menu: wx.Menu) -> None:
-                    (view_menuitem,) = (
+                    (view_menuitem,) = [
                         mi for mi in menu.MenuItems
                         if mi.ItemLabelText == 'View'
-                    )
+                    ]
                     select_menuitem_now(menu, view_menuitem.Id)
                 await download_r_ti.right_click_showing_popup_menu(show_popup)
 
@@ -618,10 +618,10 @@ async def test_the_copy_url_pattern_menuitem_actually_copies_the_resource_group_
             with patch('crystal.browser.tasktree.copy_text_to_clipboard') as mock_copy:
                 # Right-click the task tree node and select "Copy URL Pattern"
                 def show_popup(menu: wx.Menu) -> None:
-                    (copy_url_pattern_menuitem,) = (
+                    (copy_url_pattern_menuitem,) = [
                         mi for mi in menu.MenuItems
                         if mi.ItemLabelText == 'Copy URL Pattern'
-                    )
+                    ]
                     select_menuitem_now(menu, copy_url_pattern_menuitem.Id)
                 await download_rg_ti.right_click_showing_popup_menu(show_popup)
                 

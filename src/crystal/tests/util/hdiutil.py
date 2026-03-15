@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from crystal.tests.util import xtempfile
 from crystal.util.xos import is_mac_os
@@ -7,7 +7,6 @@ import subprocess
 import sys
 import time
 from typing import Type, TypeVar
-from collections.abc import Iterator
 from unittest import SkipTest
 import uuid
 

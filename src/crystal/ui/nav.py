@@ -5,7 +5,7 @@ wxPython-based program.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Sequence
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from crystal.util.controls import TreeItem
 from crystal.util.cloak import CloakMixin, cloak
 from crystal.util.xos import is_mac_os
@@ -17,7 +17,6 @@ from typing import (
     Any, assert_never, Generic, Literal, NoReturn, overload, Self,
     TypeAlias, TypeVar
 )
-from collections.abc import Iterable
 import wx
 
 

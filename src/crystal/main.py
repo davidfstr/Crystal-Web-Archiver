@@ -28,8 +28,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, BinaryIO, TextIO, cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING
-from typing import override
+from typing import Any, BinaryIO, TextIO, cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING, override
 
 if TYPE_CHECKING:
     from crystal.browser import MainWindow

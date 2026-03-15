@@ -39,8 +39,7 @@ from time import sleep
 import traceback
 from typing import Any, cast, final, Generic, List, Literal
 from typing import NoReturn as Never
-from typing import Optional, Tuple, TYPE_CHECKING, TypeVar
-from typing import override, ParamSpec
+from typing import Optional, override, ParamSpec, Tuple, TYPE_CHECKING, TypeVar
 from weakref import WeakSet
 
 if TYPE_CHECKING:

@@ -5,7 +5,7 @@ Runs on its own daemon thread.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Generator, Iterator
+from collections.abc import Callable, Generator, Iterator, Mapping
 from concurrent.futures import Future
 from contextlib import contextmanager
 from crystal.doc.generic import Document, Link
@@ -58,11 +58,8 @@ import traceback
 import trycast
 from trycast import checkcast
 from typing import (
-    Literal, Optional, TextIO, TypeAlias, TYPE_CHECKING,
-    assert_never,
+    assert_never, Literal, Optional, override, TextIO, TypeAlias, TYPE_CHECKING,
 )
-from collections.abc import Mapping
-from typing import override
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
 if TYPE_CHECKING:

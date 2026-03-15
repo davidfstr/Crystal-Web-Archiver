@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from crystal.app_preferences import app_prefs
 from crystal.browser import MainWindow as RealMainWindow
@@ -46,7 +46,6 @@ import tempfile
 import textwrap
 import shutil
 from typing import ContextManager, Never
-from collections.abc import Callable
 from unittest import skip, SkipTest
 from unittest.mock import MagicMock, patch
 import warnings

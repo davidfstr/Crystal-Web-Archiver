@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from crystal import APP_COPYRIGHT_STRING, __version__ as CRYSTAL_VERSION, APP_NAME
 from crystal.ui.branding import (
     AUTHORS_1_TEXT, AUTHORS_2_TEXT, AUTHORS_2_URL, 
@@ -10,7 +11,6 @@ from crystal.util.wx_dialog import (
     set_dialog_or_frame_icon_if_appropriate,
 )
 from crystal.util.wx_system_appearance import IsDarkNow, SetDark
-from collections.abc import Callable
 import wx
 
 

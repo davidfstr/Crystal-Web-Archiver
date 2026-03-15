@@ -33,9 +33,8 @@ import time
 import types
 from typing import (
     Any, IO, Literal, Optional, TextIO, TypeAlias, TYPE_CHECKING,
-    TypeVar, assert_never,
+    TypeVar, assert_never, override,
 )
-from typing import override
 
 if TYPE_CHECKING:
     from crystal.browser import MainWindow

@@ -4,8 +4,7 @@ from crystal.util import cli
 from functools import wraps
 import sys
 import traceback
-from typing import Concatenate, overload, Protocol, TypeAlias, TypeVar
-from typing import ParamSpec
+from typing import Concatenate, overload, ParamSpec, Protocol, TypeAlias, TypeVar
 
 _S = TypeVar('_S')
 _B = TypeVar('_B', bound='Bulkhead')

@@ -433,10 +433,10 @@ async def test_when_resource_matching_root_resource_or_resource_group_requested_
                 
                 # Verify the created download task has interactive=True priority
                 append_deferred_top_level_tasks(project)
-                (home_download_task,) = (
+                (home_download_task,) = [
                     task for task in project.root_task.children
                     if isinstance(task, DownloadResourceTask) and task.resource == home_r
-                )
+                ]
                 assertEqual(True, home_download_task.interactive)
             
             # Case 2: Test dynamic download of ResourceGroup member at interactive priority
@@ -453,10 +453,10 @@ async def test_when_resource_matching_root_resource_or_resource_group_requested_
                 append_deferred_top_level_tasks(project)
                 comic1_resource = project.get_resource(comic1_url)
                 assert comic1_resource is not None
-                (comic1_download_task,) = (
+                (comic1_download_task,) = [
                     task for task in project.root_task.children
                     if isinstance(task, DownloadResourceTask) and task.resource == comic1_resource
-                )
+                ]
                 assertEqual(True, comic1_download_task.interactive)
 
 
@@ -520,10 +520,10 @@ async def test_when_top_level_task_is_interactive_priority_then_is_scheduled_bef
                     assert isinstance(download_group_task, DownloadResourceGroupTask)
                     (urgm_task, drgm_task) = download_group_task.children
                     assert isinstance(drgm_task, DownloadResourceGroupMembersTask)
-                    (dr_task,) = (
+                    (dr_task,) = [
                         t for t in drgm_task.children
                         if isinstance(t, DownloadResourceTask) and t.resource.url == comic2_url
-                    )
+                    ]
                     assertEqual(False, dr_task.interactive)
                 
                 # Start download of comic #2 at interactive priority

@@ -2,7 +2,7 @@
 Provides services for downloading a ResourceRevision.
 """
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from crystal import __version__
 from crystal.app_preferences import app_prefs
 from crystal.model import (
@@ -18,7 +18,6 @@ import ssl
 import sys
 import truststore
 from typing import BinaryIO, assert_never, cast, Dict, TYPE_CHECKING
-from collections.abc import Collection
 import urllib.error
 from urllib.parse import urlparse
 import urllib.request
