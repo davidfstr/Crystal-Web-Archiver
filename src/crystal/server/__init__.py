@@ -58,7 +58,7 @@ import traceback
 import trycast
 from trycast import checkcast
 from typing import (
-    assert_never, Literal, override, TextIO, TypeAlias, TYPE_CHECKING,
+    Any, BinaryIO, assert_never, Literal, cast, override, TextIO, TypeAlias, TYPE_CHECKING,
 )
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
@@ -1683,6 +1683,15 @@ class _RequestHandler(BaseHTTPRequestHandler):
         if doc is None:
             # Not a document. Cannot rewrite content.
             with revision.open() as body:
+                # If revision body is not seekable, mark it as non-seekable
+                # for socket.sendfile()
+                # 
+                # NOTE: socket.sendfile() in Python 3.14 guesses whether the file object
+                #       passed to it supports seeking by looking for a seek() attribute
+                #       on the file object, rather than checking seekable().
+                if hasattr(body, 'seekable') and not body.seekable() and hasattr(body, 'seek'):
+                    body = cast(BinaryIO, _FileWithoutSeek(body))
+                
                 sock = self.connection
                 try:
                     # NOTE: It would be more straightforward to use
@@ -2021,6 +2030,26 @@ _PIN_DATE_JS_TEMPLATE = dedent(
 
 def _pin_date_js(timestamp: int) -> str:
     return _PIN_DATE_JS_TEMPLATE % timestamp
+
+
+# ------------------------------------------------------------------------------
+# Utility
+
+class _FileWithoutSeek:
+    """
+    Wraps a file object, hiding any seek() method it may expose.
+    
+    Useful for passing to os.sendfile(), which looks at whether seek() exists
+    to guess whether calling it will work rather than checking seekable().
+    """
+    def __init__(self, raw) -> None:
+        self._raw = raw
+    
+    def __getattr__(self, name: str) -> Any:
+        if name == 'seek':
+            raise AttributeError()
+        else:
+            return getattr(self._raw, name)
 
 
 # ------------------------------------------------------------------------------
