@@ -99,7 +99,7 @@ python = ">=3.13,<3.15"
 #       a very long time to complete. If wheels are missing (which is common
 #       for Linux) you'll need to precompile a .wgn yourself for the platform.
 #       See instructions in: doc/how_to_make_wxpython_wagon.md
-wxPython = "4.2.4"
+wxPython = "4.2.5"
 beautifulsoup4 = "^4.9.3"
 # NOTE: py2app 0.28.8 supports Python 3.6 - 3.13.
 py2app = { version = "^0.28.8", markers = "sys_platform == 'darwin'" }
