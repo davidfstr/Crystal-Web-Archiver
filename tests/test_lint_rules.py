@@ -893,4 +893,4 @@ class _InMemoryCheckerTestCase(pylint.testutils.CheckerTestCase):
     
     Uses pylint's in-memory API to avoid subprocess and filesystem overhead.
     """
-    CHECKER_CLASS: Type[BaseChecker] = CrystalLintRules
+    CHECKER_CLASS: type[BaseChecker] = CrystalLintRules

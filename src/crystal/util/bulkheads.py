@@ -5,7 +5,7 @@ from functools import wraps
 import sys
 import traceback
 from typing import Concatenate, overload, Protocol, TypeAlias, TypeVar
-from typing_extensions import ParamSpec
+from typing import ParamSpec
 
 _S = TypeVar('_S')
 _B = TypeVar('_B', bound='Bulkhead')

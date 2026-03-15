@@ -81,7 +81,7 @@ def _run_with_socket(exe_filepath: str, remaining_args: list[str]) -> None:
             server_socket.settimeout(5.0)  # seconds
             try:
                 (client_socket, _) = server_socket.accept()
-            except socket.timeout:
+            except TimeoutError:
                 print('Error: Subprocess did not connect to socket within timeout', file=sys.stderr)
                 process.kill()
                 sys.exit(1)
@@ -156,7 +156,7 @@ def _run_with_socket(exe_filepath: str, remaining_args: list[str]) -> None:
     sys.exit(process_returncode)
 
 
-def _run_with_file(exe_filepath: str, remaining_args: list[str], stdouterr_filepath: Optional[str]) -> None:
+def _run_with_file(exe_filepath: str, remaining_args: list[str], stdouterr_filepath: str | None) -> None:
     """Run executable with file-based stdout/stderr communication (no stdin)."""
     with ExitStack() as stack:
         # Create temporary file if path not provided

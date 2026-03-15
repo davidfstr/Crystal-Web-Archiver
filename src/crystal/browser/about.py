@@ -10,7 +10,7 @@ from crystal.util.wx_dialog import (
     set_dialog_or_frame_icon_if_appropriate,
 )
 from crystal.util.wx_system_appearance import IsDarkNow, SetDark
-from typing import Callable
+from collections.abc import Callable
 import wx
 
 

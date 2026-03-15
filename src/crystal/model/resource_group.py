@@ -415,7 +415,7 @@ class ResourceGroup(ListenableMixin):
     # === Utility ===
 
     def __repr__(self):
-        return 'ResourceGroup({},{})'.format(repr(self.name), repr(self.url_pattern))
+        return f'ResourceGroup({repr(self.name)},{repr(self.url_pattern)})'
 
 
 # ------------------------------------------------------------------------------

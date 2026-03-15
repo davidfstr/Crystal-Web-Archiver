@@ -705,7 +705,7 @@ class HtmlLink(Link):
     
     def __repr__(self) -> str:
         # TODO: Update repr to include new constructor parameters
-        return 'HtmlLink({},{},{},{})'.format(repr(self.relative_url), repr(self.type_title), repr(self.title), repr(self.embedded))
+        return f'HtmlLink({repr(self.relative_url)},{repr(self.type_title)},{repr(self.title)},{repr(self.embedded)})'
 
 
 class _IdentityKey:

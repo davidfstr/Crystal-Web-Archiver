@@ -97,7 +97,7 @@ class AppPreferences:
             state = {}
         else:
             try:
-                with open(state_filepath, 'r', encoding='utf-8') as f:
+                with open(state_filepath, encoding='utf-8') as f:
                     state = json.load(f)
             except (json.JSONDecodeError, OSError):
                 # If state file is corrupted or unreadable, start fresh

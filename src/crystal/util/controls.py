@@ -88,7 +88,7 @@ class ElementNotInteractableException(Exception):
 # General: Screenshot
 
 # NOTE: This function is exposed to AI agents in the shell
-async def screenshot(window: wx.Window | 'Navigator' | 'Snapshot' | None = None) -> 'ScreenshotResult':
+async def screenshot(window: wx.Window | Navigator | Snapshot | None = None) -> ScreenshotResult:
     """
     Takes a screenshot of the specified wx.Window,
     or of all top-level windows if no window is provided.

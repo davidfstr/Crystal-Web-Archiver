@@ -41,7 +41,7 @@ import time
 from typing import (
     assert_never, cast, Dict, final, Literal, Optional, Tuple, TypeAlias, Union,
 )
-from typing_extensions import override
+from typing import override
 from urllib.parse import urljoin
 import wx
 
@@ -371,7 +371,7 @@ class EntityTree(Bulkhead):
     def create_change_url_prefix_menuitems_for(self,
             node: Node | None,
             *, menu_type: Literal['popup', 'top_level']
-            ) -> Tuple[list[wx.MenuItem], Callable[[], None]]:
+            ) -> tuple[list[wx.MenuItem], Callable[[], None]]:
         is_readonly = self._project.readonly  # cache
         
         menuitems = []  # type: List[wx.MenuItem]
@@ -763,7 +763,7 @@ class Node(Bulkhead):
     # === Utility ===
     
     def __repr__(self):
-        return '<{} titled {} at {}>'.format(type(self).__name__, repr(self.view.title), hex(id(self)))
+        return f'<{type(self).__name__} titled {repr(self.view.title)} at {hex(id(self))}>'
 
 
 class RootNode(Node):
@@ -931,7 +931,7 @@ class _ResourceNode(Node):
     @override
     @property
     def icon_tooltip(self) -> str | None:
-        return '{} {}'.format(self._status_badge_tooltip, self._entity_tooltip)
+        return f'{self._status_badge_tooltip} {self._entity_tooltip}'
     
     @property
     def _status_badge_tooltip(self) -> str:
@@ -1212,13 +1212,13 @@ class RootResourceNode(_ResourceNode):
         if root_resource.name != '':
             entity_title_format = project.entity_title_format  # cache
             if entity_title_format == 'name_url':
-                return '{} - {}'.format(root_resource.name, display_url)
+                return f'{root_resource.name} - {display_url}'
             elif entity_title_format == 'url_name':
-                return '{} - {}'.format(display_url, root_resource.name)
+                return f'{display_url} - {root_resource.name}'
             else:
                 assert_never(entity_title_format)
         else:
-            return '{}'.format(display_url)
+            return f'{display_url}'
     
     @override
     @property
@@ -1318,7 +1318,7 @@ class LinkedResourceNode(_ResourceNode):
     @staticmethod
     def _full_title_of_link(link: Link) -> str:
         if link.title:
-            return '{}: {}'.format(link.type_title, link.title)
+            return f'{link.type_title}: {link.title}'
         else:
             return '%s' % link.type_title
     
@@ -1469,13 +1469,13 @@ class ResourceGroupNode(_GroupedNode):
         if resource_group.name != '':
             entity_title_format = project.entity_title_format  # cache
             if entity_title_format == 'name_url':
-                return '{} - {}'.format(resource_group.name, display_url)
+                return f'{resource_group.name} - {display_url}'
             elif entity_title_format == 'url_name':
-                return '{} - {}'.format(display_url, resource_group.name)
+                return f'{display_url} - {resource_group.name}'
             else:
                 assert_never(entity_title_format)
         else:
-            return '{}'.format(display_url)
+            return f'{display_url}'
     
     @override
     @property

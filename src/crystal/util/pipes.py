@@ -119,7 +119,7 @@ class ReadablePipeEnd:
     for reading from pipes.
     """
     
-    def __init__(self, fd: int, sock: Optional[socket.socket]) -> None:
+    def __init__(self, fd: int, sock: socket.socket | None) -> None:
         """
         Internal constructor. Use create_selectable_pipe() to create pipes.
         
@@ -157,7 +157,7 @@ class WritablePipeEnd:
     for writing to pipes.
     """
     
-    def __init__(self, fd: int, sock: Optional[socket.socket]) -> None:
+    def __init__(self, fd: int, sock: socket.socket | None) -> None:
         """
         Internal constructor. Use create_selectable_pipe() to create pipes.
         

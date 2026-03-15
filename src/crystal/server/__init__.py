@@ -58,10 +58,11 @@ import traceback
 import trycast
 from trycast import checkcast
 from typing import (
-    Literal, Mapping, Optional, TextIO, TypeAlias, TYPE_CHECKING,
+    Literal, Optional, TextIO, TypeAlias, TYPE_CHECKING,
     assert_never,
 )
-from typing_extensions import override
+from collections.abc import Mapping
+from typing import override
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
 if TYPE_CHECKING:
@@ -99,7 +100,7 @@ class ProjectServer:
     """
     
     # NOTE: Only changed when tests are running
-    _last_created: Optional[ProjectServer]=None
+    _last_created: ProjectServer | None=None
     
     def __init__(self,
             project: Project,
@@ -603,7 +604,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # --- Handle: GET or POST ---
     
-    def _do_GET(self) -> Generator[SwitchToThread, None, None]:
+    def _do_GET(self) -> Generator[SwitchToThread]:
         # Parse self.path using RFC 2616 rules,
         # which in particular allows it to be an absolute URI!
         if self.path == '*':
@@ -675,7 +676,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_not_found_page(vary_referer=True)
         return
     
-    def _do_POST(self) -> Generator[SwitchToThread, None, None]:
+    def _do_POST(self) -> Generator[SwitchToThread]:
         # Handle: "Not in Archive" Endpoints
         if self.path == '/_/crystal/create-url':
             yield SwitchToThread.BACKGROUND
@@ -702,7 +703,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # --- Handle: Archive URL ---
     
-    def _serve_archive_url(self, archive_url: str) -> Generator[SwitchToThread, None, None]:
+    def _serve_archive_url(self, archive_url: str) -> Generator[SwitchToThread]:
         from crystal.task import TaskDisposedException
         
         readonly = self.project.readonly  # cache
@@ -869,7 +870,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
     def _download_revision_dynamically(self,
             archive_url: str,
             *, request_headers: Message,
-            ) -> Generator[SwitchToThread, None, None]:
+            ) -> Generator[SwitchToThread]:
         from crystal.task import DownloadResourceTask
         
         # If the Accept header is missing or doesn't contain "text/html",
@@ -1247,7 +1248,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
             })
 
     @bg_affinity
-    def _handle_retry_download(self) -> Generator[SwitchToThread, None, None]:
+    def _handle_retry_download(self) -> Generator[SwitchToThread]:
         try:
             # Ensure project is not readonly
             if self.project.readonly:
@@ -1643,7 +1644,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 if name_lower not in _HEADER_DENYLIST:
                     if not (_IGNORE_UNKNOWN_X_HEADERS and name_lower.startswith('x-')):
                         self._print_warning(
-                            '*** Ignoring unknown header in archive: {}: {}'.format(name, value))
+                            f'*** Ignoring unknown header in archive: {name}: {value}')
                 continue
         if 'date' not in [name.lower() for (name, value) in headers]:
             self.send_header('Date', self.date_time_string())
@@ -1791,7 +1792,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         match = _REQUEST_PATH_IN_ARCHIVE_RE.match(request_path)
         if match:
             (scheme, rest) = match.groups()
-            archive_url = '{}://{}'.format(scheme, rest)
+            archive_url = f'{scheme}://{rest}'
             return archive_url
         elif request_path.startswith('/_/'):
             # Looks similar to _REQUEST_PATH_IN_ARCHIVE_RE but does not match

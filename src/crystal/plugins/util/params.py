@@ -1,5 +1,3 @@
-
-
 def try_get_int(params: dict[str, list[str]], key: str) -> int | None:
     str_value = try_get_str(params, key)
     if str_value is None:

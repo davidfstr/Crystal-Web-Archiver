@@ -227,7 +227,7 @@ class MockFtpServer:
                 self._server_socket.settimeout(0.5)
                 try:
                     (client_socket, address) = self._server_socket.accept()
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 
                 # Handle client in a separate thread
@@ -361,7 +361,7 @@ class MockFtpServer:
         self._server_socket.close()
         self._server_thread.join(timeout=2.0)
     
-    def __enter__(self) -> 'MockFtpServer':
+    def __enter__(self) -> MockFtpServer:
         return self
     
     def __exit__(self, *args) -> None:

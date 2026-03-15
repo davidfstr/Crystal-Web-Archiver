@@ -53,7 +53,7 @@ def warn_if_slow(
             message_str = message() if callable(message) else message
             assert isinstance(message_str, str)
             excluded_part = (
-                ' ({:.02f}s excluded)'.format(excluded_delta_time)
+                f' ({excluded_delta_time:.02f}s excluded)'
                 if excluded_delta_time > 0
                 else ''
             )

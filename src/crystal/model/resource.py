@@ -23,9 +23,10 @@ from crystal.util.xthreading import (
 )
 import itertools
 from typing import (
-    Any, Dict, Generic, Iterable, List, Literal, Optional, Tuple, TYPE_CHECKING, TypeVar, Union,
+    Any, Dict, Generic, List, Literal, Optional, Tuple, TYPE_CHECKING, TypeVar, Union,
 )
-from typing_extensions import deprecated
+from collections.abc import Iterable
+from warnings import deprecated
 from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
@@ -112,9 +113,9 @@ class Resource:
     
     project: Project
     _url: str
-    _download_body_task_ref: Optional[_WeakTaskRef[DownloadResourceBodyTask]]
-    _download_task_ref: Optional[_WeakTaskRef[DownloadResourceTask]]
-    _download_task_noresult_ref: Optional[_WeakTaskRef[DownloadResourceTask]]
+    _download_body_task_ref: _WeakTaskRef[DownloadResourceBodyTask] | None
+    _download_task_ref: _WeakTaskRef[DownloadResourceTask] | None
+    _download_task_noresult_ref: _WeakTaskRef[DownloadResourceTask] | None
     _already_downloaded_this_session: bool
     _definitely_has_no_revisions: bool
     _id: int  # or None if not finished initializing or deleted
@@ -125,7 +126,7 @@ class Resource:
     def __new__(cls, 
             project: Project,
             url: str,
-            _id: Union[None, int]=None,
+            _id: None | int=None,
             *, _external_ok: bool=False,
             ) -> Resource:
         """
@@ -712,7 +713,7 @@ class Resource:
         (task, _) = self.get_or_create_download_body_task()
         return task
     
-    def get_or_create_download_body_task(self) -> Tuple[DownloadResourceBodyTask, bool]:
+    def get_or_create_download_body_task(self) -> tuple[DownloadResourceBodyTask, bool]:
         """
         Gets/creates a Task to download this resource's body.
         
@@ -852,7 +853,7 @@ class Resource:
             *, needs_result: bool=True,
             is_embedded: bool=False,
             _get_only: bool=False,
-            ) -> Tuple[DownloadResourceTask, bool]:
+            ) -> tuple[DownloadResourceTask, bool]:
         """
         Gets/creates a Task to download this resource and all its embedded resources.
         Returns the task and whether it was created.
@@ -1140,7 +1141,7 @@ class Resource:
     # === Utility ===
     
     def __repr__(self):
-        return 'Resource({})'.format(repr(self.url))
+        return f'Resource({repr(self.url)})'
 
 
 class _TaskNotFoundException(Exception):

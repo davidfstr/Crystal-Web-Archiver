@@ -8,7 +8,7 @@ from crystal.util.wx_dialog import (
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xthreading import fg_affinity
 from typing import Optional
-from typing_extensions import override
+from typing import override
 import wx
 
 

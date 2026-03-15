@@ -1,4 +1,3 @@
-
 from ast import literal_eval
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager

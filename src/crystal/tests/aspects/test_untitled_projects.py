@@ -45,7 +45,8 @@ import subprocess
 import tempfile
 import textwrap
 import shutil
-from typing import Callable, ContextManager, Never
+from typing import ContextManager, Never
+from collections.abc import Callable
 from unittest import skip, SkipTest
 from unittest.mock import MagicMock, patch
 import warnings

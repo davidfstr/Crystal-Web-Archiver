@@ -2,7 +2,7 @@ import importlib.util
 import inspect
 import os
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 
 def tests_are_running() -> bool:

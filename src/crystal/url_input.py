@@ -40,7 +40,7 @@ class UrlCleaner:
         )
     
     @fg_affinity
-    def _run(self, url_candidates: list[str]) -> Generator[SwitchToThread, None, None]:
+    def _run(self, url_candidates: list[str]) -> Generator[SwitchToThread]:
         assert len(url_candidates) >= 1
         
         self._on_running_changed_func(True)

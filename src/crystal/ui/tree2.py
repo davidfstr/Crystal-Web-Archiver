@@ -41,7 +41,7 @@ class NodeView(NodeView1):
     def _update_base_title(self) -> None:
         subtitle = self.__subtitle  # cache
         combined_title = (
-            '{} -- {}'.format(self.__title, subtitle)
+            f'{self.__title} -- {subtitle}'
             if len(subtitle) != 0
             else self.__title
         )

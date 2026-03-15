@@ -68,7 +68,7 @@ from typing import (
     assert_never, cast, Dict, IO, Literal, List, Optional, Self, Tuple,
     TYPE_CHECKING, TypeAlias, TypeVar, Union,
 )
-from typing_extensions import override
+from typing import override
 import threading
 from urllib.parse import quote as url_quote
 import uuid
@@ -405,7 +405,7 @@ class Project(ListenableMixin):
             expect_writable: bool,
             downloading_database: Callable[[], None],
             downloading_database_progress: Callable[[int, int, float], None],
-            ) -> Iterator[Tuple[DatabaseConnection, bool, bool, IO[bytes] | None]]:
+            ) -> Iterator[tuple[DatabaseConnection, bool, bool, IO[bytes] | None]]:
         """
         Opens the project database before entering the context,
         but closes it if an exception is raised in the context.
@@ -1246,7 +1246,7 @@ class Project(ListenableMixin):
         except NoRevisionBodyError:
             # No body expected. No rollback could have been attempted.
             return
-        except (OSError, IOError):
+        except OSError:
             # Database or filesystem potentially corrupt?
             # Abort further repair attempts.
             return
@@ -1289,7 +1289,7 @@ class Project(ListenableMixin):
                 # No body expected
                 raise AssertionError(
                     'Revision not expecting a body should have been filtered out')
-            except (OSError, IOError):
+            except OSError:
                 # Body is corrupted or inaccessible
                 unreadable_body_count += 1
         if unreadable_body_count != 0:
@@ -1560,7 +1560,7 @@ class Project(ListenableMixin):
                 elif source_type == 'resource_group':
                     source_obj = self._get_resource_group_with_id(source_id)
                 else:
-                    raise ProjectFormatError('Resource group {} has invalid source type "{}".'.format(group._id, source_type))
+                    raise ProjectFormatError(f'Resource group {group._id} has invalid source type "{source_type}".')
                 group.init_source(source_obj)
             
             # Load Aliases
@@ -2702,7 +2702,7 @@ class Project(ListenableMixin):
     
     # === Events: Root Task Lifecycle ===
     
-    def _root_task_did_change(self, old_root_task: 'RootTask', new_root_task: 'RootTask') -> None:
+    def _root_task_did_change(self, old_root_task: RootTask, new_root_task: RootTask) -> None:
         # Notify normal listeners
         for lis in self.listeners:
             if hasattr(lis, 'project_root_task_did_change'):
@@ -2713,7 +2713,7 @@ class Project(ListenableMixin):
     @fg_affinity
     def save_as(self,
             new_path: str,
-            progress_listener: Optional['SaveAsProgressListener'] = None
+            progress_listener: SaveAsProgressListener | None = None
             ) -> Future[None]:
         """
         Saves this project to the specified path soon, which must not already exist.
@@ -2742,8 +2742,8 @@ class Project(ListenableMixin):
     @fg_affinity
     def _save_as_coro(self,
             new_path: str, 
-            progress_listener: Optional['SaveAsProgressListener'] = None
-            ) -> Generator[SwitchToThread, None, None]:
+            progress_listener: SaveAsProgressListener | None = None
+            ) -> Generator[SwitchToThread]:
         # TODO: Add support for non-local filesystems to
         #       {_save_as_coro, _copytree_of_project_with_progress}
         if not isinstance(self._fs, LocalFilesystem):
@@ -2876,7 +2876,7 @@ class Project(ListenableMixin):
     def _copytree_of_project_with_progress(
             src_fs_path: FilesystemPath,
             dst_project_dirpath: str,
-            progress_listener: 'SaveAsProgressListener | None' = None
+            progress_listener: SaveAsProgressListener | None = None
             ) -> None:
         """
         Copies an entire directory tree to a new location with progress reporting.

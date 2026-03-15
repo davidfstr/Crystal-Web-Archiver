@@ -5,7 +5,7 @@ from types import FrameType
 from typing import Optional
 
 
-def get_thread_stack(thread: threading.Thread) -> Optional[str]:
+def get_thread_stack(thread: threading.Thread) -> str | None:
     """
     Returns a formatted stack trace for the given thread, or None if unavailable.
     """

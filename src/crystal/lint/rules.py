@@ -772,7 +772,7 @@ class CrystalLintRules(BaseChecker):
                     return True
         return False
     
-    def _get_fstring_quote_info(self, node: nodes.JoinedStr) -> Optional[Tuple[str, str, bool]]:
+    def _get_fstring_quote_info(self, node: nodes.JoinedStr) -> tuple[str, str, bool] | None:
         """
         Get quote info for an f-string.
         Returns (prefix, quote_char, is_triple) or None if can't determine.
@@ -813,7 +813,7 @@ class CrystalLintRules(BaseChecker):
         except Exception:
             return None
     
-    def _get_string_quote_info(self, node: nodes.Const) -> Optional[Tuple[str, str, bool]]:
+    def _get_string_quote_info(self, node: nodes.Const) -> tuple[str, str, bool] | None:
         """
         Get quote info for a string constant.
         Returns (prefix, quote_char, is_triple) or None if can't determine.
@@ -917,9 +917,9 @@ class StringQuoteFix:
 
 
 def apply_string_quote_fixes(
-    source_lines: List[str],
-    fixes: List[StringQuoteFix]
-) -> List[str]:
+    source_lines: list[str],
+    fixes: list[StringQuoteFix]
+) -> list[str]:
     """
     Apply string quote fixes to source lines.
     

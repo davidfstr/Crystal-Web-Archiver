@@ -40,7 +40,7 @@ import traceback
 from typing import Any, cast, final, Generic, List, Literal
 from typing import NoReturn as Never
 from typing import Optional, Tuple, TYPE_CHECKING, TypeVar
-from typing_extensions import override, ParamSpec
+from typing import override, ParamSpec
 from weakref import WeakSet
 
 if TYPE_CHECKING:
@@ -908,7 +908,7 @@ def _get_abstract_resource_title(abstract_resource: Resource | RootResource) -> 
     resource = abstract_resource.resource
     name = getattr(abstract_resource, 'name', '') or ''
     if name != '':
-        return '{} - {}'.format(resource.url, name)
+        return f'{resource.url} - {name}'
     else:
         return '%s' % (resource.url)
 
@@ -1449,7 +1449,7 @@ class ParseResourceRevisionLinks(_LeafTask['Tuple[List[Link], List[Resource]]'])
         self._resource_revision = resource_revision
     
     @bg_affinity
-    def __call__(self) -> Tuple[List[Link], List[Resource]]:
+    def __call__(self) -> tuple[list[Link], list[Resource]]:
         """
         Returns a list of parsed Links and Resources, which may be of different lengths.
         

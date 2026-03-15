@@ -309,13 +309,13 @@ async def test_when_404_html_at_site_root_is_requested_then_always_serves_not_fo
         COMIC_PAGE = dict(
             status_code=200,
             headers=[('Content-Type', 'text/html')],
-            content='Comic!'.encode('utf-8')
+            content=b'Comic!'
         )
         
         _404_PAGE = dict(
             status_code=404,
             headers=[('Content-Type', 'text/html')],
-            content='404!'.encode('utf-8')
+            content=b'404!'
         )
         
         server = MockHttpServer({
@@ -568,7 +568,7 @@ async def test_when_404_page_exported_by_crystal_is_downloaded_and_served_by_cry
     COMIC_PAGE = dict(
         status_code=200,
         headers=[('Content-Type', 'text/html')],
-        content='Comic!'.encode('utf-8')
+        content=b'Comic!'
     )
     
     _404_PAGE = dict(

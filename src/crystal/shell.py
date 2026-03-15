@@ -35,7 +35,7 @@ from typing import (
     Any, IO, Literal, Optional, TextIO, TypeAlias, TYPE_CHECKING,
     TypeVar, assert_never,
 )
-from typing_extensions import override
+from typing import override
 
 if TYPE_CHECKING:
     from crystal.browser import MainWindow
@@ -258,7 +258,7 @@ class Shell:
 
 class _Proxy:
     _unset_repr: str
-    _value: Optional[object]
+    _value: object | None
     
     @staticmethod
     def _patch_help() -> None:
@@ -557,7 +557,6 @@ class _CrystalInteractiveConsole(code.InteractiveConsole):
             return 'stdio_buffered'
         
         # Is pyrepl usable and should it be used?
-        if sys.version_info >= (3, 13):
             # _pyrepl module only available in Python 3.13+
             
             # NOTE: Duplicates asyncio/__main__.py logic to determine

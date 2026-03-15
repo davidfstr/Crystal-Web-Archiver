@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 from typing import TypeVar
-from typing_extensions import ParamSpec
+from typing import ParamSpec
 
 
 _P = ParamSpec('_P')

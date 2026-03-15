@@ -282,7 +282,7 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
         # Handle case where no tests were run
         if run_count == 0 and len(test_names) > 0:
             print('FAILURE: No tests were found matching the specified names')
-            available_modules = set(test_func.__module__ for test_func in TEST_FUNCS)
+            available_modules = {test_func.__module__ for test_func in TEST_FUNCS}
             print(f'Available test modules: {available_modules_str(available_modules)}')
             print()
             return False
@@ -326,8 +326,8 @@ def _run_single_test(
     test_func: Callable,
     test_func_id: _TestFuncId,
     test_func_index: int,
-    num_test_funcs_to_run: Optional[int],
-    result_for_test_func_id: Dict[_TestFuncId, Optional[Exception]],
+    num_test_funcs_to_run: int | None,
+    result_for_test_func_id: dict[_TestFuncId, Exception | None],
     is_coverage_now: bool
 ) -> None:
     """

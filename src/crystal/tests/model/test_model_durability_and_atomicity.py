@@ -40,7 +40,8 @@ import os
 import sqlite3
 from tempfile import NamedTemporaryFile
 import threading
-from typing import TypeVar, assert_never, Callable, Literal, Optional
+from typing import TypeVar, assert_never, Literal, Optional
+from collections.abc import Callable
 from unittest import skip
 from unittest.mock import ANY, Mock, patch
 
@@ -471,7 +472,7 @@ async def test_when_create_resource_revision_and_disk_disconnects_or_disk_full_o
 
 async def _test_orphaned_revision_repair(
         *, last_revision_error_type: Literal['disk_disconnect', 'bad_block'] = 'disk_disconnect',
-        before_reopen: Optional[Callable[[str, Project], None]] = None,
+        before_reopen: Callable[[str, Project], None] | None = None,
         expect_repair_success: bool = True,
         database_partially_corrupt_after_disk_reconnect: bool = False,
         ) -> None:

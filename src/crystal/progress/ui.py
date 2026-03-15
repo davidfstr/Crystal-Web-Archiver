@@ -9,7 +9,7 @@ from crystal.util.xthreading import fg_affinity, fg_call_later, fg_calls_paused,
 from functools import wraps
 import time
 from typing import List, Optional, overload, Self, TypeAlias, TypeVar
-from typing_extensions import override
+from typing import override
 import wx
 
 _DELAY_UNTIL_PROGRESS_DIALOG_SHOWS = 100 / 1000  # sec
@@ -25,7 +25,7 @@ class _AbstractProgressDialog:
     _dialog_style: int | None
     _dialog: 'Optional[DeferredProgressDialog]'
     
-    def __init__(self, parent: Optional[wx.Window]=None, *, window_modal: bool=False) -> None:
+    def __init__(self, parent: wx.Window | None=None, *, window_modal: bool=False) -> None:
         self._dialog_style = None
         self._dialog = None
         self._parent = parent

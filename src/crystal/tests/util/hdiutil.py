@@ -6,7 +6,8 @@ import os
 import subprocess
 import sys
 import time
-from typing import Iterator, Type, TypeVar
+from typing import Type, TypeVar
+from collections.abc import Iterator
 from unittest import SkipTest
 import uuid
 
@@ -124,7 +125,7 @@ _E = TypeVar('_E', bound=BaseException)
 
 def _run_with_retries(
         callable: Callable[[], None],
-        exc_type: Type[_E]=BaseException,  # type: ignore[assignment]
+        exc_type: type[_E]=BaseException,  # type: ignore[assignment]
         exc_matcher: Callable[[_E], bool]=lambda e: True,
         max_retry_count: int = 3,
         delay: float = 1.0) -> None:

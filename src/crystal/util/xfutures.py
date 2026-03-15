@@ -6,7 +6,7 @@ import sys
 import threading
 import weakref
 from typing import Any, Generic, TypeVar
-from typing_extensions import override
+from typing import override
 
 
 _F = TypeVar('_F', bound=Future)

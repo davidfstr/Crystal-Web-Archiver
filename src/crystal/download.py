@@ -17,7 +17,8 @@ import sockshandler
 import ssl
 import sys
 import truststore
-from typing import BinaryIO, assert_never, cast, Collection, Dict, TYPE_CHECKING
+from typing import BinaryIO, assert_never, cast, Dict, TYPE_CHECKING
+from collections.abc import Collection
 import urllib.error
 from urllib.parse import urlparse
 import urllib.request
