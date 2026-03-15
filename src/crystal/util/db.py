@@ -3,12 +3,21 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 import sqlite3
-from typing import Self
+import sqlite3.dbapi2
+from typing import Any, cast, Self, TYPE_CHECKING
 from warnings import deprecated
+
+if TYPE_CHECKING:
+    import apsw
+    from crystal.model.s3vfs import S3VFS
+
 
 # Whether to print each database query
 VERBOSE_QUERIES = False
 
+
+# ------------------------------------------------------------------------------
+# Database Connection
 
 class DatabaseConnection:
     """
@@ -169,6 +178,87 @@ class DatabaseCursor:
         return getattr(self._c, attr_name)
 
 
+# ------------------------------------------------------------------------------
+# Apsw Database Connection
+
+class ApswConnectionAdapter:
+    """Makes an apsw.Connection look like sqlite3.dbapi2.Connection."""
+
+    def __init__(self, conn: 'apsw.Connection', s3_vfs: 'S3VFS') -> None:
+        self._conn = conn
+        # Hold reference to prevent garbage collection
+        self._s3_vfs = s3_vfs
+
+    def cursor(self) -> sqlite3.dbapi2.Cursor:
+        return cast(
+            sqlite3.dbapi2.Cursor,
+            ApswCursorAdapter(self._conn.cursor())
+        )
+
+    def create_function(self, name: str, num_params: int, func) -> None:
+        self._conn.create_scalar_function(name, func, num_params)
+
+    def close(self) -> None:
+        self._conn.close()
+
+    def commit(self) -> None:
+        pass  # read-only, no-op
+
+    def rollback(self) -> None:
+        pass  # read-only, no-op
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+
+class ApswCursorAdapter:
+    """Makes an apsw.Cursor look like sqlite3.dbapi2.Cursor."""
+
+    def __init__(self, cursor) -> None:
+        self._cursor = cursor
+        self._rows = None  # iterator from last execute
+
+    def execute(self, sql: str, *args, **kwargs):
+        self._rows = self._cursor.execute(sql, *args, **kwargs)
+        return self  # match sqlite3 behavior
+
+    def fetchone(self):
+        if self._rows is None:
+            return None
+        try:
+            return next(self._rows)
+        except StopIteration:
+            return None
+
+    def fetchall(self) -> list:
+        if self._rows is None:
+            return []
+        return list(self._rows)
+
+    def close(self) -> None:
+        self._cursor.close()
+
+    @property
+    def description(self):
+        return self._cursor.description
+
+    @property
+    def lastrowid(self):
+        return None  # read-only, never used
+
+    def __iter__(self):
+        return iter(self._rows) if self._rows else iter([])
+
+    def __next__(self):
+        return next(self._rows)
+
+    def __getattr__(self, name: str):
+        return getattr(self._cursor, name)
+
+
+# ------------------------------------------------------------------------------
+# Schema Introspection
+
 def get_table_names(c: DatabaseCursor) -> list[str]:
     return [
         table_name
@@ -199,3 +289,6 @@ def get_index_names(c: DatabaseCursor) -> list[str]:
         for (index_name,) in 
         c.execute('SELECT name FROM sqlite_master WHERE type = "index"')
     ]
+
+
+# ------------------------------------------------------------------------------
