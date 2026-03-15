@@ -32,7 +32,7 @@ from threading import Lock, Thread
 import time
 import types
 from typing import (
-    Any, IO, Literal, Optional, TextIO, TypeAlias, TYPE_CHECKING,
+    Any, IO, Literal, TextIO, TypeAlias, TYPE_CHECKING,
     TypeVar, assert_never, override,
 )
 
@@ -60,7 +60,7 @@ class Shell:
         """
         self._started = False
         self._stopping = False
-        self._shell_thread = None  # type: Optional[Thread]
+        self._shell_thread = None  # type: Thread | None
         
         # Setup proxy variables for shell
         _Proxy._patch_help()

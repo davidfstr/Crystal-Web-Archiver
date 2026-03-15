@@ -7,7 +7,6 @@ import os
 from pylint.checkers import BaseChecker
 import re
 import sys
-from typing import List, Tuple, Optional
 
 
 class CrystalLintRules(BaseChecker):
@@ -17,7 +16,7 @@ class CrystalLintRules(BaseChecker):
     
     # When non-None, tracks fixes for an auto-fixer caller to apply.
     # This list is not used by PyLint itself.
-    _fixes: 'Optional[List[StringQuoteFix]]' = None
+    _fixes: 'list[StringQuoteFix] | None' = None
     
     # Types of messages/diagnostics this plugin can emit. Each message type has:
     # - a short error code (ex: 'C9001')

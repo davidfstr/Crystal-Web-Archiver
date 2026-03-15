@@ -28,7 +28,7 @@ import tempfile
 import threading
 import time
 import traceback
-from typing import Literal, Optional, assert_never
+from typing import Literal, assert_never
 
 
 # === Main ===
@@ -348,7 +348,7 @@ def run_tests(
     return is_ok
 
 
-def _parse_worker_tasks_env(num_workers: int, num_tests: int) -> 'Optional[WorkerTaskAssignments]':
+def _parse_worker_tasks_env(num_workers: int, num_tests: int) -> 'WorkerTaskAssignments | None':
     """
     Parse the CRYSTAL_PARALLEL_WORKER_TASKS environment variable.
     

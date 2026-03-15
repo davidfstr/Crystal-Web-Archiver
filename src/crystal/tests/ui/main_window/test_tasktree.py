@@ -28,7 +28,7 @@ from crystal.util.controls import TreeItem
 from crystal.util.xcollections.lazy import (
     AppendableLazySequence, UnmaterializedItem,
 )
-from typing import cast, Tuple
+from typing import cast
 from unittest import skip
 from unittest.mock import patch
 import wx
@@ -407,7 +407,7 @@ async def test_given_showing_5_leading_completed_children_when_new_leading_child
 def _children_marked_as_complete_upon_creation(ordinals: list[int]) -> Iterator[None]:
     # Prepare: Mark appropriate children as complete immediately upon creation
     super_goc_download_task = Resource.get_or_create_download_task
-    def get_or_create_download_task(*args, **kwargs) -> 'Tuple[DownloadResourceTask, bool]':
+    def get_or_create_download_task(*args, **kwargs) -> 'tuple[DownloadResourceTask, bool]':
         (task, created) = super_goc_download_task(*args, **kwargs)
         
         for n in ordinals:

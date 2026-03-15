@@ -8,7 +8,6 @@ from itertools import count
 import pylint.testutils
 from pylint.checkers import BaseChecker
 from textwrap import dedent
-from typing import Type
 from unittest import mock
 
 

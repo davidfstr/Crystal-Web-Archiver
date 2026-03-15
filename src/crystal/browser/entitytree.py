@@ -39,15 +39,12 @@ from crystal.util.xthreading import bg_call_later, fg_call_later
 import sys
 import time
 from typing import (
-    assert_never, cast, Dict, final, Literal, Optional, override, Tuple, TypeAlias, Union,
+    assert_never, cast, final, Literal, override, TypeAlias,
 )
 from urllib.parse import urljoin
 import wx
 
-DeferrableResourceGroupSource: TypeAlias = Union[
-    ResourceGroupSource,
-    Callable[[], ResourceGroupSource]
-]
+DeferrableResourceGroupSource: TypeAlias = 'ResourceGroupSource | Callable[[], ResourceGroupSource]'
 
 
 class EntityTree(Bulkhead):
@@ -68,14 +65,14 @@ class EntityTree(Bulkhead):
         Raises:
         * CancelOpenProject
         """
-        self._crash_reason = None  # type: Optional[CrashReason]
+        self._crash_reason = None  # type: CrashReason | None
         
         self.view = TreeView(parent_peer, name='cr-entity-tree')
         self.view.delegate = self
         self.root = RootNode(project, self.view.root, progress_listener)
         self._project = project
         self._group_nodes_need_updating = False
-        self._right_clicked_node = None  # type: Optional[Node]
+        self._right_clicked_node = None  # type: Node | None
         
         project.listeners.append(self)
         
@@ -140,7 +137,7 @@ class EntityTree(Bulkhead):
                 dismiss_crash_reason,
                 dismiss_action_title='Refresh')
             self._project.add_task(crash_reason_view)
-    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
+    crash_reason = cast(CrashReason | None, property(_get_crash_reason, _set_crash_reason))
     
     # === Properties ===
     
@@ -373,8 +370,8 @@ class EntityTree(Bulkhead):
             ) -> tuple[list[wx.MenuItem], Callable[[], None]]:
         is_readonly = self._project.readonly  # cache
         
-        menuitems = []  # type: List[wx.MenuItem]
-        disabled_menuitems = []  # type: List[wx.MenuItem]
+        menuitems = []  # type: list[wx.MenuItem]
+        disabled_menuitems = []  # type: list[wx.MenuItem]
         def append_menuitem(mi: wx.MenuItem, enabled: bool) -> None:
             menuitems.append(mi)
             if not enabled:
@@ -556,14 +553,14 @@ def _sequence_with_matching_elements_replaced(new_seq, old_seq):
     return [old_seq_selfdict.get(x, x) for x in new_seq]
 
 
-NodeEntity: TypeAlias = Union['RootResource', 'Resource', 'ResourceGroup', 'Alias']
+NodeEntity: TypeAlias = 'RootResource | Resource | ResourceGroup | Alias'
 
 
 class Node(Bulkhead):
     def __init__(self, *, source: DeferrableResourceGroupSource) -> None:
         self._source = source
-        self._children = []  # type: List[Node]
-        self._crash_reason = None  # type: Optional[CrashReason]
+        self._children = []  # type: list[Node]
+        self._crash_reason = None  # type: CrashReason | None
     
     @staticmethod
     def for_node_view(node_view: NodeView) -> Node:
@@ -793,7 +790,7 @@ class RootNode(Node):
         if progress_listener is None:
             progress_listener = DummyOpenProjectProgressListener()
         
-        children = []  # type: List[Node]
+        children = []  # type: list[Node]
         
         progress_listener.loading_root_resource_views()
         for (index, rr) in enumerate(self._project.root_resources):
@@ -865,7 +862,7 @@ class _ResourceNode(Node):
         self._source_of_links = source_of_links
         
         self._status_badge_name_calculated = False
-        self._status_badge_name_value = None  # type: Optional[str]
+        self._status_badge_name_value = None  # type: str | None
         
         self.view = NodeView()
         # NOTE: Defer expensive calculation until if/when the icon_set is used
@@ -876,8 +873,8 @@ class _ResourceNode(Node):
         self.children = [_LoadingNode()]
         
         self.resource = resource
-        self.download_future = None  # type: Optional[Future[ResourceRevision]]
-        self.resource_links = None  # type: Optional[List[Link]]
+        self.download_future = None  # type: Future[ResourceRevision] | None
+        self.resource_links = None  # type: list[Link] | None
     
     # === Properties ===
     
@@ -1044,7 +1041,7 @@ class _ResourceNode(Node):
             return
         
         # Partition links and create resources
-        resources_2_links = defaultordereddict(list)  # type: Dict[Resource, List[Link]]
+        resources_2_links = defaultordereddict(list)  # type: dict[Resource, list[Link]]
         if self.resource_links:
             for link in self.resource_links:
                 url = urljoin(self.resource.url, link.relative_url)
@@ -1054,7 +1051,7 @@ class _ResourceNode(Node):
         linked_root_resources = []
         group_2_root_and_normal_resources = defaultordereddict(
             lambda: (list(), list())
-        )  # type: Dict[ResourceGroup, Tuple[List[Tuple[RootResource, List[Link]]], List[Tuple[Resource, List[Link]]]]]
+        )  # type: dict[ResourceGroup, tuple[list[tuple[RootResource, list[Link]]], list[tuple[Resource, list[Link]]]]]
         linked_other_resources = []
         lowpri_offsite_resources = []
         # TODO: Recognize cluster: (Hidden: Banned by robots.txt)
@@ -1093,7 +1090,7 @@ class _ResourceNode(Node):
                         linked_other_resources.append((r, links_to_r))
         
         # Create children and update UI
-        children = []  # type: List[Node]
+        children = []  # type: list[Node]
         
         for (rr, links_to_r) in linked_root_resources:
             children.append(RootResourceNode(rr,
@@ -1507,8 +1504,8 @@ class ResourceGroupNode(_GroupedNode):
             more_placeholder_node.more_count = len(members) - self._max_visible_children
             return
         
-        children_rrs = []  # type: List[Node]
-        children_rs = []  # type: List[Node]
+        children_rrs = []  # type: list[Node]
+        children_rs = []  # type: list[Node]
         project = self.resource_group.project  # cache
         for r in members[:min(self._max_visible_children, len(members))]:
             rr = project.get_root_resource(r)
@@ -1523,7 +1520,7 @@ class ResourceGroupNode(_GroupedNode):
             children_extra = [
                 MorePlaceholderNode(len(members) - self._max_visible_children, self,
                     source=lambda: self.resource_group.source),
-            ]  # type: List[Node]
+            ]  # type: list[Node]
         else:
             children_extra = []
         self.children = children_rrs + children_rs + children_extra

@@ -10,7 +10,7 @@ from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xos import is_linux, is_windows, preferences_are_called_settings_in_this_os
 from collections.abc import Callable
 import datetime
-from typing import Dict, TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, assert_never
 from tzlocal import get_localzone
 import wx
 
@@ -33,7 +33,7 @@ class PreferencesDialog:
     _HTML_PARSER_TYPE_FOR_ITEM = {
         _LXML_ITEM: 'lxml',
         _HTML_PARSER_BS4_ITEM: 'html_parser',
-    }  # type: Dict[str, HtmlParserType]
+    }  # type: dict[str, HtmlParserType]
     _ITEM_FOR_HTML_PARSER_TYPE = {
         v: k for (k, v) in _HTML_PARSER_TYPE_FOR_ITEM.items()
     }

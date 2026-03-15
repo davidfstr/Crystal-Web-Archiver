@@ -15,7 +15,7 @@ import os.path
 import shutil
 import subprocess
 import sys
-from typing import BinaryIO, Dict, Literal, Optional, Tuple, Union
+from typing import BinaryIO, Literal
 import xml.etree.ElementTree as ET
 
 
@@ -105,7 +105,7 @@ def install_to_linux_desktop_environment() -> None:
     #       because some apps (like GNOME/KDE's Open Dialog) cannot scale icons themselves.
     if True:
         # Locate places where MIME icons are installed, in global theme directories
-        dimension_for_mime_icon_dirpath = {}  # type: Dict[str, Union[Tuple[int, int], EllipsisType]]
+        dimension_for_mime_icon_dirpath = {}  # type: dict[str, tuple[int, int] | EllipsisType]
         with _cwd_set_to('/usr/share/icons'):
             for mime_icon_filepath in glob.iglob('**/text-plain.*', recursive=True):
                 mime_icon_dirpath = os.path.dirname(mime_icon_filepath)
@@ -180,7 +180,7 @@ def install_to_linux_desktop_environment() -> None:
                 icon_names = []
             
         # Locate places where folder icons are installed, in global theme directories
-        dimension_for_folder_icon_dirpath = {}  # type: Dict[str, Union[Tuple[int, int], EllipsisType]]
+        dimension_for_folder_icon_dirpath = {}  # type: dict[str, tuple[int, int] | EllipsisType]
         if len(icon_names) != 0:
             with _cwd_set_to('/usr/share/icons'):
                 for (folder_icon_dirpath, dirnames, filenames) in os.walk('.'):
@@ -229,7 +229,7 @@ def install_to_linux_desktop_environment() -> None:
         process_cmdline = process.cmdline()
         if (len(process_cmdline) >= 1 and
                 os.path.basename(process_cmdline[0]) == 'plasmashell'):
-            plasmashell = process  # type: Optional[psutil.Process]
+            plasmashell = process  # type: psutil.Process | None
             break
     else:
         plasmashell = None

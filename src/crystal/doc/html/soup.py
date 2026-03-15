@@ -20,13 +20,13 @@ import json
 import re
 from re import Match
 from textwrap import dedent
-from typing import List, Literal, Optional, Tuple, Type, TypeAlias, assert_never
+from typing import Literal, TypeAlias, assert_never
 from urllib.parse import urlparse
 
 _PARSER_LIBRARY_T_CHOICES = (
     LxmlFastSoup,
     BeautifulFastSoup,
-)  # type: Tuple[Type[FastSoup], ...]
+)  # type: tuple[type[FastSoup], ...]
 
 
 _ON_CLICK_RE = re.compile(r'''(?i)([a-zA-Z.]*\.(?:href|location)) *= *(['"])([^'"]*)['"] *;?$''')
@@ -99,7 +99,7 @@ def parse_html_and_links(
         html_bytes: bytes, 
         declared_charset: str | None,
         parser_type: HtmlParserType,
-        ) -> 'Optional[Tuple[Document, List[Link]]]':
+        ) -> 'tuple[Document, list[Link]] | None':
     try:
         html = parse_html(
             html_bytes,
@@ -111,8 +111,8 @@ def parse_html_and_links(
     
     XPS = _XPS_FOR_PARSER_LIBRARY_T[type(html)]
     
-    links = []  # type: List[Link]
-    pre_stringify_actions = []  # type: List[Callable[[], None]]
+    links = []  # type: list[Link]
+    pre_stringify_actions = []  # type: list[Callable[[], None]]
     
     # <style>...</style>
     for tag in XPS.STYLE_XP(html):
@@ -355,7 +355,7 @@ def _get_image_tag_title(html: FastSoup, tag: Tag) -> str | None:
         return None
 
 
-def _process_srcset_attr(html: FastSoup, img_or_source_tag: Tag) -> 'List[HtmlLink]':
+def _process_srcset_attr(html: FastSoup, img_or_source_tag: Tag) -> 'list[HtmlLink]':
     srcset = _parse_srcset_str(_assert_str(html.tag_attrs(img_or_source_tag)['srcset']))
     if srcset is None:
         return []

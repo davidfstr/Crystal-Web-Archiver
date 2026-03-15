@@ -7,7 +7,7 @@ from crystal.util.wx_dialog import (
 )
 from crystal.util.wx_static_box_sizer import wrap_static_box_sizer_child
 from crystal.util.xthreading import fg_affinity
-from typing import Optional, override
+from typing import override
 import wx
 
 
@@ -26,7 +26,7 @@ class OpenProjectFromS3Dialog(wx.Dialog):
     """
 
     # NOTE: Only changed when tests are running
-    _last_opened: 'Optional[OpenProjectFromS3Dialog]' = None
+    _last_opened: 'OpenProjectFromS3Dialog | None' = None
 
     plain_s3_url: str
     credentials: 'S3Filesystem.Credentials | S3Filesystem.ProfileCredentials | None'

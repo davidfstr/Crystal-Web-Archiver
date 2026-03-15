@@ -58,7 +58,7 @@ import traceback
 import trycast
 from trycast import checkcast
 from typing import (
-    assert_never, Literal, Optional, override, TextIO, TypeAlias, TYPE_CHECKING,
+    assert_never, Literal, override, TextIO, TypeAlias, TYPE_CHECKING,
 )
 from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
@@ -480,9 +480,9 @@ _ENABLE_PIN_DATE_MITIGATION = True
 # By default, browsers may not cache root Crystal-served assets
 # because it is common for multiple Crystal projects opened near the same
 # time to serve different assets at the root
-_CACHE_CONTROL_POLICY_AT_ROOT = 'max-age=0, must-revalidate'  # type: Optional[str]
+_CACHE_CONTROL_POLICY_AT_ROOT = 'max-age=0, must-revalidate'  # type: str | None
 # By default, browsers may cache non-root Crystal-served assets for 1 hour
-_CACHE_CONTROL_POLICY_AT_SUBDIRECTORY = 'max-age=3600'  # type: Optional[str]
+_CACHE_CONTROL_POLICY_AT_SUBDIRECTORY = 'max-age=3600'  # type: str | None
 
 _HTTP_COLON_SLASH_SLASH_RE = re.compile(r'(?i)https?://')
 
@@ -739,7 +739,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 return
         
         if resource.definitely_has_no_revisions:
-            revision = None  # type: Optional[ResourceRevision]
+            revision = None  # type: ResourceRevision | None
         else:
             def get_default_revision() -> ResourceRevision | None:
                 assert resource is not None

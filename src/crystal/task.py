@@ -37,9 +37,9 @@ import sys
 import threading
 from time import sleep
 import traceback
-from typing import Any, cast, final, Generic, List, Literal
+from typing import Any, cast, final, Generic, Literal
 from typing import NoReturn as Never
-from typing import Optional, override, ParamSpec, Tuple, TYPE_CHECKING, TypeVar
+from typing import override, ParamSpec, TYPE_CHECKING, TypeVar
 from weakref import WeakSet
 
 if TYPE_CHECKING:
@@ -112,7 +112,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
     unless explicitly documented in the Task class's docstring.
     """
     # Abstract fields for subclasses to override
-    icon_name = None  # type: Optional[str]  # abstract
+    icon_name = None  # type: str | None  # abstract
     """The name of the icon resource used for this task, or None to use the default icon."""
     scheduling_style = SCHEDULING_STYLE_NONE  # abstract for container task types
     """For a container task, defines the order that task units from children will be executed in."""
@@ -156,8 +156,8 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         
         self._title = title
         self._subtitle = 'Queued'
-        self._crash_reason = None  # type: Optional[CrashReason]
-        self._parent = None  # type: Optional[Task]
+        self._crash_reason = None  # type: CrashReason | None
+        self._parent = None  # type: Task | None
         self._children = []  # type: Sequence[Task]
         self._num_children_complete = 0
         self._complete = False
@@ -165,7 +165,7 @@ class Task(ListenableMixin, Bulkhead, Generic[_R]):
         self._interactive = False
         
         self._did_yield_self = False            # used by leaf tasks
-        self._future = None  # type: Optional[Future[_R]]  # used by leaf tasks
+        self._future = None  # type: Future[_R] | None  # used by leaf tasks
         self._next_child_index = 0
     
     # === Bulkhead ===
@@ -850,7 +850,7 @@ class CrashedTask(_LeafTask[Never]):
             dismiss_action_title: str='Dismiss') -> None:
         super().__init__(title=title)
         self.crash_reason = reason
-        self._dismiss_func = dismiss_func  # type: Optional[Callable[[], None]]
+        self._dismiss_func = dismiss_func  # type: Callable[[], None] | None
         self.dismiss_action_title = dismiss_action_title
     
     @bg_affinity
@@ -929,7 +929,7 @@ class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
     """
     icon_name = 'tasktree_download_resource_body'
     
-    _dr_profiling_context = None  # type: AbstractContextManager[Optional[cProfile.Profile]]
+    _dr_profiling_context = None  # type: AbstractContextManager[cProfile.Profile | None]
     
     # Optimize per-instance memory use, since there may be very many DownloadResourceBodyTask objects
     __slots__ = (
@@ -945,7 +945,7 @@ class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
         super().__init__(
             title='Downloading body: ' + _get_abstract_resource_title(abstract_resource))
         self._resource = abstract_resource.resource  # type: Resource
-        self.did_download = None  # type: Optional[bool]
+        self.did_download = None  # type: bool | None
     
     # === Properties ===
     
@@ -1067,7 +1067,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
             title='Downloading: ' + _get_abstract_resource_title(abstract_resource))
         self._abstract_resource = abstract_resource
         self._is_embedded = is_embedded
-        self._pbc = None  # type: Optional[ProgressBarCalculator]
+        self._pbc = None  # type: ProgressBarCalculator | None
         
         resource = abstract_resource.resource  # cache
         
@@ -1080,8 +1080,8 @@ class DownloadResourceTask(Task['ResourceRevision']):
             None
             if was_already_downloaded_this_session and not needs_result
             else resource.create_download_body_task()
-        )  # type: Optional[DownloadResourceBodyTask]
-        self._parse_links_task = None  # type: Optional[ParseResourceRevisionLinks]
+        )  # type: DownloadResourceBodyTask | None
+        self._parse_links_task = None  # type: ParseResourceRevisionLinks | None
         self._already_downloaded_task = (
             _ALREADY_DOWNLOADED_PLACEHOLDER_TASK
             if was_already_downloaded_this_session
@@ -1093,7 +1093,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
         if self._already_downloaded_task is not None:
             self.append_child(self._already_downloaded_task, already_complete_ok=True)
         
-        self._download_body_with_embedded_future = None  # type: Optional[Future[ResourceRevision]]
+        self._download_body_with_embedded_future = None  # type: Future[ResourceRevision] | None
         
         # Prevent other DownloadResourceTasks created during this session from
         # attempting to redownload this resource since they would duplicate
@@ -1408,7 +1408,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
     
     def _ancestor_downloading_resources(self) -> list[Resource]:
         ancestors = []
-        cur_task = self  # type: Optional[Task]
+        cur_task = self  # type: Task | None
         while cur_task is not None:
             if isinstance(cur_task, DownloadResourceTask):
                 ancestors.append(cur_task.resource)
@@ -1427,7 +1427,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
         return f'<DownloadResourceTask for {self.resource.url!r}>'
 
 
-class ParseResourceRevisionLinks(_LeafTask['Tuple[List[Link], List[Resource]]']):
+class ParseResourceRevisionLinks(_LeafTask['tuple[list[Link], list[Resource]]']):
     """
     Parses the list of linked resources from the specified ResourceRevision.
     
@@ -1466,7 +1466,7 @@ class ParseResourceRevisionLinks(_LeafTask['Tuple[List[Link], List[Resource]]'])
         r_url = r.url  # cache
         urls = [urljoin(r_url, link.relative_url) for link in links]
         if len(urls) == 0:
-            linked_resources = []  # type: List[Resource]
+            linked_resources = []  # type: list[Resource]
         else:
             self.subtitle = 'Recording links...'
             def record_links() -> list[Resource]:
@@ -1661,11 +1661,11 @@ class DownloadResourceGroupMembersTask(_PureContainerTask):
         super().__init__(
             title='Downloading members of group: %s' % group.display_name)
         self.group = group
-        self._deferred_events = []  # type: List[Callable[[], None]]
+        self._deferred_events = []  # type: list[Callable[[], None]]
         self._done_updating_group = False
         
         # Loaded later by _load_children
-        self._pbc = None  # type: Optional[ProgressBarCalculator]
+        self._pbc = None  # type: ProgressBarCalculator | None
         self._children_loaded = False
         
         if self._use_extra_listener_assertions:
@@ -1990,7 +1990,7 @@ class RootTask(_PureContainerTask):
     def __init__(self) -> None:
         super().__init__(title='ROOT')
         self.subtitle = 'Running'
-        self._children_to_add_soon = []  # type: List[Tuple[Task, bool]]
+        self._children_to_add_soon = []  # type: list[tuple[Task, bool]]
         self._cancel_tree_soon = False
         self._paused = False
         self.scheduler_should_wake_event = threading.Event()
@@ -2033,7 +2033,7 @@ class RootTask(_PureContainerTask):
                 # NOTE: Might raise if RootTask is in a sufficiently invalid state
                 self.append_deferred_top_level_tasks()
             fg_call_and_wait(fg_task)
-    crash_reason = cast(Optional[CrashReason], property(_get_crash_reason, _set_crash_reason))
+    crash_reason = cast(CrashReason | None, property(_get_crash_reason, _set_crash_reason))
     
     @fg_affinity
     def _dismiss_all_scheduled_tasks(self) -> None:
@@ -2263,7 +2263,7 @@ def start_scheduler_thread(root_task: RootTask) -> threading.Thread:
         assert is_synced_with_scheduler_thread()
         
         if _PROFILE_SCHEDULER:
-            profiling_context = cProfile.Profile()  # type: AbstractContextManager[Optional[cProfile.Profile]]
+            profiling_context = cProfile.Profile()  # type: AbstractContextManager[cProfile.Profile | None]
         else:
             profiling_context = nullcontext(enter_result=None)
         try:

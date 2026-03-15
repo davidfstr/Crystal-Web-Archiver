@@ -17,7 +17,6 @@ from crystal.lint.rules import (
 )
 import sys
 from pathlib import Path
-from typing import Tuple
 
 
 def main() -> int:

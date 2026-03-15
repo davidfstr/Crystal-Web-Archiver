@@ -65,8 +65,8 @@ import time
 from tqdm import tqdm
 import traceback
 from typing import (
-    assert_never, cast, Dict, IO, Literal, List, Optional, override, Self, Tuple,
-    TYPE_CHECKING, TypeAlias, TypeVar, Union,
+    assert_never, cast, IO, Literal, override, Self,
+    TYPE_CHECKING, TypeAlias, TypeVar,
 )
 import threading
 from urllib.parse import quote as url_quote
@@ -92,7 +92,7 @@ _PROFILE_MIGRATE_REVISIONS_V1_TO_V2 = False
 _PROFILE_MIGRATE_REVISIONS_V2_TO_V3 = False
 
 
-_OptionalStr = TypeVar('_OptionalStr', bound=Optional[str])
+_OptionalStr = TypeVar('_OptionalStr', bound=str | None)
 
 
 # ------------------------------------------------------------------------------
@@ -284,16 +284,16 @@ class Project(ListenableMixin):
         self._is_untitled = is_untitled
         self._is_dirty = is_dirty
         self._properties_loaded = False
-        self._properties = dict()               # type: Dict[str, Optional[str]]
-        self._resource_for_url = WeakValueDictionary()  # type: Union[WeakValueDictionary[str, Resource], OrderedDict[str, Resource]]
-        self._resource_for_id = WeakValueDictionary()   # type: Union[WeakValueDictionary[int, Resource], OrderedDict[int, Resource]]
-        self._unsaved_resources = []            # type: List[Resource]
-        self._sorted_resource_urls = None       # type: Optional[SortedList[str]]
-        self._root_resources = OrderedDict()    # type: Dict[Resource, RootResource]
-        self._resource_groups = []              # type: List[ResourceGroup]
-        self._aliases = []                      # type: List[Alias]
+        self._properties = dict()               # type: dict[str, str | None]
+        self._resource_for_url = WeakValueDictionary()  # type: WeakValueDictionary[str, Resource] | OrderedDict[str, Resource]
+        self._resource_for_id = WeakValueDictionary()   # type: WeakValueDictionary[int, Resource] | OrderedDict[int, Resource]
+        self._unsaved_resources = []            # type: list[Resource]
+        self._sorted_resource_urls = None       # type: SortedList[str] | None
+        self._root_resources = OrderedDict()    # type: dict[Resource, RootResource]
+        self._resource_groups = []              # type: list[ResourceGroup]
+        self._aliases = []                      # type: list[Alias]
         
-        self._min_fetch_date = None  # type: Optional[datetime.datetime]
+        self._min_fetch_date = None  # type: datetime.datetime | None
         
         progress_listener.opening_project()
         
@@ -361,7 +361,7 @@ class Project(ListenableMixin):
         self._start_scheduler()
         
         # Define initial configuration
-        self._request_cookie = None  # type: Optional[str]
+        self._request_cookie = None  # type: str | None
         
         self._check_url_collection_invariants()
         
@@ -978,7 +978,7 @@ class Project(ListenableMixin):
 
         # Move revisions to appropriate locations in new revisions directory
         lfs_sep = lfs.sep  # cache
-        last_new_revision_parent_relpath = None  # type: Optional[str]
+        last_new_revision_parent_relpath = None  # type: str | None
         def migrate_revision(row: tuple) -> None:
             (id,) = row
             old_revision_filepath = (
@@ -1824,7 +1824,7 @@ class Project(ListenableMixin):
         return self._get_property('default_url_prefix', None)
     def _set_default_url_prefix(self, value: str | None) -> None:
         self._set_property('default_url_prefix', value)
-    default_url_prefix = cast(Optional[str], property(_get_default_url_prefix, _set_default_url_prefix))
+    default_url_prefix = cast(str | None, property(_get_default_url_prefix, _set_default_url_prefix))
     
     def _get_entity_title_format(self) -> EntityTitleFormat:
         value = self._get_property('entity_title_format', 'url_name')
@@ -2565,7 +2565,7 @@ class Project(ListenableMixin):
             rg.last_downloaded_member = last_downloaded_member
         
         # Restore tasks
-        tasks = []  # type: List[Task]
+        tasks = []  # type: list[Task]
         for hibernated_task in hibernated_tasks:
             if hibernated_task['type'] == 'DownloadResourceTask':
                 r = self._get_resource_with_id(int(hibernated_task['resource_id']))

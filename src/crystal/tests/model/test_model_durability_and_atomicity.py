@@ -40,7 +40,7 @@ import os
 import sqlite3
 from tempfile import NamedTemporaryFile
 import threading
-from typing import TypeVar, assert_never, Literal, Optional
+from typing import TypeVar, assert_never, Literal
 from unittest import skip
 from unittest.mock import ANY, Mock, patch
 

@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 import contextlib
 import threading
-from typing import Any, Optional
+from typing import Any
 import wakepy
 import warnings
 
@@ -15,7 +15,7 @@ class Caffeination:
     _lock = threading.Lock()
     _caffeine_count = 0
     _caffeinated = False
-    _wakepy_keeper = None  # type: Optional[Any]
+    _wakepy_keeper = None  # type: Any | None
     _caffeination_unavailable = False
     
     @classmethod

@@ -7,13 +7,12 @@ from crystal.doc.generic import Document, Link
 import tinycss2
 from tinycss2 import ast
 from tinycss2.serializer import serialize_string_value, serialize_url
-from typing import List, Tuple
 
 
 def parse_css_and_links(
         body_bytes: bytes, 
         declared_charset: str | None=None
-        ) -> 'Tuple[CssDocument, List[Link]]':
+        ) -> 'tuple[CssDocument, list[Link]]':
     (rules, _) = tinycss2.parse_stylesheet_bytes(
         body_bytes,
         protocol_encoding=declared_charset)
@@ -22,17 +21,17 @@ def parse_css_and_links(
 
 def parse_css_and_links_from_style_tag(
         tag_str: str
-        ) -> 'Tuple[CssDocument, List[Link]]':
+        ) -> 'tuple[CssDocument, list[Link]]':
     rules = tinycss2.parse_stylesheet(tag_str)
     return _parse_css_and_links(rules)
 
 
 def parse_css_and_links_from_style_attribute(
         attr_value: str
-        ) -> 'Tuple[CssDocument, List[Link]]':
+        ) -> 'tuple[CssDocument, list[Link]]':
     decls = tinycss2.parse_declaration_list(attr_value)
     
-    links = []  # type: List[Link]
+    links = []  # type: list[Link]
     for decl in decls:
         if not isinstance(decl, ast.Declaration):
             continue
@@ -41,8 +40,8 @@ def parse_css_and_links_from_style_attribute(
     return (CssDocument(decls), links)
 
 
-def _parse_css_and_links(rules) -> 'Tuple[CssDocument, List[Link]]':
-    links = []  # type: List[Link]
+def _parse_css_and_links(rules) -> 'tuple[CssDocument, list[Link]]':
+    links = []  # type: list[Link]
     for rule in rules:
         if isinstance(rule, ast.QualifiedRule) or isinstance(rule, ast.AtRule):
             if rule.content is not None:  # has been observed as None in the wild sometimes

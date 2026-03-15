@@ -28,7 +28,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, BinaryIO, TextIO, cast, Never, Optional, ParamSpec, TypeVar, TYPE_CHECKING, override
+from typing import Any, BinaryIO, TextIO, cast, Never, ParamSpec, TypeVar, TYPE_CHECKING, override
 
 if TYPE_CHECKING:
     from crystal.browser import MainWindow
@@ -536,8 +536,8 @@ def _main2(args: list[str]) -> None:
         from crystal.util.test_mode import set_tests_are_running
         set_tests_are_running()
     
-    last_window = None  # type: Optional[MainWindow]
-    systemexit_during_first_launch = None  # type: Optional[SystemExit]
+    last_window = None  # type: MainWindow | None
+    systemexit_during_first_launch = None  # type: SystemExit | None
     
     # Expose internal last_window state to tests
     if tests_are_running:
@@ -712,7 +712,7 @@ def _main2(args: list[str]) -> None:
             # Allow the logout/shutdown to proceed
             event.Skip()
     
-    app = None  # type: Optional[wx.App]
+    app = None  # type: wx.App | None
     from crystal.util.quitting import is_quitting
     from crystal.util.xthreading import set_foreground_thread
     set_foreground_thread(threading.current_thread())
@@ -1263,7 +1263,7 @@ def _prompt_to_open_project(
     from crystal.util.xos import is_linux, is_mac_os, is_windows
     import wx
     
-    project_path = None  # type: Optional[str]
+    project_path = None  # type: str | None
     
     class OpenAsDirectoryHook(wx.FileDialogCustomizeHook):
         def AddCustomControls(self, customizer: wx.FileDialogCustomize):  # override

@@ -17,7 +17,7 @@ import sockshandler
 import ssl
 import sys
 import truststore
-from typing import BinaryIO, assert_never, cast, Dict, TYPE_CHECKING
+from typing import BinaryIO, assert_never, cast, TYPE_CHECKING
 import urllib.error
 from urllib.parse import urlparse
 import urllib.request
@@ -47,7 +47,7 @@ _VERBOSE_HTTP_REQUESTS_AND_RESPONSES = False
 # WARNING: These headers will NOT be persisted in the downloaded ResourceRevision
 #          and therefore it will not be possible to repeat a similar request in
 #          the future to get a more up-to-date version of a prior revision.
-_EXTRA_HEADERS = dict()  # type: Dict[str, str]
+_EXTRA_HEADERS = dict()  # type: dict[str, str]
 
 
 # ------------------------------------------------------------------------------

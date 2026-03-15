@@ -2,7 +2,6 @@ import sys
 import threading
 import traceback
 from types import FrameType
-from typing import Optional
 
 
 def get_thread_stack(thread: threading.Thread) -> str | None:

@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 from types import coroutine, FrameType
-from typing import Any, Generic, TYPE_CHECKING, TypeVar, Union
+from typing import Any, Generic, TYPE_CHECKING, TypeVar
 import urllib.error
 import urllib.request
 
@@ -44,7 +44,7 @@ def run_test_coro(
     if fg_call_and_wait_func is None:
         fg_call_and_wait_func = fg_call_and_wait
     
-    last_command_result = None  # type: Union[object, Exception]
+    last_command_result = None  # type: object | Exception
     while True:
         try:
             command = fg_call_and_wait_func(  # cr-traceback: ignore

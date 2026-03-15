@@ -2,7 +2,6 @@ from collections.abc import Callable
 from crystal.util.xfunctools import partial2
 from crystal.util.xthreading import fg_call_later, is_foreground_thread
 from functools import wraps
-from typing import Optional
 
 
 _DELAY_UNTIL_PROGRESS_DIALOG_SHOWS = 100 / 1000  # sec
@@ -11,7 +10,7 @@ _DELAY_UNTIL_PROGRESS_DIALOG_SHOWS = 100 / 1000  # sec
 # ------------------------------------------------------------------------------
 # OpenProjectProgressListener
 
-_active_progress_listener = None  # type: Optional[OpenProjectProgressListener]
+_active_progress_listener = None  # type: OpenProjectProgressListener | None
 
 
 class CancelOpenProject(Exception):

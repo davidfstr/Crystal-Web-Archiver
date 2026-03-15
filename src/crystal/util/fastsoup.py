@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 from collections.abc import Callable, Iterable, MutableMapping
 import lxml.html
 from re import Pattern
-from typing import Literal, Optional, TypeAlias, TYPE_CHECKING, Union
+from typing import Literal, TypeAlias, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from crystal.doc.html import HtmlParserType
@@ -34,7 +34,7 @@ def parse_html(
         raise ValueError(f'Unrecognized value for parser_type: {parser_type}')
 
 
-Tag: TypeAlias = Union[lxml.html.HtmlElement, bs4.Tag]
+Tag: TypeAlias = lxml.html.HtmlElement | bs4.Tag
 
 FindFunc: TypeAlias = Callable[['FastSoup'], Iterable[Tag]]
 
@@ -57,7 +57,7 @@ class FastSoup:  # abstract
             ) -> FindFunc:
         raise NotImplementedError()
     
-    def find(self, pattern: Literal[True]) -> 'Optional[Tag]':
+    def find(self, pattern: Literal[True]) -> 'Tag | None':
         raise NotImplementedError()
     
     def new_tag(self, tag_name: str, text_content: str | None=None) -> 'Tag':
@@ -117,7 +117,7 @@ class BeautifulFastSoup(FastSoup):
             return soup.find_all(tag_name, **attrs)
         return find_func
     
-    def find(self, pattern: Literal[True]) -> 'Optional[Tag]':
+    def find(self, pattern: Literal[True]) -> 'Tag | None':
         result = self._base.find(pattern)  # type: ignore[arg-type]
         assert not isinstance(result, bs4.NavigableString)
         return result
@@ -251,7 +251,7 @@ class LxmlFastSoup(FastSoup):
                     yield tag
         return new_find_func
     
-    def find(self, pattern: Literal[True]) -> 'Optional[Tag]':
+    def find(self, pattern: Literal[True]) -> 'Tag | None':
         return self._root.find('*')
     
     def new_tag(self, tag_name: str, text_content: str | None=None) -> 'Tag':

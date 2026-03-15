@@ -8,7 +8,7 @@ from crystal.util.xos import is_wx_gtk, is_windows
 from crystal.util.xthreading import fg_affinity, fg_call_later, fg_calls_paused, is_foreground_thread
 from functools import wraps
 import time
-from typing import List, Optional, overload, override, Self, TypeAlias, TypeVar
+from typing import overload, override, Self, TypeAlias, TypeVar
 import wx
 
 _DELAY_UNTIL_PROGRESS_DIALOG_SHOWS = 100 / 1000  # sec
@@ -22,7 +22,7 @@ class _AbstractProgressDialog:
     _CancelException: type[Exception]  # abstract
     
     _dialog_style: int | None
-    _dialog: 'Optional[DeferredProgressDialog]'
+    _dialog: 'DeferredProgressDialog | None'
     
     def __init__(self, parent: wx.Window | None=None, *, window_modal: bool=False) -> None:
         self._dialog_style = None
@@ -148,7 +148,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
     
     # NOTE: Only changed when tests are running
     _always_show_upgrade_required_modal = False
-    _upgrading_revision_progress = 0  # type: Optional[int]
+    _upgrading_revision_progress = 0  # type: int | None
     
     def __init__(self) -> None:
         super().__init__()
@@ -157,7 +157,7 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
         self._root_resource_count = None
         self._resource_group_count = None
         self._entity_tree_node_count = None
-        self._db_download_value_shift = None  # type: Optional[int]
+        self._db_download_value_shift = None  # type: int | None
     
     # === Phase 0 ===
 
@@ -649,17 +649,17 @@ class DeferredProgressDialog:
         if show_after is None:
             raise ValueError('Expected show_after=... keyword argument')
         
-        self._dialog = None  # type: Optional[wx.ProgressDialog]
+        self._dialog = None  # type: wx.ProgressDialog | None
         self._calls = [(
             '__init__',
             (title, message, maximum, parent, style) + args,
             kwargs
-        )]  # type: List[_Call]
+        )]  # type: list[_Call]
         self._show_at = time.monotonic() + show_after
         self._window_modal = window_modal
         
         self._shown = False
-        self._name = None  # type: Optional[str]
+        self._name = None  # type: str | None
         self._value = 0
         self._maximum = maximum
     

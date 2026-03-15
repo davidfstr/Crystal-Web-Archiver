@@ -29,7 +29,7 @@ import sys
 from tempfile import NamedTemporaryFile
 import threading
 from typing import (
-    BinaryIO, IO, Optional, TYPE_CHECKING, TypedDict, assert_never, cast,
+    BinaryIO, IO, TYPE_CHECKING, TypedDict, assert_never, cast,
 )
 from urllib.parse import urlparse
 
@@ -1205,7 +1205,7 @@ class ResourceRevision:
         doc: Document | None
         links: list[Link]
         (doc, links) = (None, [])
-        content_type_with_options = None  # type: Optional[str]
+        content_type_with_options = None  # type: str | None
         if self.is_html and self.has_body:
             with self.open() as body:
                 doc_and_links = parse_html_and_links(

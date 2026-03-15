@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 import time
-from typing import Type, TypeVar
+from typing import TypeVar
 from unittest import SkipTest
 import uuid
 

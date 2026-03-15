@@ -19,7 +19,7 @@ from crystal.util.wx_error import (
 )
 from crystal.util.xthreading import fg_affinity
 from functools import cache
-from typing import cast, Dict, List, NewType, NoReturn, Optional, TypeAlias
+from typing import cast, NewType, NoReturn, TypeAlias
 import wx
 
 IconSet: TypeAlias = tuple[tuple[wx.TreeItemIcon, wx.Bitmap], ...]
@@ -88,7 +88,7 @@ class TreeView:
         # Setup node image registration
         # NOTE: In wxPython 4.2.0, wx.Bitmap icons will be superceded by wx.BitmapBundle,
         #       and wx.ImageList will be superceded by a plain list of wx.BitmapBundles.
-        self._bitmap_2_image_id = dict()  # type: Dict[wx.Bitmap, ImageIndex]
+        self._bitmap_2_image_id = dict()  # type: dict[wx.Bitmap, ImageIndex]
         self._tree_imagelist = wx.ImageList(*_DEFAULT_TREE_ICON_SIZE)
         self.peer.AssignImageList(self._tree_imagelist)
         
@@ -217,14 +217,14 @@ class NodeView:
     
     def __init__(self) -> None:
         self.delegate = None  # type: object
-        self.peer = None  # type: Optional[NodeViewPeer]
+        self.peer = None  # type: NodeViewPeer | None
         self._title = ''
-        self._text_color = None  # type: Optional[wx.Colour]
+        self._text_color = None  # type: wx.Colour | None
         self._bold = False
         self._expandable = False
-        self._icon_set_func = None  # type: Optional[Callable[[], Optional[IconSet]]]
-        self._icon_set = None  # type: Optional[IconSet]
-        self._children = []  # type: List[NodeView]
+        self._icon_set_func = None  # type: Callable[[], IconSet | None] | None
+        self._icon_set = None  # type: IconSet | None
+        self._children = []  # type: list[NodeView]
     
     # === Properties ===
     
@@ -301,7 +301,7 @@ class NodeView:
         return self._children
     def _set_children(self, new_children: list[NodeView]) -> None:
         self.set_children(new_children)
-    children = cast('List[NodeView]', property(_get_children, _set_children))
+    children = cast('list[NodeView]', property(_get_children, _set_children))
     
     def set_children(self,
             new_children: list[NodeView],
@@ -340,8 +340,8 @@ class NodeView:
                         
                         on_selection_deleted = getattr(
                             self.delegate, 'on_selection_deleted', None
-                        )  # type: Optional[Callable[[NodeView], Optional[NodeView]]]
-                        old_selection_to_retarget = None  # type: Optional[NodeView]
+                        )  # type: Callable[[NodeView], NodeView | None] | None
+                        old_selection_to_retarget = None  # type: NodeView | None
                         if on_selection_deleted is not None:
                             old_selection = TreeView.selected_node_in(self.peer.tree_peer)
                             if old_selection is not None and old_selection.is_descendent_of_any(children_to_delete):
@@ -399,7 +399,7 @@ class NodeView:
         return self.peer.tree_peer.GetItemData(parent_treeitemid)
     
     def is_descendent_of_any(self, ancestor_node_views: Container[NodeView]) -> bool:
-        cur_node_view = self  # type: Optional[NodeView]
+        cur_node_view = self  # type: NodeView | None
         while cur_node_view is not None:
             if cur_node_view in ancestor_node_views:
                 return True

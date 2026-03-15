@@ -2,7 +2,6 @@ from crystal.util.xos import is_linux, is_mac_os, is_windows
 import os
 import socket
 import sys
-from typing import Optional
 
 
 def create_selectable_pipe(*, blocking: bool = True) -> 'Pipe':

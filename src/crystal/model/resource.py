@@ -23,7 +23,7 @@ from crystal.util.xthreading import (
 )
 import itertools
 from typing import (
-    Any, Dict, Generic, List, Literal, Optional, Tuple, TYPE_CHECKING, TypeVar, Union,
+    Any, Generic, Literal, TYPE_CHECKING, TypeVar,
 )
 from urllib.parse import urlparse, urlunparse
 from warnings import deprecated
@@ -422,7 +422,7 @@ class Resource:
         
         # 1. Create Resources in memory initially, deferring any database INSERTs
         # 2. Identify new resources that need to be inserted in the database
-        resource_for_new_url = OrderedDict()  # type: Dict[str, Resource]
+        resource_for_new_url = OrderedDict()  # type: dict[str, Resource]
         resources_already_created = []
         for url in urls:
             # Get/create Resource in memory and normalize its URL
@@ -493,7 +493,7 @@ class Resource:
                     rows = list(c.execute(
                         f'insert into resource (url) values {placeholders} returning id',
                         normalized_urls)
-                    )  # type: List[Tuple[int]]
+                    )  # type: list[tuple[int]]
         return [id for (id,) in rows]
     
     # === Properties ===
@@ -963,7 +963,7 @@ class Resource:
                     f'select request_cookie, error, metadata, id '
                         f'from resource_revision where resource_id=? order by id {ordering}',
                     (self._id,)
-                )  # type: Iterable[Tuple[Any, Any, Any, Any]]
+                )  # type: Iterable[tuple[Any, Any, Any, Any]]
             except Exception as e:
                 if is_no_such_column_error_for('request_cookie', e):
                     # Fetch from <=1.2.0 database schema
@@ -971,7 +971,7 @@ class Resource:
                         f'select error, metadata, id '
                             f'from resource_revision where resource_id=? order by id {ordering}',
                         (self._id,)
-                    )  # type: Iterable[Tuple[Any, Any, Any]]
+                    )  # type: Iterable[tuple[Any, Any, Any]]
                     rows = ((None, c0, c1, c2) for (c0, c1, c2) in old_rows)
                 else:
                     raise

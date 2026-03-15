@@ -7,7 +7,6 @@ import inspect
 import sys
 import threading
 import time
-from typing import Optional
 
 _excluded_delta_time_stack = threading.local()
 
@@ -128,7 +127,7 @@ def create_profiled_callable(title: str, max_duration: float, callable: Callable
 def profiling_context(
         stats_filepath: str,
         *, enabled: bool=True,
-        ) -> 'Iterator[Optional[cProfile.Profile]]':
+        ) -> 'Iterator[cProfile.Profile | None]':
     """
     Context in which a cProfile profiler is running,
     where all function calls are timed.
@@ -151,7 +150,7 @@ def profiling_context(
 def create_profiling_context(
         stats_filepath: str,
         *, enabled: bool=True,
-        ) -> 'AbstractContextManager[Optional[cProfile.Profile]]':
+        ) -> 'AbstractContextManager[cProfile.Profile | None]':
     """
     Creates a cProfile profiling context.
     Within the context all function calls are timed.
@@ -162,7 +161,7 @@ def create_profiling_context(
     module and the standard library "pstats" module.
     """
     if enabled:
-        profiling_context = cProfile.Profile()  # type: AbstractContextManager[Optional[cProfile.Profile]]
+        profiling_context = cProfile.Profile()  # type: AbstractContextManager[cProfile.Profile | None]
         def dump_stats() -> None:
             profiler = profiling_context
             assert isinstance(profiler, cProfile.Profile)

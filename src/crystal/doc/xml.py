@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument, HtmlLink
 from crystal.util.fastsoup import BeautifulFastSoup
-from typing import BinaryIO, List
+from typing import BinaryIO
 
 
 def parse_xml_and_links(
@@ -41,6 +41,6 @@ def parse_xml_and_links(
         if 'href' in  xml.tag_attrs(tag):  # usually also has: rel="alternate"
             links.append(HtmlLink.create_from_tag(tag, xml, 'href', type_title, title, embedded))
     
-    links_ = links  # type: List[Link]  # type: ignore[assignment]  # allow List[HtmlLink] to be converted
+    links_ = links  # type: list[Link]  # type: ignore[assignment]  # allow list[HtmlLink] to be converted
     return (HtmlDocument(xml, is_html=False), links_)
 

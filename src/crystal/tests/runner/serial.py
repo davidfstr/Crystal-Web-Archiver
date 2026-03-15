@@ -18,7 +18,7 @@ import os
 import sys
 import time
 import traceback
-from typing import Dict, Optional, TypeAlias
+from typing import TypeAlias
 from unittest import SkipTest
 import warnings
 
@@ -69,7 +69,7 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
     is_coverage_now = is_coverage()  # cache
     
     # Run selected tests
-    result_for_test_func_id = {}  # type: Dict[_TestFuncId, Optional[Exception]]
+    result_for_test_func_id = {}  # type: dict[_TestFuncId, Exception | None]
     start_time = time.monotonic()  # capture
     run_count = 0
     with warnings.catch_warnings(record=True) as warning_list, _warnings_sent_to_ci():
