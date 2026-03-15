@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-echo "========================================="
-echo "Building wxPython wagon for aarch64"
-echo "========================================="
+echo "======================="
+echo "Building wxPython wagon"
+echo "======================="
 
 echo "Architecture check:"
 uname -m
