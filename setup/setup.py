@@ -170,6 +170,17 @@ elif sys.platform == 'win32':
                 # https://stackoverflow.com/questions/5308760/py2exe-lxml-woes#5309733
                 'lxml.etree', 'lxml._elementpath', 'gzip',
             ],
+            'excludes': [
+                # apsw's __init__ is a .pyd extension, which triggers
+                # infinite recursion in py2exe's module finder.
+                # Bundle it with make-win.bat instead.
+                'apsw',
+                # botocore and boto3 derive data directory paths from
+                # __file__, which doesn't resolve to a real disk path
+                # when bundled inside py2exe's zip.
+                # Bundle them with make-win.bat instead.
+                'botocore', 'boto3',
+            ],
             'ignores': [
                 # Mac junk
                 'Carbon', 'Carbon.Files',
