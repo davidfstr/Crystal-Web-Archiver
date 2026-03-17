@@ -425,6 +425,7 @@ class Project(ListenableMixin):
         Raises:
         * ProjectReadOnlyError --
             if expect_writable is True but the project database cannot be opened as writable
+        * sqlite3.DatabaseError
         """
         (fs, project_path) = fs_path
         
@@ -513,6 +514,8 @@ class Project(ListenableMixin):
                 raw_db: sqlite3.dbapi2.Connection = cast(
                     sqlite3.dbapi2.Connection,
                     ApswConnectionAdapter(
+                        # NOTE: Raises sqlite3.DatabaseError, if the underlying S3VFSFile.__init__()
+                        #       raises an S3Filesystem.getsize() exception.
                         apsw.Connection(
                             # Use immutable=1 to disable checks for concurrent modifications,
                             # which would perform extra I/O for every database query.
@@ -2783,6 +2786,7 @@ class Project(ListenableMixin):
             if this project resides on a non-local filesystem
         * CancelSaveAs --
             if the user cancels the save operation
+        * sqlite3.DatabaseError
         """
         return start_thread_switching_coroutine(
             SwitchToThread.FOREGROUND,
@@ -3375,6 +3379,9 @@ class Project(ListenableMixin):
         Reopens this project at self.path, attempting to open as writable.
         
         Is the inverse of `close()`, but does not restore the state of tasks.
+        
+        Raises:
+        * sqlite3.DatabaseError
         """
         if not isinstance(self._fs, LocalFilesystem):
             raise NonLocalFilesystemNotSupported(

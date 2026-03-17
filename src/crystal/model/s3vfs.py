@@ -43,8 +43,8 @@ class S3VFSFile(apsw.VFSFile):
         if self.VERBOSE:
             print(f'S3VFSFile: xRead: {offset}-{offset + amount - 1}')
         
-        with self._fs.open(self._path, 'rb',
-                           start=offset, end=offset + amount - 1) as f:
+        with self._fs.open(
+                self._path, 'rb', start=offset, end=offset + amount - 1) as f:
             data = f.read()
         if len(data) < amount:
             # SQLite requires exact amount; pad with zeros if short read

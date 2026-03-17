@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from contextlib import AbstractContextManager, nullcontext
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 import sqlite3
 import sqlite3.dbapi2
 from typing import Any, cast, Self, TYPE_CHECKING
@@ -180,6 +180,16 @@ class DatabaseCursor:
 
 # ------------------------------------------------------------------------------
 # Apsw Database Connection
+#
+# The adapter classes below bridge apsw's API to look like sqlite3's API,
+# so that Crystal's existing code (which catches sqlite3 exception types
+# and uses sqlite3 cursor/connection semantics) works unchanged.
+#
+# Exception translation is critical: apsw raises its own exception hierarchy
+# (apsw.Error and subclasses) which is completely separate from sqlite3's.
+# Additionally, S3 I/O errors (PermissionError, botocore exceptions, etc.)
+# can escape through apsw's VFS layer. Both must be translated to sqlite3
+# equivalents so that Crystal's error-handling code works correctly.
 
 class ApswConnectionAdapter:
     """Makes an apsw.Connection look like sqlite3.dbapi2.Connection."""
@@ -190,16 +200,19 @@ class ApswConnectionAdapter:
         self._s3_vfs = s3_vfs
 
     def cursor(self) -> sqlite3.dbapi2.Cursor:
-        return cast(
-            sqlite3.dbapi2.Cursor,
-            ApswCursorAdapter(self._conn.cursor())
-        )
+        with _apsw_errors_as_sqlite3():
+            return cast(
+                sqlite3.dbapi2.Cursor,
+                ApswCursorAdapter(self._conn.cursor())
+            )
 
     def create_function(self, name: str, num_params: int, func) -> None:
-        self._conn.create_scalar_function(name, func, num_params)
+        with _apsw_errors_as_sqlite3():
+            self._conn.create_scalar_function(name, func, num_params)
 
     def close(self) -> None:
-        self._conn.close()
+        with _apsw_errors_as_sqlite3():
+            self._conn.close()
 
     def commit(self) -> None:
         pass  # read-only, no-op
@@ -216,10 +229,12 @@ class ApswCursorAdapter:
 
     def __init__(self, cursor) -> None:
         self._cursor = cursor
-        self._rows = None  # iterator from last execute
+        self._rows = None  # type: _ApswRowsIterator | None
 
     def execute(self, sql: str, *args, **kwargs):
-        self._rows = self._cursor.execute(sql, *args, **kwargs)
+        with _apsw_errors_as_sqlite3():
+            raw_rows = self._cursor.execute(sql, *args, **kwargs)
+        self._rows = _ApswRowsIterator(raw_rows)
         return self  # match sqlite3 behavior
 
     def fetchone(self):
@@ -236,7 +251,8 @@ class ApswCursorAdapter:
         return list(self._rows)
 
     def close(self) -> None:
-        self._cursor.close()
+        with _apsw_errors_as_sqlite3():
+            self._cursor.close()
 
     @property
     def description(self):
@@ -247,13 +263,77 @@ class ApswCursorAdapter:
         return None  # read-only, never used
 
     def __iter__(self):
-        return iter(self._rows) if self._rows else iter([])
+        return self._rows if self._rows is not None else iter([])
 
     def __next__(self):
+        if self._rows is None:
+            raise StopIteration
         return next(self._rows)
 
     def __getattr__(self, name: str):
         return getattr(self._cursor, name)
+
+
+class _ApswRowsIterator:
+    """
+    Wraps an apsw rows iterator, translating exceptions raised during
+    iteration into sqlite3 equivalents.
+
+    Without this wrapper, iterating raw apsw rows (e.g. in a for loop
+    over cursor.execute(...)) would raise apsw exceptions that Crystal's
+    error handlers don't recognize.
+    """
+
+    def __init__(self, rows) -> None:
+        self._rows = rows
+
+    def __iter__(self) -> _ApswRowsIterator:
+        return self
+
+    def __next__(self):
+        with _apsw_errors_as_sqlite3():
+            return next(self._rows)
+
+
+@contextmanager
+def _apsw_errors_as_sqlite3() -> Iterator[None]:
+    """
+    Context manager that translates apsw exceptions and VFS-propagated
+    exceptions into their sqlite3 equivalents.
+    """
+    import apsw as _apsw
+    try:
+        yield
+    except _apsw.Error as e:
+        raise _translate_apsw_error(e) from e
+    except (sqlite3.Error, StopIteration, GeneratorExit, KeyboardInterrupt):
+        raise  # pass through unchanged
+    except Exception as e:
+        # Non-apsw, non-sqlite3 exception escaped from VFS
+        # (e.g. PermissionError, botocore.exceptions.ClientError)
+        raise sqlite3.OperationalError(str(e)) from e
+
+
+def _translate_apsw_error(e: Exception) -> sqlite3.Error:
+    """Map an apsw exception to the equivalent sqlite3 exception type."""
+    import apsw as _apsw
+    msg = str(e)
+    if isinstance(e, (_apsw.CorruptError, _apsw.NotADBError)):
+        return sqlite3.DatabaseError(msg)
+    elif isinstance(e, _apsw.ConstraintError):
+        return sqlite3.IntegrityError(msg)
+    elif isinstance(e, (_apsw.ConnectionClosedError, _apsw.CursorClosedError, _apsw.MisuseError)):
+        if isinstance(e, _apsw.ConnectionClosedError):
+            # Translate message to match what sqlite3 uses,
+            # so that is_database_closed_error() recognizes it
+            msg = 'Cannot operate on a closed database.'
+        return sqlite3.ProgrammingError(msg)
+    elif isinstance(e, _apsw.InternalError):
+        return sqlite3.InternalError(msg)
+    else:
+        # Default: sqlite3.OperationalError
+        # (covers SQLError, IOError, BusyError, ReadOnlyError, etc.)
+        return sqlite3.OperationalError(msg)
 
 
 # ------------------------------------------------------------------------------
