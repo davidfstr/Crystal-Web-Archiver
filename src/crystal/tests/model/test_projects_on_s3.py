@@ -14,6 +14,7 @@ from crystal.browser.open_project_from_s3 import OpenProjectFromS3Dialog
 from crystal.filesystem import FilesystemPath, LocalFilesystem, RENAME_SUFFIX, S3Filesystem
 from crystal.model import Project, ProjectFormatError
 from crystal.model.pack16 import open_pack_entry, rewrite_pack_without_entry
+import crystal.model.project
 from crystal.model.project import MigrationType, NonLocalFilesystemNotSupported, NonLocalFilesystemReadOnlyError
 from crystal.model.resource_revision import ResourceRevision
 from crystal.progress.interface import CancelOpenProject, OpenProjectProgressListener
@@ -43,6 +44,7 @@ from crystal.util.controls import click_button, TreeItem
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.wx_window import SetFocus
 from crystal.util.xos import is_windows
+from crystal.model.s3vfs import S3VFSFile
 from io import TextIOBase
 import os
 import re
@@ -153,6 +155,51 @@ async def test_can_open_project_with_credentialful_s3_url_as_readonly_and_serve_
                     s3_url,
                     fill_more_options=verify_credential_controls_disabled)
                 await _ensure_can_serve_a_resource_revision(mw, project)
+
+
+# === Test: Database Streaming ===
+
+async def test_given_project_on_s3_and_database_streaming_enabled_when_open_project_then_only_part_of_database_is_read() -> None:
+    assertEqual(
+        False,
+        crystal.model.project._OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE,
+        'Expected database streaming to be enabled by default')
+    
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root:
+
+        db_size = os.path.getsize(os.path.join(project_dirpath, 'database.sqlite'))
+
+        with _fake_s3(fake_s3_root, omit_env_var_credentials=True), \
+                patch.object(
+                    S3VFSFile, 'xFileSize', autospec=True,
+                    side_effect=S3VFSFile.xFileSize
+                ) as spy_xfilesize, \
+                patch.object(
+                    S3VFSFile, 'xRead', autospec=True,
+                    side_effect=S3VFSFile.xRead
+                ) as spy_xread:
+            (mw, _) = await _open_project_from_s3_in_ui(
+                s3_url,
+                credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'))
+            await mw.close()
+
+    assert spy_xfilesize.call_count >= 1, \
+        'Expected xFileSize to be called at least once'
+    assert spy_xread.call_count >= 1, \
+        'Expected xRead to be called at least once'
+    
+    total_bytes_read = sum(c.args[1] for c in spy_xread.call_args_list)  # args[0]=self, args[1]=amount
+    assert total_bytes_read < db_size, (
+        f'Expected less than 100% of database to be read on open '
+        f'(read {total_bytes_read} of {db_size} bytes = {total_bytes_read / db_size:.1%})')
 
 
 # === Test: Database Download: Progress ===

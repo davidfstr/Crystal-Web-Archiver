@@ -41,7 +41,7 @@ class S3VFSFile(apsw.VFSFile):
 
     def xRead(self, amount: int, offset: int) -> bytes:
         if self.VERBOSE:
-            print(f'S3VFSFile: xread: {offset}-{offset + amount - 1}')
+            print(f'S3VFSFile: xRead: {offset}-{offset + amount - 1}')
         
         with self._fs.open(self._path, 'rb',
                            start=offset, end=offset + amount - 1) as f:

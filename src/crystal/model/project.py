@@ -93,7 +93,11 @@ _PROFILE_MIGRATE_REVISIONS_V1_TO_V2 = False
 _PROFILE_MIGRATE_REVISIONS_V2_TO_V3 = False
 
 # Whether to download a copy of a project database opened from S3,
-# rather than trying to open it directly on S3
+# rather than trying to incrementally stream it from S3.
+# 
+# The downloading logic is more straightforward than streaming,
+# albeit less efficient. If streaming breaks for some reason,
+# downloading should still work.
 _OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE = False
 
 
