@@ -14,6 +14,7 @@ from crystal.browser.open_project_from_s3 import OpenProjectFromS3Dialog
 from crystal.filesystem import FilesystemPath, LocalFilesystem, RENAME_SUFFIX, S3Filesystem
 from crystal.model import Project, ProjectFormatError
 from crystal.model.pack16 import open_pack_entry, rewrite_pack_without_entry
+import crystal.model.project
 from crystal.model.project import MigrationType, NonLocalFilesystemNotSupported, NonLocalFilesystemReadOnlyError
 from crystal.model.resource_revision import ResourceRevision
 from crystal.progress.interface import CancelOpenProject, OpenProjectProgressListener
@@ -43,6 +44,7 @@ from crystal.util.controls import click_button, TreeItem
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.wx_window import SetFocus
 from crystal.util.xos import is_windows
+from crystal.model.s3vfs import S3VFSFile
 from io import TextIOBase
 import os
 import re
@@ -155,9 +157,14 @@ async def test_can_open_project_with_credentialful_s3_url_as_readonly_and_serve_
                 await _ensure_can_serve_a_resource_revision(mw, project)
 
 
-# === Test: Database Download Progress ===
+# === Test: Database Streaming ===
 
-async def test_given_project_on_s3_when_open_then_downloading_database_progress_is_reported() -> None:
+async def test_given_project_on_s3_and_database_streaming_enabled_when_open_project_then_only_part_of_database_is_read() -> None:
+    assertEqual(
+        False,
+        crystal.model.project._OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE,
+        'Expected database streaming to be enabled by default')
+    
     s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
 
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
@@ -166,59 +173,168 @@ async def test_given_project_on_s3_when_open_then_downloading_database_progress_
                 region='us-east-1',
                 bucket='test-bucket',
                 key_prefix='Archive/TestProject.crystalproj',
-                ) as fake_s3_root, \
-            _fake_s3(fake_s3_root):
-        progress_calls = []  # type: list[tuple[int, int, float]]
+                ) as fake_s3_root:
 
-        class RecordingProgressListener(OpenProjectProgressListener):
-            def downloading_database_progress(
-                    self,
-                    bytes_downloaded: int,
-                    total_bytes: int,
-                    bytes_per_second: float,
-                    ) -> None:
-                progress_calls.append((bytes_downloaded, total_bytes, bytes_per_second))
+        db_size = os.path.getsize(os.path.join(project_dirpath, 'database.sqlite'))
 
-        with Project(s3_url, readonly=True, progress_listener=RecordingProgressListener()):
-            pass
+        with _fake_s3(fake_s3_root, omit_env_var_credentials=True), \
+                patch.object(
+                    S3VFSFile, 'xFileSize', autospec=True,
+                    side_effect=S3VFSFile.xFileSize
+                ) as spy_xfilesize, \
+                patch.object(
+                    S3VFSFile, 'xRead', autospec=True,
+                    side_effect=S3VFSFile.xRead
+                ) as spy_xread:
+            (mw, _) = await _open_project_from_s3_in_ui(
+                s3_url,
+                credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'))
+            await mw.close()
 
-        assert len(progress_calls) >= 1, 'Expected at least one downloading_database_progress call'
-        (final_bytes_downloaded, final_total_bytes, _) = progress_calls[-1]
-        assert final_bytes_downloaded == final_total_bytes, (
-            f'Expected final progress call to report 100% completion '
-            f'({final_bytes_downloaded} != {final_total_bytes})')
-        for (bytes_downloaded, total_bytes, _) in progress_calls:
-            assert 0 <= bytes_downloaded <= total_bytes
+    assert spy_xfilesize.call_count >= 1, \
+        'Expected xFileSize to be called at least once'
+    assert spy_xread.call_count >= 1, \
+        'Expected xRead to be called at least once'
+    
+    total_bytes_read = sum(c.args[1] for c in spy_xread.call_args_list)  # args[0]=self, args[1]=amount
+    assert total_bytes_read < db_size, (
+        f'Expected less than 100% of database to be read on open '
+        f'(read {total_bytes_read} of {db_size} bytes = {total_bytes_read / db_size:.1%})')
+
+
+# === Test: Database Download: Progress ===
+
+async def test_given_project_on_s3_when_open_then_downloading_database_progress_is_reported() -> None:
+    with patch('crystal.model.project._OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE', True):
+        s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                _fake_s3_root(
+                    project_dirpath,
+                    region='us-east-1',
+                    bucket='test-bucket',
+                    key_prefix='Archive/TestProject.crystalproj',
+                    ) as fake_s3_root, \
+                _fake_s3(fake_s3_root):
+            progress_calls = []  # type: list[tuple[int, int, float]]
+
+            class RecordingProgressListener(OpenProjectProgressListener):
+                def downloading_database_progress(
+                        self,
+                        bytes_downloaded: int,
+                        total_bytes: int,
+                        bytes_per_second: float,
+                        ) -> None:
+                    progress_calls.append((bytes_downloaded, total_bytes, bytes_per_second))
+
+            with Project(s3_url, readonly=True, progress_listener=RecordingProgressListener()):
+                pass
+
+            assert len(progress_calls) >= 1, 'Expected at least one downloading_database_progress call'
+            (final_bytes_downloaded, final_total_bytes, _) = progress_calls[-1]
+            assert final_bytes_downloaded == final_total_bytes, (
+                f'Expected final progress call to report 100% completion '
+                f'({final_bytes_downloaded} != {final_total_bytes})')
+            for (bytes_downloaded, total_bytes, _) in progress_calls:
+                assert 0 <= bytes_downloaded <= total_bytes
 
 
 async def test_given_project_on_s3_when_cancel_during_database_download_then_CancelOpenProject_is_raised() -> None:
-    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+    with patch('crystal.model.project._OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE', True):
+        s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
 
-    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
-            _fake_s3_root(
-                project_dirpath,
-                region='us-east-1',
-                bucket='test-bucket',
-                key_prefix='Archive/TestProject.crystalproj',
-                ) as fake_s3_root, \
-            _fake_s3(fake_s3_root):
+        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                _fake_s3_root(
+                    project_dirpath,
+                    region='us-east-1',
+                    bucket='test-bucket',
+                    key_prefix='Archive/TestProject.crystalproj',
+                    ) as fake_s3_root, \
+                _fake_s3(fake_s3_root):
 
-        class CancelOnFirstProgressListener(OpenProjectProgressListener):
-            def downloading_database_progress(
-                    self,
-                    bytes_downloaded: int,
-                    total_bytes: int,
-                    bytes_per_second: float,
-                    ) -> None:
-                raise CancelOpenProject()
+            class CancelOnFirstProgressListener(OpenProjectProgressListener):
+                def downloading_database_progress(
+                        self,
+                        bytes_downloaded: int,
+                        total_bytes: int,
+                        bytes_per_second: float,
+                        ) -> None:
+                    raise CancelOpenProject()
 
-        try:
-            with Project(s3_url, readonly=True, progress_listener=CancelOnFirstProgressListener()):
-                pass
-        except CancelOpenProject:
-            pass  # Expected
-        else:
-            raise AssertionError('Expected CancelOpenProject to be raised but project opened successfully')
+            try:
+                with Project(s3_url, readonly=True, progress_listener=CancelOnFirstProgressListener()):
+                    pass
+            except CancelOpenProject:
+                pass  # Expected
+            else:
+                raise AssertionError('Expected CancelOpenProject to be raised but project opened successfully')
+
+
+# === Test: Database Download: Cleanup ===
+
+@awith_subtests
+async def test_when_close_project_given_project_opened_from_s3_url_then_deletes_local_copy_of_project_database(subtests: SubtestsContext) -> None:
+    with patch('crystal.model.project._OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE', True):
+        s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+        with subtests.test(layer='model'):
+            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                    _fake_s3_root(
+                        project_dirpath,
+                        region='us-east-1',
+                        bucket='test-bucket',
+                        key_prefix='Archive/TestProject.crystalproj',
+                        ) as fake_s3_root:
+
+                captured_db_paths = []  # type: list[str]
+                original_ntf = tempfile.NamedTemporaryFile
+                def capture_db_path(*args, **kwargs):
+                    f = original_ntf(*args, **kwargs)
+                    captured_db_paths.append(f.name)
+                    return f
+
+                with _fake_s3(fake_s3_root), \
+                        patch('crystal.model.project.tempfile.NamedTemporaryFile',
+                            side_effect=capture_db_path):
+                    with Project(s3_url, readonly=True):
+                        (local_db_path,) = captured_db_paths
+                        assert os.path.exists(local_db_path), \
+                            f'Expected local DB copy to exist while project is open: {local_db_path}'
+
+                assert not os.path.exists(local_db_path), \
+                    f'Expected local DB copy to be deleted after project closed: {local_db_path}'
+
+        with subtests.test(layer='ui'):
+            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                    _fake_s3_root(
+                        project_dirpath,
+                        region='us-east-1',
+                        bucket='test-bucket',
+                        key_prefix='Archive/TestProject.crystalproj',
+                        ) as fake_s3_root:
+
+                captured_db_paths = []
+                original_ntf = tempfile.NamedTemporaryFile
+                def capture_db_path(*args, **kwargs):
+                    f = original_ntf(*args, **kwargs)
+                    captured_db_paths.append(f.name)
+                    return f
+
+                with _fake_s3(fake_s3_root, omit_env_var_credentials=True), \
+                        patch('crystal.model.project.tempfile.NamedTemporaryFile',
+                            side_effect=capture_db_path):
+                    (mw, _) = await _open_project_from_s3_in_ui(
+                        s3_url,
+                        credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'))
+                    try:
+                        (local_db_path,) = captured_db_paths
+                        assert os.path.exists(local_db_path), \
+                            f'Expected local DB copy to exist while project is open: {local_db_path}'
+                    finally:
+                        await mw.close()
+
+                assert not os.path.exists(local_db_path), \
+                    f'Expected local DB copy to be deleted after project closed: {local_db_path}'
 
 
 # === Test: Bucket Region Resolve Efficiency ===
@@ -606,72 +722,6 @@ async def test_project_path_is_s3_url_with_credentials_removed_given_project_ope
                     assert project.path == expected_path
                 finally:
                     await mw.close()
-
-
-# === Test: Database Management ===
-
-@awith_subtests
-async def test_when_close_project_given_project_opened_from_s3_url_then_deletes_local_copy_of_project_database(subtests: SubtestsContext) -> None:
-    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
-
-    with subtests.test(layer='model'):
-        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
-                _fake_s3_root(
-                    project_dirpath,
-                    region='us-east-1',
-                    bucket='test-bucket',
-                    key_prefix='Archive/TestProject.crystalproj',
-                    ) as fake_s3_root:
-
-            captured_db_paths = []  # type: list[str]
-            original_ntf = tempfile.NamedTemporaryFile
-            def capture_db_path(*args, **kwargs):
-                f = original_ntf(*args, **kwargs)
-                captured_db_paths.append(f.name)
-                return f
-
-            with _fake_s3(fake_s3_root), \
-                    patch('crystal.model.project.tempfile.NamedTemporaryFile',
-                          side_effect=capture_db_path):
-                with Project(s3_url, readonly=True):
-                    (local_db_path,) = captured_db_paths
-                    assert os.path.exists(local_db_path), \
-                        f'Expected local DB copy to exist while project is open: {local_db_path}'
-
-            assert not os.path.exists(local_db_path), \
-                f'Expected local DB copy to be deleted after project closed: {local_db_path}'
-
-    with subtests.test(layer='ui'):
-        with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
-                _fake_s3_root(
-                    project_dirpath,
-                    region='us-east-1',
-                    bucket='test-bucket',
-                    key_prefix='Archive/TestProject.crystalproj',
-                    ) as fake_s3_root:
-
-            captured_db_paths = []
-            original_ntf = tempfile.NamedTemporaryFile
-            def capture_db_path(*args, **kwargs):
-                f = original_ntf(*args, **kwargs)
-                captured_db_paths.append(f.name)
-                return f
-
-            with _fake_s3(fake_s3_root, omit_env_var_credentials=True), \
-                    patch('crystal.model.project.tempfile.NamedTemporaryFile',
-                          side_effect=capture_db_path):
-                (mw, _) = await _open_project_from_s3_in_ui(
-                    s3_url,
-                    credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'))
-                try:
-                    (local_db_path,) = captured_db_paths
-                    assert os.path.exists(local_db_path), \
-                        f'Expected local DB copy to exist while project is open: {local_db_path}'
-                finally:
-                    await mw.close()
-
-            assert not os.path.exists(local_db_path), \
-                f'Expected local DB copy to be deleted after project closed: {local_db_path}'
 
 
 # === Test: Read ===

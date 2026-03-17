@@ -16,6 +16,15 @@ copy media\vcruntime140\*.dll dist\ >nul
 @echo Copying in tzdata...
 call poetry run python -c "import os, shutil, tzdata; shutil.copytree(tzdata.__path__[0], os.path.join('dist', 'lib', 'tzdata'))"
 
+@rem Copy in AWS S3 remote database dependencies
+@echo Copying in apsw...
+call poetry run python -c "import os, shutil, apsw; shutil.copytree(os.path.dirname(apsw.__file__), os.path.join('dist', 'lib', 'apsw'))"
+
+@rem Copy in AWS S3 data access dependencies (botocore, boto3, s3transfer, jmespath).
+@rem See copy_aws_deps.py for details on why this is needed and the slimming strategy.
+@echo Copying in AWS S3 dependencies...
+call poetry run python copy_aws_deps.py
+
 @echo Built files:
 dir dist
 

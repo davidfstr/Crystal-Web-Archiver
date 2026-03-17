@@ -58,6 +58,7 @@ import shutil
 from shutil import COPY_BUFSIZE  # type: ignore[attr-defined]  # private API
 from sortedcontainers import SortedList
 import sqlite3
+import sqlite3.dbapi2
 import sys
 import tempfile
 from textwrap import dedent
@@ -90,6 +91,14 @@ _PROFILE_MIGRATE_REVISIONS_V1_TO_V2 = False
 # Whether to collect profiling information about Project._migrate_v2_to_v3().
 # See profiling_context() for more info.
 _PROFILE_MIGRATE_REVISIONS_V2_TO_V3 = False
+
+# Whether to download a copy of a project database opened from S3,
+# rather than trying to incrementally stream it from S3.
+# 
+# The downloading logic is more straightforward than streaming,
+# albeit less efficient. If streaming breaks for some reason,
+# downloading should still work.
+_OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE = False
 
 
 _OptionalStr = TypeVar('_OptionalStr', bound=str | None)
@@ -419,6 +428,7 @@ class Project(ListenableMixin):
         """
         (fs, project_path) = fs_path
         
+        # Prepare to open database
         tmp_db_file = None  # type: IO[bytes] | None
         if isinstance(fs, LocalFilesystem):
             db_filepath = fs.join(project_path, cls._DB_FILENAME)  # cache
@@ -435,90 +445,133 @@ class Project(ListenableMixin):
         elif isinstance(fs, S3Filesystem):
             if not readonly_requested:
                 raise NonLocalFilesystemReadOnlyError()
-
-            # Download the remote database locally
+            
             db_s3_path = fs.join(project_path, cls._DB_FILENAME)
-            total_db_bytes = fs.getsize(db_s3_path)
-            downloading_database()
-            local_db_file = tempfile.NamedTemporaryFile(
-                'wb',
-                suffix='.sqlite',
-                delete=False,  # required on Windows: avoids FILE_FLAG_DELETE_ON_CLOSE which prevents sqlite3.connect()
-            )
-            try:
-                with fs.open(db_s3_path, 'rb') as remote_db_file:
-                    # Copy in chunks to allow progress reporting and cancellation
-                    TARGET_MAX_DELAY_BETWEEN_REPORTS = 0.5  # seconds
-                    bytes_downloaded = 0
-                    last_report_time = time.monotonic()
-                    last_report_bytes = 0
-                    while True:
-                        chunk = remote_db_file.read(COPY_BUFSIZE)
-                        if not chunk:
-                            break
-                        local_db_file.write(chunk)
-                        bytes_downloaded += len(chunk)
+            if _OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE:
+                # Download the remote database locally
+                total_db_bytes = fs.getsize(db_s3_path)
+                downloading_database()
+                local_db_file = tempfile.NamedTemporaryFile(
+                    'wb',
+                    suffix='.sqlite',
+                    delete=False,  # required on Windows: avoids FILE_FLAG_DELETE_ON_CLOSE which prevents sqlite3.connect()
+                )
+                try:
+                    with fs.open(db_s3_path, 'rb') as remote_db_file:
+                        # Copy in chunks to allow progress reporting and cancellation
+                        TARGET_MAX_DELAY_BETWEEN_REPORTS = 0.5  # seconds
+                        bytes_downloaded = 0
+                        last_report_time = time.monotonic()
+                        last_report_bytes = 0
+                        while True:
+                            chunk = remote_db_file.read(COPY_BUFSIZE)
+                            if not chunk:
+                                break
+                            local_db_file.write(chunk)
+                            bytes_downloaded += len(chunk)
+    
+                            current_time = time.monotonic()  # capture
+                            if (current_time - last_report_time) >= TARGET_MAX_DELAY_BETWEEN_REPORTS:
+                                elapsed = current_time - last_report_time
+                                bytes_per_second = (bytes_downloaded - last_report_bytes) / elapsed
+                                downloading_database_progress(
+                                    bytes_downloaded,
+                                    total_db_bytes,
+                                    bytes_per_second,
+                                )  # may raise CancelOpenProject
+                                last_report_time = current_time
+                                last_report_bytes = bytes_downloaded
+                        # Final progress report at 100%
+                        elapsed = time.monotonic() - last_report_time
+                        bytes_per_second = (
+                            (bytes_downloaded - last_report_bytes) / elapsed
+                            if elapsed > 0
+                            else 0.0
+                        )
+                        downloading_database_progress(
+                            bytes_downloaded,
+                            total_db_bytes,
+                            bytes_per_second,
+                        )  # may raise CancelOpenProject
+                    local_db_file.flush()
+                except:
+                    local_db_file.close()
+                    raise
+                
+                db_filepath = local_db_file.name
+                can_write_db = False
+                tmp_db_file = local_db_file  # reinterpret
+            else:
+                # Open database directly from S3 (via range requests)
+                import apsw
+                from crystal.model.s3vfs import S3VFS
+                from crystal.util.db import ApswConnectionAdapter
 
-                        current_time = time.monotonic()  # capture
-                        if (current_time - last_report_time) >= TARGET_MAX_DELAY_BETWEEN_REPORTS:
-                            elapsed = current_time - last_report_time
-                            bytes_per_second = (bytes_downloaded - last_report_bytes) / elapsed
-                            downloading_database_progress(
-                                bytes_downloaded,
-                                total_db_bytes,
-                                bytes_per_second,
-                            )  # may raise CancelOpenProject
-                            last_report_time = current_time
-                            last_report_bytes = bytes_downloaded
-                    # Final progress report at 100%
-                    elapsed = time.monotonic() - last_report_time
-                    bytes_per_second = (
-                        (bytes_downloaded - last_report_bytes) / elapsed
-                        if elapsed > 0
-                        else 0.0
+                # NOTE: Must not be garbage collected while connection is open.
+                #       ApswConnectionAdapter holds a reference to keep it alive.
+                s3_vfs = S3VFS(fs, db_s3_path)
+                raw_db: sqlite3.dbapi2.Connection = cast(
+                    sqlite3.dbapi2.Connection,
+                    ApswConnectionAdapter(
+                        apsw.Connection(
+                            # Use immutable=1 to disable checks for concurrent modifications,
+                            # which would perform extra I/O for every database query.
+                            # - Must use file: URL to specify immutable=1
+                            # - Cannot embed an s3: URL inside a file: URL,
+                            #   so pass a placeholder path instead.
+                            # - S3VFS will ignore the placeholder path and
+                            #   open db_s3_path instead.
+                            'file:/__crystal_s3_placeholder__?immutable=1',
+                            flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI,
+                            vfs=S3VFS.NAME,
+                        ),
+                        s3_vfs
                     )
-                    downloading_database_progress(
-                        bytes_downloaded,
-                        total_db_bytes,
-                        bytes_per_second,
-                    )  # may raise CancelOpenProject
-                local_db_file.flush()
-            except:
-                local_db_file.close()
-                raise
+                )
 
-            db_filepath = local_db_file.name
-            can_write_db = False
-            tmp_db_file = local_db_file  # reinterpret
+                db_filepath = None  # no local DB
+                can_write_db = False
+                tmp_db_file = None
         else:
             assert_never(fs)
-        
+
         # Open database
-        db_connect_query = (
-            '?immutable=1'
-            if not can_write_db
-            else (
-                '?mode=ro'
-                if readonly_requested
-                else ''
+        if db_filepath is not None:
+            # Open local database
+            db_connect_query = (
+                '?immutable=1'
+                if not can_write_db
+                else (
+                    '?mode=ro'
+                    if readonly_requested
+                    else ''
+                )
             )
-        )
-        raw_db = sqlite3.connect(
-            'file:' + url_quote(db_filepath) + db_connect_query,
-            uri=True)
+            raw_db = sqlite3.connect(
+                'file:' + url_quote(db_filepath) + db_connect_query,
+                uri=True)
+        else:
+            # Remote database already open
+            assert raw_db is not None
         
-        try:
-            database_is_on_ssd = is_ssd(db_filepath)
-        except Exception:
-            # NOTE: Specially check for unexpected errors because SSD detection
-            #       is somewhat brittle and I don't want errors to completely
-            #       block opening a project
-            print(
-                '*** Unexpected error while checking whether project database is on SSD',
-                file=sys.stderr)
-            traceback.print_exc(file=sys.stderr)
-            
-            database_is_on_ssd = False  # conservative
+        # Detect whether database is on an SSD,
+        # which enables certain I/O optimizations
+        if isinstance(fs, LocalFilesystem):
+            assert db_filepath is not None
+            try:
+                database_is_on_ssd = is_ssd(db_filepath)
+            except Exception:
+                # NOTE: Specially check for unexpected errors because SSD detection
+                #       is somewhat brittle and I don't want errors to completely
+                #       block opening a project
+                print(
+                    '*** Unexpected error while checking whether project database is on SSD',
+                    file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+                
+                database_is_on_ssd = False  # conservative
+        else:
+            database_is_on_ssd = False
         
         readonly_actual = readonly_requested or not can_write_db
         db = DatabaseConnection(raw_db, readonly_actual, mark_dirty_func)
