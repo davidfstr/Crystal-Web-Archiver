@@ -155,7 +155,7 @@ async def test_can_open_project_with_credentialful_s3_url_as_readonly_and_serve_
                 await _ensure_can_serve_a_resource_revision(mw, project)
 
 
-# === Test: Database Download Progress ===
+# === Test: Database Download: Progress ===
 
 async def test_given_project_on_s3_when_open_then_downloading_database_progress_is_reported() -> None:
     with patch('crystal.model.project._OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE', True):
@@ -221,6 +221,73 @@ async def test_given_project_on_s3_when_cancel_during_database_download_then_Can
                 pass  # Expected
             else:
                 raise AssertionError('Expected CancelOpenProject to be raised but project opened successfully')
+
+
+# === Test: Database Download: Cleanup ===
+
+@awith_subtests
+async def test_when_close_project_given_project_opened_from_s3_url_then_deletes_local_copy_of_project_database(subtests: SubtestsContext) -> None:
+    with patch('crystal.model.project._OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE', True):
+        s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+        with subtests.test(layer='model'):
+            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                    _fake_s3_root(
+                        project_dirpath,
+                        region='us-east-1',
+                        bucket='test-bucket',
+                        key_prefix='Archive/TestProject.crystalproj',
+                        ) as fake_s3_root:
+
+                captured_db_paths = []  # type: list[str]
+                original_ntf = tempfile.NamedTemporaryFile
+                def capture_db_path(*args, **kwargs):
+                    f = original_ntf(*args, **kwargs)
+                    captured_db_paths.append(f.name)
+                    return f
+
+                with _fake_s3(fake_s3_root), \
+                        patch('crystal.model.project.tempfile.NamedTemporaryFile',
+                            side_effect=capture_db_path):
+                    with Project(s3_url, readonly=True):
+                        (local_db_path,) = captured_db_paths
+                        assert os.path.exists(local_db_path), \
+                            f'Expected local DB copy to exist while project is open: {local_db_path}'
+
+                assert not os.path.exists(local_db_path), \
+                    f'Expected local DB copy to be deleted after project closed: {local_db_path}'
+
+        with subtests.test(layer='ui'):
+            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+                    _fake_s3_root(
+                        project_dirpath,
+                        region='us-east-1',
+                        bucket='test-bucket',
+                        key_prefix='Archive/TestProject.crystalproj',
+                        ) as fake_s3_root:
+
+                captured_db_paths = []
+                original_ntf = tempfile.NamedTemporaryFile
+                def capture_db_path(*args, **kwargs):
+                    f = original_ntf(*args, **kwargs)
+                    captured_db_paths.append(f.name)
+                    return f
+
+                with _fake_s3(fake_s3_root, omit_env_var_credentials=True), \
+                        patch('crystal.model.project.tempfile.NamedTemporaryFile',
+                            side_effect=capture_db_path):
+                    (mw, _) = await _open_project_from_s3_in_ui(
+                        s3_url,
+                        credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'))
+                    try:
+                        (local_db_path,) = captured_db_paths
+                        assert os.path.exists(local_db_path), \
+                            f'Expected local DB copy to exist while project is open: {local_db_path}'
+                    finally:
+                        await mw.close()
+
+                assert not os.path.exists(local_db_path), \
+                    f'Expected local DB copy to be deleted after project closed: {local_db_path}'
 
 
 # === Test: Bucket Region Resolve Efficiency ===
@@ -608,73 +675,6 @@ async def test_project_path_is_s3_url_with_credentials_removed_given_project_ope
                     assert project.path == expected_path
                 finally:
                     await mw.close()
-
-
-# === Test: Database Management ===
-
-@awith_subtests
-async def test_when_close_project_given_project_opened_from_s3_url_then_deletes_local_copy_of_project_database(subtests: SubtestsContext) -> None:
-    with patch('crystal.model.project._OPEN_LOCAL_COPY_OF_S3_PROJECT_DATABASE', True):
-        s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
-
-        with subtests.test(layer='model'):
-            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
-                    _fake_s3_root(
-                        project_dirpath,
-                        region='us-east-1',
-                        bucket='test-bucket',
-                        key_prefix='Archive/TestProject.crystalproj',
-                        ) as fake_s3_root:
-
-                captured_db_paths = []  # type: list[str]
-                original_ntf = tempfile.NamedTemporaryFile
-                def capture_db_path(*args, **kwargs):
-                    f = original_ntf(*args, **kwargs)
-                    captured_db_paths.append(f.name)
-                    return f
-
-                with _fake_s3(fake_s3_root), \
-                        patch('crystal.model.project.tempfile.NamedTemporaryFile',
-                            side_effect=capture_db_path):
-                    with Project(s3_url, readonly=True):
-                        (local_db_path,) = captured_db_paths
-                        assert os.path.exists(local_db_path), \
-                            f'Expected local DB copy to exist while project is open: {local_db_path}'
-
-                assert not os.path.exists(local_db_path), \
-                    f'Expected local DB copy to be deleted after project closed: {local_db_path}'
-
-        with subtests.test(layer='ui'):
-            with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
-                    _fake_s3_root(
-                        project_dirpath,
-                        region='us-east-1',
-                        bucket='test-bucket',
-                        key_prefix='Archive/TestProject.crystalproj',
-                        ) as fake_s3_root:
-
-                captured_db_paths = []
-                original_ntf = tempfile.NamedTemporaryFile
-                def capture_db_path(*args, **kwargs):
-                    f = original_ntf(*args, **kwargs)
-                    captured_db_paths.append(f.name)
-                    return f
-
-                with _fake_s3(fake_s3_root, omit_env_var_credentials=True), \
-                        patch('crystal.model.project.tempfile.NamedTemporaryFile',
-                            side_effect=capture_db_path):
-                    (mw, _) = await _open_project_from_s3_in_ui(
-                        s3_url,
-                        credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'))
-                    try:
-                        (local_db_path,) = captured_db_paths
-                        assert os.path.exists(local_db_path), \
-                            f'Expected local DB copy to exist while project is open: {local_db_path}'
-                    finally:
-                        await mw.close()
-
-                assert not os.path.exists(local_db_path), \
-                    f'Expected local DB copy to be deleted after project closed: {local_db_path}'
 
 
 # === Test: Read ===
