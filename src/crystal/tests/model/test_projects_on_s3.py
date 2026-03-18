@@ -43,7 +43,7 @@ from crystal.tests.util.wx_keyboard_actions import press_tab_in_window_to_naviga
 from crystal.util.controls import click_button, TreeItem
 from crystal.util.wx_dialog import mocked_show_modal
 from crystal.util.wx_window import SetFocus
-from crystal.util.xos import is_windows
+from crystal.util.xos import is_mac_os, is_windows
 from crystal.model.s3vfs import S3VFSFile
 from io import TextIOBase
 import os
@@ -52,7 +52,7 @@ import subprocess
 import tempfile
 from typing import assert_never
 import wx
-from unittest import skip
+from unittest import SkipTest, skip
 from unittest.mock import patch
 import urllib.request
 
@@ -889,6 +889,9 @@ async def test_can_open_s3_dialog_from_file_menu(subtests: SubtestsContext) -> N
                 ) as fake_s3_root:
 
         with subtests.test(when='before_project_opened'):
+            if not is_mac_os():
+                raise SkipTest('minimal menubar only visible on macOS')
+            
             # Trigger from minimal menubar (no project open yet)
             with _fake_s3(fake_s3_root, omit_env_var_credentials=True):
                 (mw, _) = await _open_project_from_s3_in_ui(
