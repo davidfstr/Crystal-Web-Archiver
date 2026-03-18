@@ -1365,8 +1365,14 @@ def _prompt_to_open_project_from_s3(
             raise CancelOpenProject()
         plain_s3_url = dialog.plain_s3_url
         credentials = dialog.credentials
-
+    
+    # Call opening_project() early so that the progress dialog shows
+    # itself early, to give the user feedback ASAP.
+    # NOTE: Project.__init__() will internally call opening_project() later.
+    progress_listener.opening_project()
+    
     try:
+        # NOTE: Performs a HEAD network request
         is_valid = Project.is_valid(plain_s3_url, fs=S3Filesystem(credentials))
     except PermissionError as e:
         _show_access_denied_dialog(e)

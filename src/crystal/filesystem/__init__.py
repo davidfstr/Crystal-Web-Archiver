@@ -326,6 +326,9 @@ class S3Filesystem(_AbstractFilesystem):
       to be created. There is no makedirs() command.
     - Queries like "does X directory exist" are not supported.
     """
+    # Whether to print all network requests
+    _VERBOSE = False
+    
     _MAX_CACHED_S3_CLIENTS = 4
     
     def __init__(self, credentials: 'Credentials | ProfileCredentials | None' = None) -> None:
@@ -427,8 +430,12 @@ class S3Filesystem(_AbstractFilesystem):
         s3_client = self._get_or_create_s3_client(bucket, region_hint)
         try:
             if range_header is None:
+                if self._VERBOSE:
+                    print(f'S3Filesystem: GET s3://{bucket}/{key}')
                 resp = s3_client.get_object(Bucket=bucket, Key=key)
             else:
+                if self._VERBOSE:
+                    print(f'S3Filesystem: GET s3://{bucket}/{key} {start}-{end}')
                 resp = s3_client.get_object(Bucket=bucket, Key=key, Range=range_header)
         except botocore.exceptions.ClientError as e:
             error_code = e.response.get('Error', {}).get('Code')
@@ -474,6 +481,8 @@ class S3Filesystem(_AbstractFilesystem):
         (bucket, key, region_hint) = self.parse_url(path)
         s3_client = self._get_or_create_s3_client(bucket, region_hint)
         try:
+            if self._VERBOSE:
+                print(f'S3Filesystem: HEAD s3://{bucket}/{key}')
             resp = s3_client.head_object(Bucket=bucket, Key=key)
         except botocore.exceptions.ClientError as e:
             error_code = e.response.get('Error', {}).get('Code')

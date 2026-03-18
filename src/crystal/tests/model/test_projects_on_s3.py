@@ -18,6 +18,7 @@ import crystal.model.project
 from crystal.model.project import MigrationType, NonLocalFilesystemNotSupported, NonLocalFilesystemReadOnlyError
 from crystal.model.resource_revision import ResourceRevision
 from crystal.progress.interface import CancelOpenProject, OpenProjectProgressListener
+from crystal.progress.ui import OpenProjectProgressDialog
 from crystal.server import get_request_url
 from crystal.tests.util.asserts import assertEqual, assertIn, assertRegex
 from crystal.tests.util.cli import (
@@ -27,7 +28,7 @@ from crystal.tests.util.cli import (
     read_until,
 )
 from crystal.tests.util.fake_boto3 import install as install_fake_boto3
-from crystal.tests.util.fake_boto3.boto3 import HttpRequestToS3
+from crystal.tests.util.fake_boto3.boto3 import HttpRequestToS3, _FakeS3Client
 from crystal.tests.util.mark import should_check_focused_windows
 from crystal.tests.util.save_as import save_as_with_ui, save_as_without_ui
 from crystal.tests.util.server import (
@@ -155,6 +156,45 @@ async def test_can_open_project_with_credentialful_s3_url_as_readonly_and_serve_
                     s3_url,
                     fill_more_options=verify_credential_controls_disabled)
                 await _ensure_can_serve_a_resource_revision(mw, project)
+
+
+# NOTE: It's important to report opening_project() early so that the OpenProjectProgressDialog
+#       appears in a timely fashion, so that the user isn't left with no progress indicator
+#       while the project is opening.
+async def test_given_project_on_s3_when_open_then_opening_project_is_reported_before_any_s3_requests_are_made() -> None:
+    s3_url = 's3://test-bucket/Archive/TestProject.crystalproj/?region=us-east-1'
+
+    with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath, \
+            _fake_s3_root(
+                project_dirpath,
+                region='us-east-1',
+                bucket='test-bucket',
+                key_prefix='Archive/TestProject.crystalproj',
+                ) as fake_s3_root, \
+            _fake_s3(fake_s3_root, omit_env_var_credentials=True):
+
+        _FakeS3Client.http_requests.clear()
+
+        # Capture S3 request count made at time opening_project() is first called
+        s3_request_count_at_first_opening_project = None  # type: int | None
+        original_opening_project = OpenProjectProgressDialog.opening_project
+        def spy_opening_project(self) -> None:
+            nonlocal s3_request_count_at_first_opening_project
+            if s3_request_count_at_first_opening_project is None:
+                s3_request_count_at_first_opening_project = len(_FakeS3Client.http_requests)
+            original_opening_project(self)
+
+        with patch.object(OpenProjectProgressDialog, 'opening_project', spy_opening_project):
+            (mw, _) = await _open_project_from_s3_in_ui(
+                s3_url,
+                credentials=S3Filesystem.Credentials('fake-access-key', 'fake-secret-key'))
+            await mw.close()
+
+    assert s3_request_count_at_first_opening_project is not None, \
+        'Expected opening_project() to be called at least once'
+    assert s3_request_count_at_first_opening_project == 0, (
+        f'Expected opening_project() to be called before any S3 requests, '
+        f'but {s3_request_count_at_first_opening_project} S3 request(s) were made first')
 
 
 # === Test: Database Streaming ===

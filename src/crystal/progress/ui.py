@@ -163,6 +163,9 @@ class OpenProjectProgressDialog(_AbstractProgressDialog, OpenProjectProgressList
 
     @override
     def opening_project(self) -> None:
+        """
+        Called when a project starts opening, possibly multiple times.
+        """
         self._show_noncancelable_indeterminate_message(
             f'Opening project...')
 
