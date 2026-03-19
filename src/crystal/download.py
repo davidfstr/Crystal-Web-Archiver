@@ -199,7 +199,9 @@ class HttpResourceRequest(ResourceRequest):
         
         # Disallow network requests while running tests
         if tests_are_running() and not (
-                host_and_port.startswith('127.0.0.1:') or 
+                host_and_port == '127.0.0.1' or
+                host_and_port.startswith('127.0.0.1:') or
+                host_and_port == 'localhost' or
                 host_and_port.startswith('localhost:')):
             BLOCK_MESSAGE = 'Blocked by Crystal Test Runner Firewall'
             metadata = ResourceRevisionMetadata({
