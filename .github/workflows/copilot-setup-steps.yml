@@ -109,3 +109,9 @@ jobs:
       
       # END: Duplicate steps from build-linux job in ci.yaml
       # ========================================================================
+
+      - name: Ensure crystal runs without error
+        run: poetry run crystal --help
+
+      - name: Run non-UI tests
+        run: poetry run python -m pytest
