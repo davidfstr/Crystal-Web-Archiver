@@ -85,7 +85,7 @@ jobs:
       # NOTE: To recompile the .wgn, see instructions in: doc/how_to_make_wxpython_wagon.md
       - name: Install dependency wxPython from wagon (Python 3.14)
         run: |
-          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.5.0b/wxPython-4.2.4-py314-none-linux_x86_64.wgn
+          wget --no-verbose https://github.com/davidfstr/Crystal-Web-Archiver/releases/download/v1.6.0b/wxPython-4.2.5-py314-none-linux_x86_64.wgn
           poetry run wagon install *.wgn
           rm *.wgn
 
