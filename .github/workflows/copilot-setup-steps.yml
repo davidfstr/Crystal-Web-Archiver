@@ -111,7 +111,7 @@ jobs:
       # ========================================================================
 
       - name: Ensure crystal runs without error
-        run: poetry run crystal --help
+        run: poetry run crystal --version
 
       - name: Run non-UI tests
         run: poetry run python -m pytest
