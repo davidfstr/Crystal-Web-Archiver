@@ -45,8 +45,8 @@ def load_children_of_drg_task(
 
 @contextmanager
 def network_down() -> Iterator[None]:
-    def MockHTTPConnection(*args, **kwargs) -> NoReturn:
+    def mock_http_resource_request__call__(self) -> NoReturn:
         raise socket.gaierror(8, 'nodename nor servname provided, or not known')
     
-    with patch('crystal.download.HTTPConnection', MockHTTPConnection):
+    with patch('crystal.download.HttpResourceRequest.__call__', mock_http_resource_request__call__):
         yield
