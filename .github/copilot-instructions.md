@@ -85,5 +85,8 @@ Error Handling:
 * Run `crystal --version` and ensure you see a result like `Crystal 2.0.2`.
     * If you see `crystal: command not found` then you probably need to activate a Python virtual environment first or use Poetry to run commands. Try `source venv3.14/bin/activate && crystal --version` first. If there is no `venv3.14` directory then try `poetry run crystal --version`.
 * Ensure you can run a unit test. Try `pytest tests/test_version.py` or `poetry run pytest ...`.
-* Ensure you can run an end-to-end test. Try `xvfb-run crystal test crystal.tests.test_main_window.test_branding_area_shows_crystal_logo_and_program_name_and_version_number_and_authors` or `poetry run xvfb-run crystal test ...`.
+* Ensure you can run an end-to-end test. Try `xvfb-run crystal test crystal.tests.test_main_window` or `poetry run xvfb-run crystal test ...`.
     * If you see `xvfb-run: command not found` then remove `xvfb-run` from the command and try again.
+    * If you see `Unable to access the X Display, is $DISPLAY set properly?` then you probably forgot to use `xvfb-run`.
+
+If you are running in a cloud agent environment you MUST check the above steps before attempting to run any other `crystal` commands.
