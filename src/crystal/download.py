@@ -10,8 +10,10 @@ from crystal.model import (
     ResourceRevisionMetadata,
 )
 from crystal.util.cli import print_warning
+from crystal.util.test_mode import tests_are_running
 from crystal.util.xthreading import fg_call_and_wait
 from http.client import HTTPConnection, HTTPSConnection
+from io import BytesIO
 import socks
 import sockshandler
 import ssl
@@ -194,6 +196,21 @@ class HttpResourceRequest(ResourceRequest):
             (url_parts.path or '/') + 
             ('' if url_parts.query == '' else f'?{url_parts.query}')
         )
+        
+        # Disallow network requests while running tests
+        if tests_are_running() and not (
+                host_and_port.startswith('127.0.0.1:') or 
+                host_and_port.startswith('localhost:')):
+            BLOCK_MESSAGE = 'Blocked by Crystal Test Runner Firewall'
+            metadata = ResourceRevisionMetadata({
+                'http_version': 10,
+                'status_code': 403,
+                'reason_phrase': BLOCK_MESSAGE,
+                'headers': [
+                    ['content-type', 'text/plain; charset=utf-8'],
+                ],
+            })
+            return (metadata, BytesIO(BLOCK_MESSAGE.encode('utf-8')))
         
         conn: HTTPConnection | HTTPSConnection | _SocksHTTPConnection | _SocksHTTPSConnection
         proxy_type = app_prefs.proxy_type  # cache
