@@ -295,8 +295,8 @@ def scale_timeout(timeout: float | None) -> float | None:
         return timeout * GLOBAL_TIMEOUT_MULTIPLIER
 
 def get_default_timeout(context: BrowserContext) -> float | None:
-    # HACK: Uses Playright private API
-    return context._timeout_settings.default_timeout()  # type: ignore[attr-defined]
+    # HACK: Uses Playwright private API
+    return context._impl_obj._timeout_settings.default_timeout()  # type: ignore[attr-defined]
 
 
 # ------------------------------------------------------------------------------
