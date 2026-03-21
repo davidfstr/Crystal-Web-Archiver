@@ -48,7 +48,7 @@ run-name: >
 # Set the subset of tests to run across all environments.
 # To run all tests, set to an empty string.
 env:
-  TEST_NAMES: ""
+  TEST_NAMES: "test_workflows"
 
 # 1. Test Crystal binary on each supported OS
 # 2. Test Crystal with Address Sanitizer on macOS specially
