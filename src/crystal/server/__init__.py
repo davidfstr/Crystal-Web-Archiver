@@ -35,7 +35,7 @@ from crystal.util.test_mode import tests_are_running
 from crystal.util.unicode_labels import decorate_label
 from crystal.util.xthreading import (
     bg_affinity, bg_call_later, fg_affinity, fg_call_and_wait, fg_wait_for,
-    is_foreground_thread,
+    is_foreground_thread, is_single_threaded_mode,
     run_thread_switching_coroutine, SwitchToThread,
 )
 from crystal.util.xtyping import intstr_from
@@ -146,7 +146,7 @@ class ProjectServer:
             else:
                 try:
                     address = (host, port)
-                    server = _HttpServer(address, _RequestHandler)
+                    server = _HttpServer.create_with_address(address, project, verbosity, stdout)
                 except Exception as e:
                     if try_other_ports and is_port_in_use_error(e):
                         pass
@@ -154,13 +154,10 @@ class ProjectServer:
                         raise
                 else:
                     break
-            
+
             # Try another port
             port += 1
             continue
-        server.project = project
-        server.verbosity = verbosity
-        server.stdout = stdout
         
         self._server = server
         self._port = port
@@ -307,7 +304,8 @@ def get_request_url(
     
     request_host = f'{host}:{port}'
     return _RequestHandler.get_request_url_with_host(
-        archive_url, request_host, project_default_url_prefix)
+        archive_url, request_host, project_default_url_prefix,
+        request_scheme='http')
 
 
 @contextmanager
@@ -491,19 +489,57 @@ class _HttpServer(HTTPServer):
     project: Project
     verbosity: Verbosity
     stdout: TextIO | None
-    
+
+    @classmethod
+    def create_with_address(
+            cls,
+            address: tuple[str, int],
+            project: Project,
+            verbosity: Verbosity,
+            stdout: TextIO | None,
+            ) -> '_HttpServer':
+        """Creates an _HttpServer bound to the given address."""
+        server = cls(address, _RequestHandler)
+        server.project = project
+        server.verbosity = verbosity
+        server.stdout = stdout
+        return server
+
+    @classmethod
+    def create_without_address(
+            cls,
+            project: Project,
+            verbosity: Verbosity,
+            stdout: TextIO | None,
+            ) -> '_HttpServer':
+        """
+        Creates an _HttpServer without binding to any address or socket.
+
+        Intended for use in environments like AWS Lambda where incoming
+        connections are handed to the handler directly, not accepted from a
+        listening socket.
+        """
+        server = object.__new__(cls)
+        # Call only BaseServer.__init__ to set the minimum required attributes
+        # without creating or binding a real socket.
+        socketserver.BaseServer.__init__(server, ('lambda', 443), _RequestHandler)
+        server.project = project
+        server.verbosity = verbosity
+        server.stdout = stdout
+        return server
+
     @override
     def handle_error(self, request, client_address):
         # Print to stderr a message starting with
         # 'Exception occurred during processing of request from'
         return super().handle_error(request, client_address)
-    
+
     @override
     def server_bind(self):
         """
         Overrides server_bind to assume the server name is "localhost"
         when bound to 127.0.0.1.
-        
+
         The default implementation of HTTPServer.server_bind() uses
         `socket.getfqdn(host)` to determine the server name, which shows an
         unwanted 'Allow "Crystal" to find devices on local networks?'
@@ -789,10 +825,16 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_resource_not_in_archive(archive_url)
             return
         
-        # HACK: Don't wait for subresources to download if there is no real
-        #       scheduler thread to run the downloads
-        scheduler_running = isinstance(self.project._scheduler_thread, threading.Thread)
-        if scheduler_running:
+        can_download = not self.project.readonly
+        scheduler_usable = (
+            # No real scheduler thread available
+            isinstance(self.project._scheduler_thread, threading.Thread)
+            # In single-threaded mode (e.g. AWS Lambda) the scheduler thread
+            # exists but cannot process work because there is no main loop
+            # draining deferred foreground calls, so treat it as unusable
+            and not is_single_threaded_mode()
+        )
+        if can_download and scheduler_usable:
             # 1. Wait for any embedded subresources to finish downloading
             # 2. Escalate any in-progress download of subresources to interactive priority
             download_embedded_future = resource.download(
@@ -1231,9 +1273,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
                 return
             
             # NOTE: Use same algorithm as the NewGroupDialog to calculate and present URLs
-            from crystal.browser.new_group import NewGroupDialog
+            from crystal.browser.new_group_info import NewGroupDialogInfo
             matching_urls_and_more_items = fg_call_and_wait(
-                lambda: NewGroupDialog._calculate_preview_urls(self.project, url_pattern))
+                lambda: NewGroupDialogInfo._calculate_preview_urls(self.project, url_pattern))
             self._send_json_response(200, {
                 'matching_urls': matching_urls_and_more_items,
             })
@@ -1469,7 +1511,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
             archive_url: str,
             referrer_archive_url: str | None,
             ) -> CreateGroupFormData:
-        from crystal.browser.entitytree import ResourceGroupNode, RootResourceNode
+        from crystal.browser.entitytree_info import (
+            ResourceGroupNodeInfo,
+            RootResourceNodeInfo,
+        )
         
         # Format Source choices
         # NOTE: Source choice computation duplicated in NewGroupDialog._create_fields
@@ -1481,8 +1526,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
         for rr in project.root_resources:
             source_choices.append(SourceChoice({
                 'display_name': decorate_label(
-                    RootResourceNode.ICON,
-                    RootResourceNode.calculate_title_of(rr),
+                    RootResourceNodeInfo.ICON,
+                    RootResourceNodeInfo.calculate_title_of(rr),
                     # NOTE: Browsers do not require a truncation fix
                     truncation_fix=''),
                 'value': SourceChoiceValue(
@@ -1491,8 +1536,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
         for rg in project.resource_groups:
             source_choices.append(SourceChoice({
                 'display_name': decorate_label(
-                    ResourceGroupNode.ICON,
-                    ResourceGroupNode.calculate_title_of(rg),
+                    ResourceGroupNodeInfo.ICON,
+                    ResourceGroupNodeInfo.calculate_title_of(rg),
                     # NOTE: Browsers do not require a truncation fix
                     truncation_fix=''),
                 'value': SourceChoiceValue(
@@ -1811,15 +1856,25 @@ class _RequestHandler(BaseHTTPRequestHandler):
             else:
                 return None
     
+    @property
+    def request_scheme(self) -> str:
+        """Returns 'https' or 'http' based on the incoming request headers."""
+        scheme = self.headers.get('X-Forwarded-Proto', 'http')
+        if scheme not in ('http', 'https'):
+            scheme = 'http'
+        return scheme
+
     def get_request_url(self, archive_url: str) -> str:
         return self.get_request_url_with_host(
-            archive_url, self.request_host, self.project.default_url_prefix)
+            archive_url, self.request_host, self.project.default_url_prefix,
+            request_scheme=self.request_scheme)
     
     @staticmethod
     def get_request_url_with_host(
             archive_url: str,
             request_host: str,
             default_url_prefix: str | None,
+            *, request_scheme: str = 'http',
             ) -> str:
         """
         Given the absolute URL of a resource, returns the URL that should be used to
@@ -1840,11 +1895,10 @@ class _RequestHandler(BaseHTTPRequestHandler):
                     pass
                 else:
                     # Eliminate the default URL prefix
-                    return f'http://{request_host}' + slash_path
-        
+                    return f'{request_scheme}://{request_host}' + slash_path
+
         archive_url_parts = urlparse(archive_url)
         
-        request_scheme = 'http'
         request_netloc = request_host
         request_path = '_/{}/{}{}'.format(
             archive_url_parts.scheme,
