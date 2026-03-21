@@ -28,7 +28,7 @@ Windows 11 and later:
             C:\Users\__YOUR_USERNAME__\.poetry\bin
         - Ensure Poetry works in Command Prompt:
             $ poetry --version
-    * Inno Setup 6.4.3, from https://jrsoftware.org/isdl.php
+    * Inno Setup 6.7.1, from https://jrsoftware.org/isdl.php#v6
 2. Run the following commands in a Command Prompt window from this directory:
     $ poetry install
     $ cd setup
