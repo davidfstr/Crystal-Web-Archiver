@@ -10,7 +10,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from crystal.model.project import Project
+    from crystal.model import Project
 
 
 # ------------------------------------------------------------------------------
@@ -62,7 +62,7 @@ class Alias:
         * sqlite3.DatabaseError --
             if a database error occurred, preventing the creation of the new Alias.
         """
-        from crystal.model.project import Project, ProjectReadOnlyError
+        from crystal.model import Project, ProjectReadOnlyError
         
         project = resolve_proxy(project)  # type: ignore[assignment]
         if not isinstance(project, Project):
@@ -120,7 +120,7 @@ class Alias:
         * sqlite3.DatabaseError --
             if the delete fully failed due to a database error
         """
-        from crystal.model.project import ProjectReadOnlyError
+        from crystal.model import ProjectReadOnlyError
         
         if self.project.readonly:
             raise ProjectReadOnlyError()
@@ -149,7 +149,7 @@ class Alias:
         return self._target_url_prefix
     @fg_affinity
     def _set_target_url_prefix(self, target_url_prefix: str) -> None:
-        from crystal.model.project import ProjectReadOnlyError
+        from crystal.model import ProjectReadOnlyError
         
         if not target_url_prefix.endswith('/'):
             raise ValueError('target_url_prefix must end in slash (/)')
@@ -173,7 +173,7 @@ class Alias:
         return self._target_is_external
     @fg_affinity
     def _set_target_is_external(self, target_is_external: bool) -> None:
-        from crystal.model.project import ProjectReadOnlyError
+        from crystal.model import ProjectReadOnlyError
         
         if not isinstance(target_is_external, bool):
             raise TypeError()

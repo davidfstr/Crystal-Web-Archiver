@@ -15,7 +15,7 @@ from crystal.filesystem import LocalFilesystem, S3Filesystem
 from crystal.model import (
     Alias, Project, ProjectReadOnlyError, Resource, ResourceGroup, ResourceGroupSource, RootResource,
 )
-from crystal.model.project import MigrationType, NonLocalFilesystemNotSupported, NonLocalFilesystemReadOnlyError
+from crystal.model.project import MigrationType, NonLocalFilesystemNotSupported
 from crystal.progress.interface import (
     CancelLoadUrls, CancelSaveAs, DummyOpenProjectProgressListener,
     OpenProjectProgressListener,
