@@ -49,7 +49,7 @@ async def test_can_create_project_with_menuitem_given_dirty_untitled_project_vis
         # Create a RootResource to make the project dirty
         RootResource(project1, '', Resource(project1, 'https://example.com/'))
         
-        with patch('crystal.browser.ShowModal',
+        with patch('crystal.browser.main_window.ShowModal',
                 mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
             await mw1.start_new_project_with_menuitem()
             
@@ -66,7 +66,7 @@ async def test_can_create_project_with_menuitem_given_dirty_untitled_project_vis
         with xtempfile.TemporaryDirectory() as tmp_dir:
             save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
             with file_dialog_returning(save_path):
-                with patch('crystal.browser.ShowModal',
+                with patch('crystal.browser.main_window.ShowModal',
                         mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)):
                     await mw1.start_new_project_with_menuitem()
                     
@@ -81,7 +81,7 @@ async def test_can_create_project_with_menuitem_given_dirty_untitled_project_vis
         # Create a RootResource to make the project dirty
         RootResource(project1, '', Resource(project1, 'https://example.com/'))
         
-        with patch('crystal.browser.ShowModal',
+        with patch('crystal.browser.main_window.ShowModal',
                 mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)):
             await mw1.start_new_project_with_menuitem()
             
@@ -156,7 +156,7 @@ async def test_can_open_project_with_menuitem_given_dirty_untitled_project_visib
             RootResource(project1, '', Resource(project1, 'https://example.com/'))
             
             with file_dialog_returning(project2_dirpath):
-                with patch('crystal.browser.ShowModal',
+                with patch('crystal.browser.main_window.ShowModal',
                         mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
                     await mw1.start_open_project_with_menuitem()
                     
@@ -174,7 +174,7 @@ async def test_can_open_project_with_menuitem_given_dirty_untitled_project_visib
             with xtempfile.TemporaryDirectory() as tmp_dir:
                 save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
                 with file_dialog_returning([save_path, project2_dirpath]):
-                    with patch('crystal.browser.ShowModal',
+                    with patch('crystal.browser.main_window.ShowModal',
                             mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)):
                         await mw1.start_open_project_with_menuitem()
                         
@@ -190,7 +190,7 @@ async def test_can_open_project_with_menuitem_given_dirty_untitled_project_visib
             # Create a RootResource to make the project dirty
             RootResource(project1, '', Resource(project1, 'https://example.com/'))
             
-            with patch('crystal.browser.ShowModal',
+            with patch('crystal.browser.main_window.ShowModal',
                     mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)):
                 await mw1.start_open_project_with_menuitem()
                 
@@ -262,7 +262,7 @@ async def test_can_close_project_with_menuitem_given_dirty_untitled_project_visi
         # Create a RootResource to make the project dirty
         RootResource(project1, '', Resource(project1, 'https://example.com/'))
         
-        with patch('crystal.browser.ShowModal',
+        with patch('crystal.browser.main_window.ShowModal',
                 mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
             await mw1.start_close_project_with_menuitem()
             
@@ -278,7 +278,7 @@ async def test_can_close_project_with_menuitem_given_dirty_untitled_project_visi
         with xtempfile.TemporaryDirectory() as tmp_dir:
             save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
             with file_dialog_returning(save_path):
-                with patch('crystal.browser.ShowModal',
+                with patch('crystal.browser.main_window.ShowModal',
                         mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)):
                     await mw1.start_close_project_with_menuitem()
                     
@@ -292,7 +292,7 @@ async def test_can_close_project_with_menuitem_given_dirty_untitled_project_visi
         # Create a RootResource to make the project dirty
         RootResource(project1, '', Resource(project1, 'https://example.com/'))
         
-        with patch('crystal.browser.ShowModal',
+        with patch('crystal.browser.main_window.ShowModal',
                 mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)):
             await mw1.start_close_project_with_menuitem()
             

@@ -270,7 +270,7 @@ recommended unless you are writing tests intended to directly test the UI.
 After creating or opening a project, you'll get an `mw`
 (`crystal.tests.util.windows.MainWindow`) object which can be interacted with
 to manipulate the UI in the main window. (This is not the same as the
-`crystal.browser.MainWindow` object that is available on the Crystal CLI.)
+`crystal.browser.main_window.MainWindow` object that is available on the Crystal CLI.)
 
 Read the source of `MainWindow` or look at how other tests interact with it
 to determine what actions are possible.

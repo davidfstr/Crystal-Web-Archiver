@@ -9,7 +9,7 @@ Especially exercises code in:
 
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
-from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.main_window import MainWindow as RealMainWindow
 from crystal.browser.open_project_from_s3 import OpenProjectFromS3Dialog
 from crystal.filesystem import FilesystemPath, LocalFilesystem, RENAME_SUFFIX, S3Filesystem
 from crystal.model import Project, ProjectFormatError
@@ -1314,7 +1314,7 @@ async def test_when_save_as_given_project_opened_from_s3_url_then_raises_NonLoca
                             captured_message = dialog.Message
                         return wx.ID_OK
                     
-                    with patch('crystal.browser.ShowModal',
+                    with patch('crystal.browser.main_window.ShowModal',
                             mocked_show_modal('cr-save-error-dialog', capture_message_and_dismiss),
                             ) as mock_show_modal:
                         await save_as_with_ui(rmw, save_path, expect_file_dialog=False)

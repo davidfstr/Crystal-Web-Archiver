@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from crystal.app_preferences import app_prefs
-from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.main_window import MainWindow as RealMainWindow
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.model import (
     Project, ProjectReadOnlyError, Resource, ResourceGroup, RootResource,
@@ -330,7 +330,7 @@ async def test_when_dirty_untitled_project_closed_then_prompts_to_save() -> None
                 assert mw.main_window.OSXIsModified()
 
             # Close the project, expect a prompt to save, and save to the specified path
-            with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)), \
+            with patch('crystal.browser.main_window.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)), \
                     file_dialog_returning(save_path):
                 await mw.close()
                 assert os.path.exists(save_path)
@@ -341,7 +341,7 @@ async def test_when_clean_untitled_project_closed_then_does_not_prompt_to_save()
         assert not project.is_dirty
 
         # Close project. Ensure no prompt to save.
-        with patch('crystal.browser.ShowModal') as mock_show_modal:
+        with patch('crystal.browser.main_window.ShowModal') as mock_show_modal:
             await mw.close()
             mock_show_modal.assert_not_called()
 
@@ -407,7 +407,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
                 return wx.ID_YES
 
             # Start logout. Expect a prompt to save. Save.
-            with patch('crystal.browser.ShowModal', mocked_show_modal(
+            with patch('crystal.browser.main_window.ShowModal', mocked_show_modal(
                         'cr-save-changes-dialog',
                         _ensure_logout_vetoed_and_return_yes)), \
                     file_dialog_returning(save_path):
@@ -435,7 +435,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
         assert project.is_dirty
         
         # Start logout. Expect a prompt to save. Cancel.
-        with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)):
+        with patch('crystal.browser.main_window.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)):
             logout_event = _simulate_os_logout()
 
             # Verify the logout was vetoed
@@ -446,7 +446,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
             assert project.is_untitled
         
         # Now close the project without saving
-        with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
+        with patch('crystal.browser.main_window.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
             await mw.close()
 
 
@@ -460,7 +460,7 @@ async def test_given_os_logout_with_dirty_untitled_project_and_prompts_to_save_w
         assert project.is_dirty
         
         # Start logout. Expect a prompt to save. Do not save.
-        with patch('crystal.browser.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
+        with patch('crystal.browser.main_window.ShowModal', mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
             _simulate_os_logout()
             
             # Ensure project was closed
@@ -476,7 +476,7 @@ async def test_when_close_untitled_prompt_and_user_does_not_save_then_project_mo
 
         with patch('crystal.filesystem.LocalFilesystem.send2trash', wraps=send2trash.send2trash) as send2trash_spy, \
                 patch(
-                    'crystal.browser.ShowModal',
+                    'crystal.browser.main_window.ShowModal',
                     mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
             await mw.close()
         
@@ -820,7 +820,7 @@ async def test_when_save_as_project_and_destination_filesystem_writable_generall
         
         # Run the save operation
         with patch.object(DatabaseCursor, 'execute', spy_execute), \
-                patch('crystal.browser.ShowModal', mocked_show_modal(
+                patch('crystal.browser.main_window.ShowModal', mocked_show_modal(
                     'cr-save-error-dialog', wx.ID_OK)):
             await save_as_with_ui(rmw, save_path)
         
@@ -857,7 +857,7 @@ async def test_when_save_as_project_and_disk_full_then_fails_with_error_and_clea
             
             # Run the save operation
             with _file_object_write_mocked_to(raise_disk_full_error), \
-                    patch('crystal.browser.ShowModal', mocked_show_modal(
+                    patch('crystal.browser.main_window.ShowModal', mocked_show_modal(
                         'cr-save-error-dialog', wx.ID_OK)):
                 await save_as_with_ui(rmw, save_path)
 
@@ -904,7 +904,7 @@ async def test_when_save_as_project_and_destination_filesystem_unmounts_unexpect
                     
                     # Run the save operation
                     with _file_object_write_mocked_to(raise_destination_filesystem_gone_error), \
-                            patch('crystal.browser.ShowModal', mocked_show_modal(
+                            patch('crystal.browser.main_window.ShowModal', mocked_show_modal(
                                 'cr-save-error-dialog', wx.ID_OK)):
                         await save_as_with_ui(rmw, save_path)
 
@@ -981,7 +981,7 @@ async def test_when_save_as_project_and_old_project_fails_to_close_then_handles_
             # Patch the scheduler join timeout to 0 to force immediate timeout
             with patch.object(Project, '_SCHEDULER_JOIN_TIMEOUT', 0):
                 # Mock error dialog to acknowledge the timeout error
-                with patch('crystal.browser.ShowModal', mocked_show_modal(
+                with patch('crystal.browser.main_window.ShowModal', mocked_show_modal(
                         'cr-save-error-dialog', wx.ID_OK)):
                     await save_as_with_ui(rmw, save_path)
         
@@ -1029,7 +1029,7 @@ async def test_when_save_as_project_and_new_project_fails_to_open_then_handles_g
             
             # Run the save operation
             with patch('sqlite3.connect', side_effect=raise_database_corruption_error), \
-                    patch('crystal.browser.ShowModal', mocked_show_modal(
+                    patch('crystal.browser.main_window.ShowModal', mocked_show_modal(
                         'cr-save-error-dialog', wx.ID_OK)):
                 await save_as_with_ui(rmw, save_path)
         
@@ -1071,7 +1071,7 @@ async def test_when_save_as_untitled_project_with_corrupted_database_then_fails_
                     f.truncate(size // 2)
             return original_reopen(self)
         with patch.object(Project, '_reopen', fake_reopen), \
-                patch('crystal.browser.ShowModal', mocked_show_modal(
+                patch('crystal.browser.main_window.ShowModal', mocked_show_modal(
                     'cr-save-error-dialog', wx.ID_OK)) as show_modal_method:
             await save_as_with_ui(rmw, save_path)
             assert 1 == show_modal_method.call_count, \
@@ -1119,7 +1119,7 @@ async def test_when_save_as_titled_project_with_corrupted_database_then_fails_wi
                 return original_reopen(self)
             
             with patch.object(Project, '_reopen', fake_reopen), \
-                    patch('crystal.browser.ShowModal', mocked_show_modal(
+                    patch('crystal.browser.main_window.ShowModal', mocked_show_modal(
                         'cr-save-error-dialog', wx.ID_OK)) as show_modal_method:
                 await save_as_with_ui(rmw, save_path)
                 assert 1 == show_modal_method.call_count, \
@@ -1506,7 +1506,7 @@ async def _wait_for_save_as_dialog_to_complete(project: Project) -> AsyncIterato
         return instance
     
     try:
-        with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy):
+        with patch('crystal.browser.main_window.SaveAsProgressDialog', SaveAsProgressDialogSpy):
             async with wait_for_save_as_to_complete(project):
                 # 1. Tell caller to start a Save As operation
                 # 2. Yield a placeholder for spies that will be updated when the dialog is created
@@ -1537,7 +1537,7 @@ async def _assert_save_as_dialog_not_shown_during_save_as(project: Project) -> A
     try:
         old_project_dirpath = project.path  # capture
         assert os.path.exists(old_project_dirpath)
-        with patch('crystal.browser.SaveAsProgressDialog', SaveAsProgressDialogSpy):
+        with patch('crystal.browser.main_window.SaveAsProgressDialog', SaveAsProgressDialogSpy):
             async with wait_for_save_as_to_complete(project):
                 yield
             

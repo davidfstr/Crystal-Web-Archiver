@@ -188,7 +188,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                             with xtempfile.TemporaryDirectory() as tmp_dir:
                                 save_path = os.path.join(tmp_dir, 'TestProject.crystalproj')
                                 with patch(
-                                        'crystal.browser.ShowModal',
+                                        'crystal.browser.main_window.ShowModal',
                                         mocked_show_modal('cr-save-changes-dialog', wx.ID_YES)
                                         ) as show_modal_method, \
                                         file_dialog_returning(save_path):
@@ -230,7 +230,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                             
                             # Simulate double-click on titled project while Crystal running
                             with patch(
-                                    'crystal.browser.ShowModal',
+                                    'crystal.browser.main_window.ShowModal',
                                     mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)
                                     ) as show_modal_method:
                                 wx.GetApp().MacOpenFile(titled_project_dirpath)
@@ -271,7 +271,7 @@ async def test_given_macos_when_double_click_crystalproj_package_in_finder_then_
                             
                             # Simulate double-click on titled project while Crystal running
                             with patch(
-                                    'crystal.browser.ShowModal',
+                                    'crystal.browser.main_window.ShowModal',
                                     mocked_show_modal('cr-save-changes-dialog', wx.ID_CANCEL)
                                     ) as show_modal_method:
                                 wx.GetApp().MacOpenFile(titled_project_dirpath)

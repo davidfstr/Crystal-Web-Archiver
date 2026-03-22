@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager, redirect_stderr
-from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.main_window import MainWindow as RealMainWindow
 from crystal.model import Project, Resource, ResourceGroup, RootResource
 import crystal.task
 from crystal.task import (
@@ -672,7 +672,7 @@ async def _open_project_with_resume_data(
     If `resume` is `False`, it simulates the user clicking "Cancel".
     """
     with patch(
-            'crystal.browser.ShowModal',
+            'crystal.browser.main_window.ShowModal',
             mocked_show_modal('cr-resume-downloads', wx.ID_OK if resume else wx.ID_CANCEL)
             ) as show_modal_method:
         async def wait_for_project_to_unhibernate() -> None:
@@ -696,7 +696,7 @@ def _frequent_autohibernates_enabled() -> Iterator[None]:
     Enables frequent automatic hibernation for projects that become opened.
     """
     with patch(
-            'crystal.browser.MainWindow._AUTOHIBERNATE_PERIOD',
+            'crystal.browser.main_window.MainWindow._AUTOHIBERNATE_PERIOD',
             20  # milliseconds
             ):
         yield

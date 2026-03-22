@@ -1034,7 +1034,7 @@ async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> No
         if True:
             # - Press Command-W to trigger "Close" action.
             # - When prompted whether to save the project, answer "Don't Save".
-            with patch('crystal.browser.ShowModal',
+            with patch('crystal.browser.main_window.ShowModal',
                     mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
                 press_key_in_window_triggering_menu_item(
                     mw.main_window, ord('W'), ctrl=True)

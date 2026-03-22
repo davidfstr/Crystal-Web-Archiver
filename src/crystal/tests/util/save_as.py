@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, nullcontext
-from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.main_window import MainWindow as RealMainWindow
 from crystal.model import Project
 from crystal.tests.util.controls import (
     file_dialog_returning, select_menuitem_now,

@@ -1,6 +1,6 @@
 from contextlib import redirect_stderr
 from crystal import task
-from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.main_window import MainWindow as RealMainWindow
 from crystal.browser.entitytree import _ErrorNode, ResourceGroupNode
 from crystal.browser.tasktree import TaskTreeNode
 from crystal.doc.generic import create_external_link, Link

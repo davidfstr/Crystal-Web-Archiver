@@ -6,7 +6,7 @@ including error recovery mechanisms, and test utilities.
 """
 
 from contextlib import redirect_stderr
-from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.main_window import MainWindow as RealMainWindow
 from crystal.model import Project
 from crystal.tests.util.asserts import (
     assertEqual, assertIn, assertNotEqual, assertNotIn, assertRegex

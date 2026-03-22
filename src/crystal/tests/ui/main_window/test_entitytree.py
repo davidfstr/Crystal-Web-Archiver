@@ -1,4 +1,4 @@
-from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.main_window import MainWindow as RealMainWindow
 from crystal.model import (
     DownloadErrorDict, Project, Resource, ResourceGroup, RootResource,
 )

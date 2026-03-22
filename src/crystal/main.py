@@ -31,7 +31,7 @@ import traceback
 from typing import Any, BinaryIO, TextIO, cast, Never, ParamSpec, TypeVar, TYPE_CHECKING, override
 
 if TYPE_CHECKING:
-    from crystal.browser import MainWindow
+    from crystal.browser.main_window import MainWindow
     from crystal.model import Project
     from crystal.progress.interface import OpenProjectProgressListener
     from crystal.shell import Shell
@@ -1039,7 +1039,7 @@ async def _did_launch(
                 
                 # Create main window (unless in headless mode)
                 if not parsed_args.headless:
-                    from crystal.browser import MainWindow
+                    from crystal.browser.main_window import MainWindow
                     # NOTE: Can raise CancelOpenProject
                     window = MainWindow(project, progress_listener)
     except CancelOpenProject:
@@ -1107,7 +1107,7 @@ async def _prompt_for_project(
     Raises:
     * SystemExit -- if the user quits rather than providing a project
     """
-    from crystal.browser import MainWindow
+    from crystal.browser.main_window import MainWindow
     from crystal.progress.interface import CancelOpenProject
     from crystal.ui.dialog import BetterMessageDialog
     from crystal.util.wx_bind import bind

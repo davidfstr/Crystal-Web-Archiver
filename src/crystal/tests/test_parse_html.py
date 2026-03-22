@@ -1,7 +1,7 @@
 import bs4
 from collections.abc import Iterator
 from contextlib import contextmanager
-from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.main_window import MainWindow as RealMainWindow
 from crystal.doc.generic import Document, Link
 from crystal.doc.html import parse_html_and_links
 from crystal.doc.html.basic import BasicDocument

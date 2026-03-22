@@ -96,7 +96,7 @@ class OpenOrCreateDialog:
 
                     # 1. Try to close MainWindow that is open
                     # 2. If prompted whether to save the project, answer no
-                    with patch('crystal.browser.ShowModal',
+                    with patch('crystal.browser.main_window.ShowModal',
                             mocked_show_modal('cr-save-changes-dialog', wx.ID_NO)):
                         main_window.Close()
                         

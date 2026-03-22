@@ -37,7 +37,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from crystal.browser import MainWindow
+    from crystal.browser.main_window import MainWindow
 
 
 _R = TypeVar('_R')

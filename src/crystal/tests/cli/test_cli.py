@@ -418,7 +418,7 @@ def test_when_launched_with_shell_and_project_filepath_then_shell_starts_with_op
             
             # Verify window variable is set to a real MainWindow object
             result = py_eval_literal(crystal, 'repr(window)')
-            assertIn('<crystal.browser.MainWindow object at 0x', result)
+            assertIn('<crystal.browser.main_window.MainWindow object at 0x', result)
             
             # Verify the project path is correct
             result = py_eval_literal(crystal, 'project.path')

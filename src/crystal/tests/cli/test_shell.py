@@ -126,12 +126,12 @@ def test_can_launch_with_shell(subtests: SubtestsContext) -> None:
                 r'^<crystal\.model\.project\.Project object at 0x[0-9a-f]+>\n$',
                 py_eval(crystal, 'project'))
             assert re.fullmatch(
-                r'^<crystal\.browser\.MainWindow object at 0x[0-9a-f]+>\n$',
+                r'^<crystal\.browser\.main_window\.MainWindow object at 0x[0-9a-f]+>\n$',
                 py_eval(crystal, 'window'))
         
         with subtests.test(msg='and {project, window} can be used with help()'):
             assertIn('Help on Project in module crystal.model.project object:', py_eval(crystal, 'help(project)'))
-            assertIn('Help on MainWindow in module crystal.browser object:', py_eval(crystal, 'help(window)'))
+            assertIn('Help on MainWindow in module crystal.browser.main_window object:', py_eval(crystal, 'help(window)'))
 
 
 def test_can_use_pythonstartup_file() -> None:

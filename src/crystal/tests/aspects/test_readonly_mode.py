@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
-from crystal.browser import MainWindow as RealMainWindow
+from crystal.browser.main_window import MainWindow as RealMainWindow
 from crystal.model import Project, Resource, RootResource
 # TODO: Extract shared utilities to own module
 from crystal.tests.aspects.test_untitled_projects import (
@@ -516,7 +516,7 @@ async def test_when_writable_project_becomes_readonly_then_edit_button_becomes_g
         
         # Run the save operation
         with patch.object(DatabaseCursor, 'execute', spy_execute), \
-                patch('crystal.browser.ShowModal', mocked_show_modal(
+                patch('crystal.browser.main_window.ShowModal', mocked_show_modal(
                     'cr-save-error-dialog', wx.ID_OK)):
             await save_as_with_ui(rmw, save_path)
         
