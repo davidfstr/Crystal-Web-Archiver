@@ -49,6 +49,12 @@ Release Notes ⋮
 * Documentation improvements
     * Project format documented at: <doc/crystalproj_project_format.md>
 
+* Read-only project fixes
+    * Fix "Something went wrong" error when browsing the entity tree of a read-only
+      project where some linked URLs have no previously saved Resources.
+      Now those missing URLs are represented as unsaved in-memory Resources so
+      that browsing can continue normally.
+
 * Headless mode fixes
     * UI progress dialogs will now never show in headless mode.
     * wxPython is now never even loaded in headless mode.
