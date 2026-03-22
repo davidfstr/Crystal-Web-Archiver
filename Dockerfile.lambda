@@ -81,5 +81,6 @@ COPY lambda_server.py ./
 # Lambda console under Configuration → Environment variables).
 EXPOSE 8080
 ENV AWS_LWA_INVOKE_MODE=response_stream
+ENV AWS_LWA_READINESS_CHECK_PATH=/_/crystal/health
 ENTRYPOINT ["python", "-u", "/var/task/lambda_server.py"]
 CMD []

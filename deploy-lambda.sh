@@ -47,11 +47,20 @@
 #             --policy-name crystal-s3-read \
 #             --policy-document '{
 #               "Version": "2012-10-17",
-#               "Statement": [{
-#                 "Effect": "Allow",
-#                 "Action": ["s3:GetObject", "s3:HeadObject"],
-#                 "Resource": "arn:aws:s3:::my-bucket/*"
-#               }]
+#               "Statement": [
+#                 {
+#                   "Sid": "ObjectsReadOnlyInSpecificDirectory",
+#                   "Effect": "Allow",
+#                   "Action": "s3:GetObject",
+#                   "Resource": "arn:aws:s3:::my-bucket/subdirectory/*"
+#                 },
+#                 {
+#                   "Sid": "ListBucketInSpecificBucket",
+#                   "Effect": "Allow",
+#                   "Action": "s3:ListBucket",
+#                   "Resource": "arn:aws:s3:::my-bucket"
+#                 },
+#               ]
 #             }'
 #
 #      d. Get the role ARN for use in the next step:

@@ -643,6 +643,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
     # --- Handle: GET or POST ---
     
     def _do_GET(self) -> Generator[SwitchToThread]:
+        self._strip_trailing_empty_query()
+        
         # Parse self.path using RFC 2616 rules,
         # which in particular allows it to be an absolute URI!
         if self.path == '*':
@@ -665,11 +667,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
             # Rewrite self.path to be a URL path and the Host header to be a domain
             self.path = urlunparse(pathurl_parts._replace(scheme='', netloc=''))
             self.headers['Host'] = pathurl_parts.netloc  # replace any that existed before
-        
-        # Normalize bare trailing '?' (empty query string).
-        # Lambda Web Adapter appends '?' even when there is no query string.
-        if self.path.endswith('?'):
-            self.path = self.path[:-1]
 
         # Serve pin_date.js if requested
         m = _PIN_DATE_JS_PATH_RE.fullmatch(self.path)
@@ -692,6 +689,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
         if self.path.startswith('/_/crystal/download-progress'):
             yield SwitchToThread.BACKGROUND
             self._handle_get_download_progress()
+            return
+
+        # Handle: Health check
+        if self.path == '/_/crystal/health':
+            self._serve_health_check_response()
             return
         
         # Reserve 404.html in the root directory for exported projects
@@ -720,6 +722,8 @@ class _RequestHandler(BaseHTTPRequestHandler):
         return
     
     def _do_POST(self) -> Generator[SwitchToThread]:
+        self._strip_trailing_empty_query()
+        
         # Handle: "Not in Archive" Endpoints
         if self.path == '/_/crystal/create-url':
             yield SwitchToThread.BACKGROUND
@@ -743,6 +747,18 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_header('Allow', 'GET')
         self.end_headers()
         return
+    
+    # NOTE: Logic is also used externally by lambda_server.py, as a BaseHTTPRequestHandler
+    def _strip_trailing_empty_query(self: BaseHTTPRequestHandler) -> None:
+        # Normalize bare trailing '?' (empty query string).
+        # Lambda Web Adapter appends '?' even when there is no query string.
+        if self.path.endswith('?'):
+            self.path = self.path[:-1]
+    
+    # NOTE: Logic is also used externally by lambda_server.py, as a BaseHTTPRequestHandler
+    def _serve_health_check_response(self: BaseHTTPRequestHandler) -> None:
+        self.send_response(200)
+        self.end_headers()
     
     # --- Handle: Archive URL ---
     
@@ -1381,8 +1397,9 @@ class _RequestHandler(BaseHTTPRequestHandler):
 
     # --- Handle: Static Resources ---
     
+    # NOTE: Logic is also used externally by lambda_server.py, as a BaseHTTPRequestHandler
     @bg_affinity
-    def _handle_static_resource(self) -> None:
+    def _handle_static_resource(self: '_RequestHandler | BaseHTTPRequestHandler') -> None:
         """Serve static resources from Crystal's "resources" directory."""
         # Extract resource filename from path: /_/crystal/resources/filename.ext
         if not self.path.startswith('/_/crystal/resources/'):
@@ -1392,7 +1409,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
         resource_name = self.path.removeprefix('/_/crystal/resources/')
         
         # Security: Only allow specific resource files to prevent directory traversal
-        if resource_name not in self.PUBLIC_STATIC_RESOURCE_NAMES:
+        if resource_name not in _RequestHandler.PUBLIC_STATIC_RESOURCE_NAMES:
             self.send_response(404)
             self.end_headers()
             return
@@ -1415,7 +1432,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
         except Exception as e:
-            self._print_error(f'Error serving static resource {resource_name}: {str(e)}')
+            message = f'Error serving static resource {resource_name}: {str(e)}'
+            if hasattr(self, '_print_error'):
+                self._print_error(message)
+            else:
+                print_error(message)
             self.send_response(500)
             self.end_headers()
     

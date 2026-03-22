@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from crystal.model import Project
 from crystal.tests.util.asserts import assertIn, assertRegex
 from crystal.tests.util.server import extracted_project
-from crystal.tests.util.subtests import SubtestsContext, awith_subtests
+from crystal.tests.util.subtests import SubtestsContext, awith_subtests, with_subtests
 from crystal.tests.util import xtempfile
 import base64
 import http.client
@@ -34,7 +34,7 @@ _CONTAINER_STARTUP_TIMEOUT = 60.0  # seconds; first build can be slow
 _CONTAINER_READY_POLL_INTERVAL = 0.5  # seconds
 
 
-# === Tests ===
+# === Tests: Happy Path Cases ===
 
 def test_can_fetch_html_page_from_crystal_running_as_lambda_function() -> None:
     with _lambda_container_serving_xkcd_project() as container_url:
@@ -158,11 +158,106 @@ async def test_can_fetch_root_page_of_default_domain_from_crystal_running_as_lam
                 assertIn('xkcd', title_match.group(1))
 
 
+# === Tests: Error Cases ===
+
+def test_given_project_url_env_var_missing_then_lambda_function_serves_internal_server_error_page_with_actionable_error_message() -> None:
+    with _lambda_container_serving_xkcd_project(use_missing_project_url=True) as container_url:
+        # Fetch root page and verify Internal Server Error page is served
+        response = _invoke_lambda(container_url, path='/')
+        assert response['statusCode'] == 500, (
+            f'Expected 500, got {response["statusCode"]}'
+        )
+        body = response['body']
+
+        # Verify the error message format
+        assertIn('Internal Server Error', body)
+        assertIn(
+            'CRYSTAL_PROJECT_URL environment variable is not configured for the Crystal lambda function. '
+            'Set it to an s3:// URL.',
+            body,
+        )
+
+
+def test_given_project_url_env_var_points_to_nonexistent_project_then_lambda_function_serves_internal_server_error_page_with_actionable_error_message() -> None:
+    with _lambda_container_serving_xkcd_project(use_incorrect_project_url=True) as container_url:
+        # Fetch root page and verify Internal Server Error page is served
+        response = _invoke_lambda(container_url, path='/')
+        assert response['statusCode'] == 500, (
+            f'Expected 500, got {response["statusCode"]}'
+        )
+        body = response['body']
+
+        # Verify the error message format
+        assertIn('Internal Server Error', body)
+        assertRegex(body, r'<code>ProjectMissingOrIncompleteError</code>')
+        assertRegex(body, r'Project does not exist or is missing database:')
+
+        # Verify the Crystal logo on the Internal Server Error page looks correct
+        if True:
+            # Verify the page includes the Crystal logo
+            assertIn('/_/crystal/resources/appicon.png', body)
+
+            # Fetch the Crystal logo and verify it is a valid PNG
+            logo_response = _invoke_lambda(container_url, path='/_/crystal/resources/appicon.png')
+            assert logo_response['statusCode'] == 200, (
+                f'Expected 200 for logo, got {logo_response["statusCode"]}'
+            )
+            assert logo_response.get('isBase64Encoded') is True, (
+                'Logo response should be base64-encoded'
+            )
+            logo_bytes = base64.b64decode(logo_response['body'])
+            _PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+            assert logo_bytes[:8] == _PNG_SIGNATURE, (
+                f'Expected PNG signature, got {logo_bytes[:8]!r}'
+            )
+
+
+@with_subtests
+def test_given_situation_related_to_PermissionError_then_lambda_function_serves_internal_server_error_page_with_actionable_error_message(subtests: SubtestsContext) -> None:
+    with subtests.test(has_get_object_permission=False):
+        with _lambda_container_serving_xkcd_project(use_access_denied=True) as container_url:
+            response = _invoke_lambda(container_url, path='/')
+            assert response['statusCode'] == 500, (
+                f'Expected 500, got {response["statusCode"]}'
+            )
+            body = response['body']
+
+            # Verify the error page identifies a PermissionError
+            assertIn('Internal Server Error', body)
+            assertRegex(body, r'<code>PermissionError</code>')
+
+            # Verify the actionable error message includes ARN details
+            assertIn('Ensure the project exists at ', body)
+            assertIn('s3://test-bucket/Archive/TestProject.crystalproj', body)
+            assertIn('s3:GetObject', body)
+            assertIn('arn:aws:s3:::test-bucket/Archive/TestProject.crystalproj/*', body)
+            assertIn('s3:ListBucket', body)
+            assertIn('arn:aws:s3:::test-bucket', body)
+
+    with subtests.test(has_get_object_permission=True, has_list_bucket_permission=False, project_exists=False):
+        raise SkipTest('covered by: the first subtest above, since S3 returns an identical error in this second scenario')
+
+    with subtests.test(has_get_object_permission=True, has_list_bucket_permission=True, project_exists=False):
+        # NOTE: This case doesn't actually raise PermissionError; it raises ProjectMissingOrIncompleteError
+        raise SkipTest('covered by: test_given_project_url_env_var_points_to_nonexistent_project_then_lambda_function_serves_internal_server_error_page_with_actionable_error_message')
+
+
+def test_given_lambda_function_is_misconfigured_then_still_serves_http_200_at_health_check_endpoint() -> None:
+    with _lambda_container_serving_xkcd_project(use_incorrect_project_url=True) as container_url:
+        response = _invoke_lambda(container_url, path='/_/crystal/health')
+        assert response['statusCode'] == 200, (
+            f'Expected 200 at health check endpoint, got {response["statusCode"]}'
+        )
+
+
 # === Utility: Docker Container ===
 
 @contextmanager
 def _lambda_container_serving_xkcd_project(
         *, setup_project: Callable[[str], None] | None = None,
+        use_incorrect_project_url: bool = False,
+        use_missing_project_url: bool = False,
+        use_access_denied: bool = False,
         ) -> Iterator[str]:
     """
     Build the Lambda Docker image, start a container serving the xkcd test
@@ -173,13 +268,28 @@ def _lambda_container_serving_xkcd_project(
         Optional callback called with the project directory path
         before copying to fake S3. Use this to modify the project
         (e.g. set default_url_prefix) before the container starts.
+    * use_incorrect_project_url --
+        If True, set CRYSTAL_PROJECT_URL to a non-existent project path,
+        causing the container's error server to serve Internal Server Error pages.
+    * use_missing_project_url --
+        If True, omit CRYSTAL_PROJECT_URL entirely,
+        causing the container's error server to serve Internal Server Error pages.
+    * use_access_denied --
+        If True, simulate S3 returning 403 Forbidden for all operations,
+        causing the container's error server to serve Internal Server Error pages
+        with an actionable PermissionError message.
     """
     _ensure_docker_available()
 
     s3_bucket = 'test-bucket'
     s3_key_prefix = 'Archive/TestProject.crystalproj'
     s3_region = 'us-east-1'
-    s3_url = f's3://{s3_bucket}/{s3_key_prefix}/?region={s3_region}'
+    if use_missing_project_url:
+        project_url = None
+    elif use_incorrect_project_url:
+        project_url = f's3://{s3_bucket}/Archive/NonExistent.crystalproj/?region={s3_region}'
+    else:
+        project_url = f's3://{s3_bucket}/{s3_key_prefix}/?region={s3_region}'
 
     with extracted_project('testdata_xkcd.crystalproj.zip') as project_dirpath:
         if setup_project is not None:
@@ -201,8 +311,17 @@ def _lambda_container_serving_xkcd_project(
                 '--platform', 'linux/amd64',
                 '-p', f'{host_port}:8080',
                 '-v', f'{fake_s3_root}:/fake_s3:ro',
-                '-e', f'CRYSTAL_PROJECT_URL={s3_url}',
+                *(
+                    ['-e', f'CRYSTAL_PROJECT_URL={project_url}']
+                    if project_url is not None
+                    else []
+                ),
                 '-e', 'CRYSTAL_FAKE_S3_ROOT=/fake_s3',
+                *(
+                    ['-e', 'CRYSTAL_FAKE_S3_ACCESS_DENIED=1']
+                    if use_access_denied
+                    else []
+                ),
                 '-e', 'AWS_ACCESS_KEY_ID=fake-access-key',
                 '-e', 'AWS_SECRET_ACCESS_KEY=fake-secret-key',
                 '-e', f'AWS_DEFAULT_REGION={s3_region}',

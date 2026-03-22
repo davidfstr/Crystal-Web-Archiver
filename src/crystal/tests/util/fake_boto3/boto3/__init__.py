@@ -37,10 +37,14 @@ def client(service_name, *, region_name=None, aws_access_key_id=None, aws_secret
     invalid_credentials = (
         os.environ.get('CRYSTAL_FAKE_S3_INVALID_CREDENTIALS') == '1'
     )
+    access_denied = (
+        os.environ.get('CRYSTAL_FAKE_S3_ACCESS_DENIED') == '1'
+    )
     return _FakeS3Client(
         region_name=region_name,
         has_credentials=has_credentials,
         invalid_credentials=invalid_credentials,
+        access_denied=access_denied,
     )
 
 # ('<region>', 'GET', 's3://<bucket>/<key>') or 
@@ -60,10 +64,11 @@ class _FakeS3Client:
     # Buckets not in this dict are assumed to be in whatever region the client was created with.
     CORRECT_REGION_FOR_BUCKET: dict[str, str] = {}
 
-    def __init__(self, *, region_name=None, has_credentials=True, invalid_credentials=False):
+    def __init__(self, *, region_name=None, has_credentials=True, invalid_credentials=False, access_denied=False):
         self._region_name = region_name or 'us-east-1'
         self._has_credentials = has_credentials
         self._invalid_credentials = invalid_credentials
+        self._access_denied = access_denied
     
     # === Utility ===
 
@@ -78,6 +83,18 @@ class _FakeS3Client:
                     'Error': {
                         'Code': 'InvalidClientTokenId',
                         'Message': 'The security token included in the request is invalid.',
+                    },
+                    'ResponseMetadata': {'HTTPStatusCode': 403},
+                },
+                operation_name,
+            )
+        if self._access_denied:
+            from botocore.exceptions import ClientError
+            raise ClientError(
+                {
+                    'Error': {
+                        'Code': '403',
+                        'Message': 'Forbidden',
                     },
                     'ResponseMetadata': {'HTTPStatusCode': 403},
                 },

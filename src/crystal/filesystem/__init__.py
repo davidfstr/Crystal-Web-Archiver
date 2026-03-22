@@ -572,6 +572,12 @@ class S3Filesystem(_AbstractFilesystem):
             *,
             allow_credentials: bool = False,
             ) -> tuple[str, str, str]:
+        """
+        Parses the specified s3:// URL to (bucket_name, key, region_hint).
+        
+        Raises:
+        * ValueError -- if the specified s3:// URL is not valid
+        """
         from s3_parse_url import parse_s3_url
 
         try:
