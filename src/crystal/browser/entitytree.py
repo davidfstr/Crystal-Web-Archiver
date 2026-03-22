@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from concurrent.futures import CancelledError, Future
+from crystal.browser.entitytree_info import (
+    _GroupedNodeInfo,
+    ResourceGroupNodeInfo,
+    RootResourceNodeInfo,
+)
 from crystal.browser.icons import (
     BADGED_ART_PROVIDER_TREE_NODE_ICON, BADGED_TREE_NODE_ICON, TREE_NODE_ICONS,
 )
@@ -1203,18 +1208,7 @@ class RootResourceNode(_ResourceNode):
     
     @staticmethod
     def calculate_title_of(root_resource: RootResource) -> str:
-        project = root_resource.project
-        display_url = project.get_display_url(root_resource.url)
-        if root_resource.name != '':
-            entity_title_format = project.entity_title_format  # cache
-            if entity_title_format == 'name_url':
-                return f'{root_resource.name} - {display_url}'
-            elif entity_title_format == 'url_name':
-                return f'{display_url} - {root_resource.name}'
-            else:
-                assert_never(entity_title_format)
-        else:
-            return f'{display_url}'
+        return RootResourceNodeInfo.calculate_title_of(root_resource)
     
     @override
     @property
@@ -1376,8 +1370,8 @@ class ClusterNode(Node):
 class _GroupedNode(Node):  # abstract
     entity_tooltip: str  # abstract
     
-    ICON = '📁'
-    ICON_TRUNCATION_FIX = ' '
+    ICON = _GroupedNodeInfo.ICON
+    ICON_TRUNCATION_FIX = _GroupedNodeInfo.ICON_TRUNCATION_FIX
     
     def __init__(self,
             resource_group: ResourceGroup,
@@ -1460,18 +1454,7 @@ class ResourceGroupNode(_GroupedNode):
     
     @staticmethod
     def calculate_title_of(resource_group: ResourceGroup) -> str:
-        project = resource_group.project
-        display_url = project.get_display_url(resource_group.url_pattern)
-        if resource_group.name != '':
-            entity_title_format = project.entity_title_format  # cache
-            if entity_title_format == 'name_url':
-                return f'{resource_group.name} - {display_url}'
-            elif entity_title_format == 'url_name':
-                return f'{display_url} - {resource_group.name}'
-            else:
-                assert_never(entity_title_format)
-        else:
-            return f'{display_url}'
+        return ResourceGroupNodeInfo.calculate_title_of(resource_group)
     
     @override
     @property
