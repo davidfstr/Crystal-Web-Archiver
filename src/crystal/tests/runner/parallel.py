@@ -6,7 +6,7 @@ Runs end-to-end tests in parallel across subprocesses.
 import argparse
 from collections.abc import Sequence
 from contextlib import closing
-from crystal.tests.runner.shared import normalize_test_names
+from crystal.tests.runner.shared import MAX_INTERRUPTED_TEST_COUNT_TO_REPORT, normalize_test_names
 from crystal.tests.util.cli import get_crystal_command
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.pipes import create_selectable_pipe, Pipe, ReadablePipeEnd
@@ -82,6 +82,7 @@ def run_tests(
         raw_test_names: list[str],
         *, jobs: int | None,
         verbose: bool,
+        maxfail: int | None = None,
         ) -> bool:
     from crystal.tests.index import TEST_FUNCS
     
@@ -210,6 +211,10 @@ def run_tests(
     # Create shared state for interrupt handling
     interrupted_event = threading.Event()
     
+    # Create shared state for --maxfail
+    fail_count = [0]  # mutable int, shared across worker threads
+    fail_count_lock = threading.Lock()
+    
     # Create coordination state for simulated parent interrupt
     # (used when '!' appears in CRYSTAL_PARALLEL_WORKER_TASKS)
     workers_at_interrupt_point: list[threading.Event] = [
@@ -235,6 +240,9 @@ def run_tests(
                     workers_at_interrupt_point[worker_id]
                     if simulate_parent_interrupt else None
                 ),
+                maxfail=maxfail,
+                fail_count=fail_count,
+                fail_count_lock=fail_count_lock,
             )
             with worker_results_lock:
                 worker_results[worker_id] = result
@@ -569,7 +577,10 @@ def _format_summary(all_tests: 'list[TestResult]', total_duration: float) -> tup
         if interrupted_tests:
             output_lines.append('')
             output_lines.append('Rerun interrupted tests with:')
-            output_lines.append(f'$ crystal test {" ".join(interrupted_tests)}')
+            if len(interrupted_tests) < MAX_INTERRUPTED_TEST_COUNT_TO_REPORT:
+                output_lines.append(f'$ crystal test {" ".join(interrupted_tests)}')
+            else:
+                output_lines.append(f'$ crystal test <{len(interrupted_tests)} tests>')
     
     return ('\n'.join(output_lines), is_ok)
 
@@ -621,6 +632,9 @@ def _run_worker(
         interrupt_read_pipe: 'ReadablePipeEnd',
         display_result_immediately: bool = True,
         at_interrupt_point_event: threading.Event | None = None,
+        maxfail: int | None = None,
+        fail_count: 'list[int] | None' = None,
+        fail_count_lock: 'threading.Lock | None' = None,
         ) -> WorkerResult:
     """
     Run a worker subprocess in interactive mode, pulling tests from work_queue on-demand.
@@ -649,6 +663,9 @@ def _run_worker(
         If False, results are only returned in the WorkerResult.
     * at_interrupt_point_event -- Event to set when worker reaches _INTERRUPT_MARKER.
         The worker will then wait for interrupted_event to be set before continuing.
+    * maxfail -- Stop running after this many failures, or None for no limit.
+    * fail_count -- Shared mutable counter of failures across all workers.
+    * fail_count_lock -- Lock protecting fail_count.
     
     Returns:
     * WorkerResult containing test results and metadata.
@@ -774,6 +791,21 @@ def _run_worker(
                     # Display the test result immediately (unless deferred)
                     if display_result_immediately:
                         _display_test_result(test_result)
+                    
+                    # Check if --maxfail threshold has been reached
+                    if (maxfail is not None and
+                            fail_count is not None and
+                            fail_count_lock is not None and
+                            test_result.status in ('FAILURE', 'ERROR')):
+                        with fail_count_lock:
+                            fail_count[0] += 1
+                            reached_maxfail = (fail_count[0] >= maxfail)
+                        if reached_maxfail and not interrupted_event.is_set():
+                            if verbose:
+                                print(
+                                    f'[Runner] Reached maxfail={maxfail}, interrupting workers...',
+                                    file=sys.stderr)
+                            interrupted_event.set()
                     
                     if process_is_interrupted:
                         break

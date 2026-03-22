@@ -1,3 +1,6 @@
+MAX_INTERRUPTED_TEST_COUNT_TO_REPORT = 50
+
+
 def normalize_test_names(raw_test_names: list[str]) -> list[str]:
     """
     Normalize test names from various formats into the canonical format.

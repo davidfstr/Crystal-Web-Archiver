@@ -293,6 +293,13 @@ def _main2(args: list[str]) -> None:
                 help='Print additional diagnostic information. Only applies with --parallel.',
                 action='store_true',
             )
+            test_parser.add_argument(
+                '--maxfail',
+                help='Stop running tests after N failures.',
+                type=int,
+                default=None,
+                metavar='N',
+            )
         
         # Define main command
         parser.add_argument(
@@ -444,6 +451,12 @@ def _main2(args: list[str]) -> None:
                 (not hasattr(parsed_args, 'parallel') or not parsed_args.parallel)):
                 print('error: -j/--jobs can only be used with -p/--parallel', file=sys.stderr)
                 sys.exit(2)
+            
+            # Validate --maxfail must be positive
+            if (hasattr(parsed_args, 'maxfail') and parsed_args.maxfail is not None and
+                    parsed_args.maxfail <= 0):
+                print('error: --maxfail must be a positive integer', file=sys.stderr)
+                sys.exit(2)
         else:
             parsed_args.test = None
         
@@ -471,12 +484,14 @@ def _main2(args: list[str]) -> None:
 
         jobs = parsed_args.jobs if hasattr(parsed_args, 'jobs') else None
         verbose = parsed_args.verbose if hasattr(parsed_args, 'verbose') else False
+        maxfail = parsed_args.maxfail if hasattr(parsed_args, 'maxfail') else None
         
         # NOTE: Run on main thread so that it can handle KeyboardInterrupt
         is_ok = run_tests_parallel(
             parsed_args.test,
             jobs=jobs,
-            verbose=verbose
+            verbose=verbose,
+            maxfail=maxfail,
         )
         exit_code = 0 if is_ok else 1
         sys.exit(exit_code)
@@ -786,7 +801,8 @@ def _main2(args: list[str]) -> None:
                 
                 is_ok = False
                 try:
-                    is_ok = run_tests_serial(parsed_args.test, interactive=is_interactive)
+                    maxfail = parsed_args.maxfail if hasattr(parsed_args, 'maxfail') else None
+                    is_ok = run_tests_serial(parsed_args.test, interactive=is_interactive, maxfail=maxfail)
                 finally:
                     exit_code = 0 if is_ok else 1
                     if is_coverage():

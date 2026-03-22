@@ -2,7 +2,7 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import Future
 from contextlib import contextmanager
 from crystal.app_preferences import app_prefs
-from crystal.tests.runner.shared import available_modules_str, normalize_test_names
+from crystal.tests.runner.shared import MAX_INTERRUPTED_TEST_COUNT_TO_REPORT, available_modules_str, normalize_test_names
 from crystal.tests.util.downloads import delay_between_downloads_minimized
 from crystal.tests.util.runner import run_test
 from crystal.tests.util.subtests import SubtestFailed
@@ -30,7 +30,7 @@ _TestFuncId: TypeAlias = tuple[str, str]  # (module, func_name)
 
 
 @bg_affinity
-def run_tests(raw_test_names: list[str], *, interactive: bool = False) -> bool:
+def run_tests(raw_test_names: list[str], *, interactive: bool = False, maxfail: int | None = None) -> bool:
     """
     Runs automated UI tests, printing a summary report,
     and returning whether the run was OK.
@@ -54,10 +54,10 @@ def run_tests(raw_test_names: list[str], *, interactive: bool = False) -> bool:
         else:
             test_names = []  # ignored
         
-        return _run_tests(test_names, interactive=interactive)
+        return _run_tests(test_names, interactive=interactive, maxfail=maxfail)
 
 
-def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
+def _run_tests(test_names: list[str], *, interactive: bool = False, maxfail: int | None = None) -> bool:
     from crystal.tests.index import TEST_FUNCS
     
     # Ensure ancestor caller did already call set_tests_are_running()
@@ -83,6 +83,7 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                 test_func_by_name[test_name] = test_func
             
             # Interactive mode: read test names from stdin one at a time
+            fail_count = 0  # for --maxfail tracking
             try:
                 while True:
                     # Print prompt
@@ -152,6 +153,15 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                     except NoForegroundThreadError:
                         # Fatal error; abort
                         break
+                    
+                    # Check if --maxfail threshold has been reached
+                    if maxfail is not None:
+                        last_result = result_for_test_func_id.get(test_func_id)
+                        if (last_result is not None and
+                                not isinstance(last_result, (SkipTest, _TestInterrupted))):
+                            fail_count += 1
+                            if fail_count >= maxfail:
+                                break
             except KeyboardInterrupt:
                 # Proceed to print a summary section, and exit the process
                 pass
@@ -166,9 +176,16 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                     if test_name not in test_names and test_func.__module__ not in test_names:
                         continue
                 test_funcs_to_run.append(test_func)
-                
+            
+            def mark_remaining_tests_as_interrupted() -> None:
+                for remaining_test_func in test_funcs_to_run[test_func_index:]:
+                    remaining_test_func_id = (remaining_test_func.__module__, remaining_test_func.__name__)
+                    if remaining_test_func_id not in result_for_test_func_id:
+                        result_for_test_func_id[remaining_test_func_id] = _TestInterrupted()
+            
             num_test_funcs_to_run = len(test_funcs_to_run)  # cache
             
+            fail_count = 0  # for --maxfail tracking
             try:
                 for (test_func_index, test_func) in enumerate(test_funcs_to_run):
                     test_func_id = (test_func.__module__, test_func.__name__)
@@ -196,12 +213,18 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
                     except NoForegroundThreadError:
                         # Fatal error; abort
                         break
+                    
+                    # Check if --maxfail threshold has been reached
+                    if maxfail is not None:
+                        last_result = result_for_test_func_id.get(test_func_id)
+                        if (last_result is not None and
+                                not isinstance(last_result, (SkipTest, _TestInterrupted))):
+                            fail_count += 1
+                            if fail_count >= maxfail:
+                                mark_remaining_tests_as_interrupted()
+                                break
             except KeyboardInterrupt:
-                # Mark all remaining tests as interrupted
-                for remaining_test_func in test_funcs_to_run[test_func_index:]:
-                    remaining_test_func_id = (remaining_test_func.__module__, remaining_test_func.__name__)
-                    if remaining_test_func_id not in result_for_test_func_id:
-                        result_for_test_func_id[remaining_test_func_id] = _TestInterrupted()
+                mark_remaining_tests_as_interrupted()
                 
                 # Proceed to print a summary section, and exit the process
                 pass
@@ -314,7 +337,10 @@ def _run_tests(test_names: list[str], *, interactive: bool = False) -> bool:
     if len(interrupted_test_names) != 0:
         print()
         print('Rerun interrupted tests with:')
-        print(f'$ crystal test {" ".join(interrupted_test_names)}')
+        if len(interrupted_test_names) < MAX_INTERRUPTED_TEST_COUNT_TO_REPORT:
+            print(f'$ crystal test {" ".join(interrupted_test_names)}')
+        else:
+            print(f'$ crystal test <{len(interrupted_test_names)} tests>')
     
     # Play bell sound in terminal
     print('\a', end='', flush=True)
