@@ -716,7 +716,7 @@ def not_in_archive_html(
             <div id="cr-create-root-url-form" class="cr-create-root-url-form">
                 <div class="cr-form-row">
                     <label class="cr-form-row__label">Name:</label>
-                    <input type="text" id="cr-root-url-name" class="cr-form-row__input" placeholder="e.g. Home">
+                    <input type="text" id="cr-root-url-name" class="cr-form-row__input" placeholder="e.g. Home" {'disabled ' if readonly else ''}>
                 </div>
             </div>
             
@@ -724,21 +724,21 @@ def not_in_archive_html(
                 <div class="cr-form-row">
                     <label class="cr-form-row__label">URL Pattern:</label>
                     <div class="cr-form-input-container">
-                        <input type="text" id="cr-group-url-pattern" class="cr-form-row__input" placeholder="https://example.com/post/*" value="{html_escape(create_group_form_data['predicted_url_pattern'])}">
+                        <input type="text" id="cr-group-url-pattern" class="cr-form-row__input" placeholder="https://example.com/post/*" value="{html_escape(create_group_form_data['predicted_url_pattern'])}" {'disabled ' if readonly else ''}>
                         <div class="cr-form-row__help-text"># = numbers, @ = letters, * = anything but /, ** = anything</div>
                     </div>
                 </div>
                 
                 <div class="cr-form-row">
                     <label class="cr-form-row__label">Source:</label>
-                    <select id="cr-group-source" class="cr-form-row__input">
+                    <select id="cr-group-source" class="cr-form-row__input" {'disabled ' if readonly else ''}>
                         <!-- Source options will be populated by JavaScript -->
                     </select>
                 </div>
                 
                 <div class="cr-form-row">
                     <label class="cr-form-row__label">Name:</label>
-                    <input type="text" id="cr-group-name" class="cr-form-row__input" placeholder="e.g. Post" value="{html_escape(create_group_form_data['predicted_name'])}">
+                    <input type="text" id="cr-group-name" class="cr-form-row__input" placeholder="e.g. Post" value="{html_escape(create_group_form_data['predicted_name'])}" {'disabled ' if readonly else ''}>
                 </div>
                 
                 <div class="cr-form__section">
@@ -752,7 +752,7 @@ def not_in_archive_html(
                 <div class="cr-form__section">
                     <div class="cr-form__section-header">New Group Options</div>
                     <label class="cr-checkbox">
-                        <input type="checkbox" id="cr-download-group-immediately-checkbox" checked onchange="onDownloadImmediatelyCheckboxChange()">
+                        <input type="checkbox" id="cr-download-group-immediately-checkbox" {'disabled ' if readonly else ''}checked onchange="onDownloadImmediatelyCheckboxChange()">
                         <span>Download Group Immediately</span>
                     </label>
                 </div>

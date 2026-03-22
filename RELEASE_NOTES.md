@@ -53,6 +53,12 @@ Release Notes ⋮
 * Documentation improvements
     * Project format documented at: <doc/crystalproj_project_format.md>
 
+* Read-only project fixes
+    * Fix editable fields on the "Not in Archive" page to be correctly
+      disabled when the project is opened in read-only mode.
+      The name, URL pattern, source, group name, and download-immediately
+      checkbox were all previously editable even in read-only mode.
+
 * Headless mode fixes
     * UI progress dialogs will now never show in headless mode.
     * wxPython is now never even loaded in headless mode.
