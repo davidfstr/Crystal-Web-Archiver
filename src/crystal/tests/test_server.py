@@ -719,6 +719,41 @@ async def test_given_readonly_project_then_all_action_type_radio_buttons_disable
             'Download Only radio button should be disabled in readonly mode'
 
 
+async def test_given_readonly_project_then_all_form_input_fields_disabled() -> None:
+    async with _not_in_archive_page_visible(readonly=True) as server_page:
+        content = server_page.content
+        
+        # Root URL name field should be disabled
+        assert 'id="cr-root-url-name"' in content, \
+            'Root URL name field should be present even in readonly mode'
+        assert 'id="cr-root-url-name" class="cr-form-row__input" placeholder="e.g. Home" disabled' in content, \
+            'Root URL name field should be disabled in readonly mode'
+        
+        # Group URL pattern field should be disabled
+        assert 'id="cr-group-url-pattern"' in content, \
+            'Group URL pattern field should be present even in readonly mode'
+        assert re.search(r'id="cr-group-url-pattern"[^>]+ disabled', content) is not None, \
+            'Group URL pattern field should be disabled in readonly mode'
+        
+        # Group source select should be disabled
+        assert 'id="cr-group-source"' in content, \
+            'Group source select should be present even in readonly mode'
+        assert 'id="cr-group-source" class="cr-form-row__input" disabled' in content, \
+            'Group source select should be disabled in readonly mode'
+        
+        # Group name field should be disabled
+        assert 'id="cr-group-name"' in content, \
+            'Group name field should be present even in readonly mode'
+        assert 'id="cr-group-name" class="cr-form-row__input" placeholder="e.g. Post" value="" disabled' in content, \
+            'Group name field should be disabled in readonly mode'
+        
+        # Download group immediately checkbox should be disabled
+        assert 'id="cr-download-group-immediately-checkbox"' in content, \
+            'Download group immediately checkbox should be present even in readonly mode'
+        assert 'id="cr-download-group-immediately-checkbox" disabled' in content, \
+            'Download group immediately checkbox should be disabled in readonly mode'
+
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # Test: "Not in Archive" Page: Create Root URL + Download Progress Bar
 
