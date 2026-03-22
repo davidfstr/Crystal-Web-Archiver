@@ -79,7 +79,7 @@
 #          --timeout 30 \
 #          --environment 'Variables={CRYSTAL_PROJECT_URL=s3://my-bucket/My Site.crystalproj}'
 #
-#   5. Expose the function via a Function URL (simplest; no extra charge):
+#   5. Expose the function via a Function URL with response streaming:
 #        aws lambda add-permission \
 #          --function-name crystal-lambda \
 #          --statement-id FunctionURLAllowPublicAccess \
@@ -88,7 +88,8 @@
 #          --function-url-auth-type NONE
 #        aws lambda create-function-url-config \
 #          --function-name crystal-lambda \
-#          --auth-type NONE
+#          --auth-type NONE \
+#          --invoke-mode RESPONSE_STREAM
 #      Or expose via API Gateway if you prefer.
 #
 # Subsequent deploys:

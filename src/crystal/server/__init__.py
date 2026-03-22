@@ -189,11 +189,16 @@ class ProjectServer:
                 self._server.serve_forever()
             finally:
                 self._server.server_close()
-        bg_call_later(bg_task, name='ProjectServer.serve', daemon=True)
-        
-        if wait_for_banner:
-            banner_printed._cr_declare_no_deadlocks = True  # type: ignore[attr-defined]
-            banner_printed.result()
+        if is_single_threaded_mode():
+            # Run the server on the current thread, blocking until server shut down
+            bg_task()
+        else:
+            # Start the server on a background thread
+            bg_call_later(bg_task, name='ProjectServer.serve', daemon=True)
+            
+            if wait_for_banner:
+                banner_printed._cr_declare_no_deadlocks = True  # type: ignore[attr-defined]
+                banner_printed.result()
         
         # Export reference to self, if running tests
         if tests_are_running():
@@ -661,6 +666,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.path = urlunparse(pathurl_parts._replace(scheme='', netloc=''))
             self.headers['Host'] = pathurl_parts.netloc  # replace any that existed before
         
+        # Normalize bare trailing '?' (empty query string).
+        # Lambda Web Adapter appends '?' even when there is no query string.
+        if self.path.endswith('?'):
+            self.path = self.path[:-1]
+
         # Serve pin_date.js if requested
         m = _PIN_DATE_JS_PATH_RE.fullmatch(self.path)
         if m is not None:

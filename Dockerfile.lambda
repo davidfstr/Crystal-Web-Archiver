@@ -4,6 +4,9 @@
 # stored on S3 over HTTP, using the same request-handling logic as
 # ProjectServer.
 #
+# Lambda Web Adapter (LWA) is included to enable response streaming, which
+# lifts the 6 MB buffered-response size limit imposed by Lambda Function URLs.
+#
 # Build:
 #   docker build -f Dockerfile.lambda -t crystal-lambda .
 #
@@ -15,12 +18,16 @@
 #     -e AWS_DEFAULT_REGION=us-east-1 \
 #     crystal-lambda
 #
-#   curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" \
-#     -d '{"requestContext":{"http":{"method":"GET"}},"rawPath":"/","rawQueryString":"","headers":{"host":"localhost"}}'
+#   curl "http://localhost:9000/_/https/example.com/"
 #
 # See deploy-lambda.sh for how to push and deploy to AWS.
 
 FROM public.ecr.aws/lambda/python:3.13
+
+# Lambda Web Adapter: enables response streaming for Lambda Function URLs.
+# LWA intercepts Lambda invocations and forwards them as HTTP requests to
+# Crystal's HTTP server (port 8080), streaming responses back to the caller.
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
 
 WORKDIR /var/task
 
@@ -55,18 +62,24 @@ RUN poetry export --without dev --without-hashes \
     rm /tmp/requirements-lambda.txt pyproject.toml poetry.lock
 
 # ---------------------------------------------------------------------------
-# Crystal source and Lambda handler
+# Crystal source and Lambda server
 # ---------------------------------------------------------------------------
 
 # Install the crystal package from source (without re-installing deps).
 COPY src/crystal ./crystal
-COPY lambda_handler.py ./
+COPY lambda_server.py ./
 
 # ---------------------------------------------------------------------------
 # Lambda entrypoint
 # ---------------------------------------------------------------------------
 
-# The Lambda handler is: lambda_handler.handler
+# Run Crystal's HTTP server directly on port 8080.
+# Lambda Web Adapter (LWA) will proxy Lambda invocations to this server and
+# stream responses back to the caller when deployed on AWS Lambda.
+#
 # Set CRYSTAL_PROJECT_URL at deploy time (see deploy-lambda.sh or the
 # Lambda console under Configuration → Environment variables).
-CMD ["lambda_handler.handler"]
+EXPOSE 8080
+ENV AWS_LWA_INVOKE_MODE=response_stream
+ENTRYPOINT ["python", "-u", "/var/task/lambda_server.py"]
+CMD []
