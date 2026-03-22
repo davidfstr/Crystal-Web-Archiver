@@ -1,6 +1,7 @@
 # TODO: Consider extracting functions shared between dialogs to own module
 from collections.abc import Callable
 from crystal.browser.entitytree import ResourceGroupNode, RootResourceNode
+from crystal.browser.new_group_info import NewGroupDialogInfo
 from crystal.browser.new_root_url import (
     fields_hide_hint_when_focused, NewRootUrlDialog,
 )
@@ -32,7 +33,7 @@ _OPTIONS_NOT_SHOWN_LABEL = 'Advanced Options'
 
 class NewGroupDialog:
     _INITIAL_URL_PATTERN_WIDTH = NewRootUrlDialog._INITIAL_URL_WIDTH
-    _MAX_VISIBLE_PREVIEW_URLS = 100
+    _MAX_VISIBLE_PREVIEW_URLS = NewGroupDialogInfo._MAX_VISIBLE_PREVIEW_URLS
     
     # === Init ===
     
@@ -458,30 +459,7 @@ class NewGroupDialog:
     
     @classmethod
     def _calculate_preview_urls(cls, project: Project, url_pattern: str) -> list[str]:
-        url_pattern_re = ResourceGroup.create_re_for_url_pattern(url_pattern)
-        literal_prefix = ResourceGroup.literal_prefix_for_url_pattern(url_pattern)
-        
-        url_pattern_is_literal = (len(literal_prefix) == len(url_pattern))
-        if url_pattern_is_literal:
-            member = project.get_resource(literal_prefix)
-            if member is None:
-                (matching_urls, approx_match_count) = ([], 0)
-            else:
-                (matching_urls, approx_match_count) = ([member.url], 1)
-        else:
-            (matching_urls, approx_match_count) = project.urls_matching_pattern(
-                url_pattern_re, literal_prefix, limit=cls._MAX_VISIBLE_PREVIEW_URLS)
-        
-        if len(matching_urls) == 0:
-            return []
-        else:
-            more_count = approx_match_count - len(matching_urls)
-            more_items = (
-                [f'... about {more_count:n} more']
-                if more_count != 0
-                else []
-            )
-            return matching_urls + more_items
+        return NewGroupDialogInfo._calculate_preview_urls(project, url_pattern)
     
     # === Events ===
     
