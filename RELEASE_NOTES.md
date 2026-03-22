@@ -36,6 +36,10 @@ Release Notes ⋮
           otherwise. See <doc/model_durability_and_atomicity.md> for details.
         * Failed transactions are now explicitly rolled back correctly.
 
+* Performance improvements
+    * The log drawer no longer slows down over time when many lines are written.
+      Old lines are automatically trimmed once the log exceeds 5,000 lines.
+
 * Shell changes
     * `Resource.delete()` and `ResourceRevision.delete()` now are asynchronous
       rather than synchronous, returning a `Future` to track completion.

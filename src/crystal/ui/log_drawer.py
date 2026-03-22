@@ -35,6 +35,7 @@ _COLOR_CODES = OrderedDict([
     (cli.TERMINAL_FG_PURPLE, _hexcolor_to_color('#D43BD2')),
 ])  # type: dict[str, wx.Colour]
 _RESET_CODE = cli.TERMINAL_RESET
+_MAX_LINE_COUNT = 5000  # prevent unbounded growth over time
 
 
 # TODO: Avoid inheriting directly from wx.Frame because doing so
@@ -475,6 +476,13 @@ class _LogDrawerWriter(TextIOBase):
                         # TODO: Eliminate these inserted '\u200b' values
                         #       from any text copied (or cut) from the text area.
                         textarea.WriteText('\u200b')  # zero-width space
+            
+            # Trim leading lines if the total exceeds the maximum
+            line_count = textarea.GetNumberOfLines()
+            if line_count > _MAX_LINE_COUNT:
+                lines_to_remove = line_count - _MAX_LINE_COUNT
+                end_of_removed = textarea.XYToPosition(0, lines_to_remove)
+                textarea.Remove(0, end_of_removed)
             
             if textarea_was_scrolled_to_bottom:
                 self._drawer._scroll_to_bottom()
