@@ -9,7 +9,7 @@
 #     (see "One-time setup" below)
 #
 # Usage:
-#   ./deploy-lambda.sh
+#   src/crystal_on_aws/deploy.sh
 #
 # Configuration (edit variables below or export them before running):
 #   LAMBDA_FUNCTION_NAME   Name of the Lambda function to update
@@ -144,7 +144,7 @@ echo "==> Building container image..."
 docker build \
     --platform linux/amd64 \
     --provenance=false \
-    -f Dockerfile.lambda \
+    -f src/crystal_on_aws/Dockerfile.lambda \
     -t "${FULL_IMAGE}" \
     .
 

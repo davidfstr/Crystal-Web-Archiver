@@ -9,7 +9,7 @@ Usage:
     Set CRYSTAL_PROJECT_URL to the S3 URL of a .crystalproj:
         CRYSTAL_PROJECT_URL=s3://my-bucket/My Site.crystalproj
 
-    See Dockerfile.lambda for how this file is used in the container.
+    See src/crystal_on_aws/Dockerfile.lambda for how this file is used in the container.
 
     Credentials come from the Lambda execution role (boto3 credential chain).
 """

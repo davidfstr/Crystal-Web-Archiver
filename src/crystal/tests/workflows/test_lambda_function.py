@@ -340,14 +340,14 @@ def _lambda_container_serving_xkcd_project(
 
 
 def _build_lambda_image() -> None:
-    """Build the Lambda Docker image from Dockerfile.lambda."""
+    """Build the Lambda Docker image from src/crystal_on_aws/Dockerfile.lambda."""
     project_root = _get_project_root()
     subprocess.check_call(
         [
             'docker', 'build',
             '--platform', 'linux/amd64',
             '--provenance=false',
-            '-f', 'Dockerfile.lambda',
+            '-f', 'src/crystal_on_aws/Dockerfile.lambda',
             '-t', _DOCKER_IMAGE_NAME,
             '.',
         ],
@@ -502,11 +502,11 @@ def _find_free_port() -> int:
 
 
 def _get_project_root() -> str:
-    """Return the root directory of the Crystal project (where Dockerfile.lambda lives)."""
-    # Walk up from this file until we find Dockerfile.lambda
+    """Return the root directory of the Crystal project (where src/crystal_on_aws/ lives)."""
+    # Walk up from this file until we find src/crystal_on_aws/Dockerfile.lambda
     d = os.path.dirname(__file__)
     for _ in range(10):
-        if os.path.exists(os.path.join(d, 'Dockerfile.lambda')):
+        if os.path.exists(os.path.join(d, 'src', 'crystal_on_aws', 'Dockerfile.lambda')):
             return d
         d = os.path.dirname(d)
-    raise RuntimeError('Cannot find project root (Dockerfile.lambda)')
+    raise RuntimeError('Cannot find project root (src/crystal_on_aws/Dockerfile.lambda)')

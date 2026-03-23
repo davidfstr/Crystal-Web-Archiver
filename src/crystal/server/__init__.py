@@ -748,14 +748,14 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         return
     
-    # NOTE: Logic is also used externally by lambda_server.py, as a BaseHTTPRequestHandler
+    # NOTE: Logic is also used externally by crystal_on_aws/lambda_server.py, as a BaseHTTPRequestHandler
     def _strip_trailing_empty_query(self: BaseHTTPRequestHandler) -> None:
         # Normalize bare trailing '?' (empty query string).
         # Lambda Web Adapter appends '?' even when there is no query string.
         if self.path.endswith('?'):
             self.path = self.path[:-1]
     
-    # NOTE: Logic is also used externally by lambda_server.py, as a BaseHTTPRequestHandler
+    # NOTE: Logic is also used externally by crystal_on_aws/lambda_server.py, as a BaseHTTPRequestHandler
     def _serve_health_check_response(self: BaseHTTPRequestHandler) -> None:
         self.send_response(200)
         self.end_headers()
@@ -1397,7 +1397,7 @@ class _RequestHandler(BaseHTTPRequestHandler):
 
     # --- Handle: Static Resources ---
     
-    # NOTE: Logic is also used externally by lambda_server.py, as a BaseHTTPRequestHandler
+    # NOTE: Logic is also used externally by crystal_on_aws/lambda_server.py, as a BaseHTTPRequestHandler
     @bg_affinity
     def _handle_static_resource(self: '_RequestHandler | BaseHTTPRequestHandler') -> None:
         """Serve static resources from Crystal's "resources" directory."""
