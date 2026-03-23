@@ -20,7 +20,7 @@
 #
 #   curl "http://localhost:9000/_/https/example.com/"
 #
-# See deploy.sh for how to push and deploy to AWS.
+# See deploy-image.sh for how to push and deploy to AWS.
 
 FROM public.ecr.aws/lambda/python:3.13
 
@@ -77,7 +77,7 @@ COPY src/crystal_on_aws/lambda_server.py ./
 # Lambda Web Adapter (LWA) will proxy Lambda invocations to this server and
 # stream responses back to the caller when deployed on AWS Lambda.
 #
-# Set CRYSTAL_PROJECT_URL at deploy time (see deploy.sh or the
+# Set CRYSTAL_PROJECT_URL at deploy time (see deploy-image.sh or the
 # Lambda console under Configuration → Environment variables).
 EXPOSE 8080
 ENV AWS_LWA_INVOKE_MODE=response_stream

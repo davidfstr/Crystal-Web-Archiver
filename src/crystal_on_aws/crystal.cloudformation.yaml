@@ -1,0 +1,535 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |-
+  Deploys a Crystal Lambda function that serves an archived
+  website (.crystalproj) stored on S3.
+
+  Prerequisites:
+    - A .crystalproj uploaded to an S3 bucket.
+
+  After stack creation, the archived site is available at the Function URL
+  shown in the Outputs tab.
+
+
+# =============================================================================
+# Parameters
+# =============================================================================
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Crystal Project
+        Parameters:
+          - ProjectS3Url
+      - Label:
+          default: Custom Domain (managed by custom-domain-add.sh)
+        Parameters:
+          - CustomDomainHost
+      - Label:
+          default: Advanced Options
+        Parameters:
+          - ImageUri
+          - ImageRefreshToken
+          - LambdaMemorySize
+          - LambdaTimeout
+    ParameterLabels:
+      ProjectS3Url:
+        default: Project S3 URL
+      ImageUri:
+        default: Container Image URI
+      ImageRefreshToken:
+        default: Image Refresh Token
+      CustomDomainHost:
+        default: Custom Domain
+      LambdaMemorySize:
+        default: Memory (MB)
+      LambdaTimeout:
+        default: Timeout (seconds)
+
+Parameters:
+
+  ProjectS3Url:
+    Type: String
+    Description: >-
+      S3 URL of the Crystal project, as shown in the S3 Console
+      (e.g. s3://my-bucket/My Site.crystalproj).
+    AllowedPattern: '^s3://[^/]+/.+'
+    ConstraintDescription: >-
+      Must be an S3 URL in the form s3://bucket-name/path/to/project.crystalproj
+
+  ImageUri:
+    Type: String
+    Default: 'public.ecr.aws/g0h6z3c9/crystal-on-aws:latest'
+    Description: >-
+      Container image URI. The default uses the latest official Crystal
+      release from public ECR. Override to use a custom or dev build.
+
+  ImageRefreshToken:
+    Type: String
+    Default: ''
+    Description: >-
+      Change this value (to any new value) to force re-checking the 
+      ImageUri for any changes during a stack update. Useful when the
+      ImageUri is a public image like "latest" which may change over time.
+
+  CustomDomainHost:
+    Type: String
+    Default: ''
+    Description: >-
+      DO NOT SET MANUALLY. Use custom-domain-add.sh and custom-domain-remove.sh
+      to configure a custom domain. Those scripts create the required CloudFront
+      distribution and ACM certificate in addition to setting this value.
+
+  LambdaMemorySize:
+    Type: Number
+    Default: 512
+    MinValue: 128
+    MaxValue: 10240
+    Description: Memory allocated to the Lambda function (MB).
+
+  LambdaTimeout:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 900
+    Description: Maximum execution time for a single request (seconds).
+
+
+# =============================================================================
+# Conditions
+# =============================================================================
+
+Conditions:
+  HasCustomDomain: !Not [!Equals [!Ref CustomDomainHost, '']]
+
+
+# =============================================================================
+# Resources
+# =============================================================================
+
+Resources:
+
+  # ---------------------------------------------------------------------------
+  # URL Parser (Custom Resource)
+  # ---------------------------------------------------------------------------
+  # Parses ProjectS3Url into BucketName and ProjectKey using a tiny inline
+  # Lambda, because CloudFormation's intrinsic functions cannot extract an
+  # arbitrary-depth key from an S3 URL (Fn::Split requires a literal delimiter).
+
+  UrlParserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  UrlParserFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt UrlParserRole.Arn
+      Timeout: 10
+      Code:
+        ZipFile: |
+          import cfnresponse
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+                  url = event['ResourceProperties']['Url']
+                  # Strip s3:// prefix and optional trailing slash
+                  path = url.removeprefix('s3://').removesuffix('/')
+                  (bucket, key) = path.split('/', 1)
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                      'BucketName': bucket,
+                      'ProjectKey': key,
+                  })
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=str(e))
+
+  ParsedProjectUrl:
+    Type: Custom::UrlParser
+    Properties:
+      ServiceToken: !GetAtt UrlParserFunction.Arn
+      Url: !Ref ProjectS3Url
+
+  # ---------------------------------------------------------------------------
+  # Image Copier (Custom Resource)
+  # ---------------------------------------------------------------------------
+  # Lambda cannot pull from public ECR (public.ecr.aws). This custom resource
+  # copies a public ECR image to a private ECR repository in the same region,
+  # so that the Crystal Lambda function can use it. Private ECR URIs are
+  # passed through unchanged.
+
+  ImageCopierRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: EcrCopyAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:CreateRepository
+                  - ecr:DescribeRepositories
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource: !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/crystal-on-aws'
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+
+  ImageCopierFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt ImageCopierRole.Arn
+      Timeout: 900
+      MemorySize: 512
+      EphemeralStorage:
+        Size: 2048
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import hashlib
+          import json
+          import os
+          import urllib.request
+
+          CRYSTAL_PUBLIC_PREFIX = 'public.ecr.aws/g0h6z3c9/crystal-on-aws:'
+          PRIVATE_REPO_NAME = 'crystal-on-aws'
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {'ImageUri': ''})
+                      return
+
+                  image_uri = event['ResourceProperties']['ImageUri']
+
+                  # Pass through private ECR URIs unchanged
+                  if not image_uri.startswith('public.ecr.aws/'):
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {'ImageUri': image_uri})
+                      return
+
+                  # Reject non-Crystal public ECR repos
+                  if not image_uri.startswith(CRYSTAL_PUBLIC_PREFIX):
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=(
+                          'Public ECR repositories other than Crystal\'s official public ECR '
+                          'repository ("public.ecr.aws/g0h6z3c9/crystal-on-aws") are not supported.'
+                      ))
+                      return
+
+                  tag = image_uri[len(CRYSTAL_PUBLIC_PREFIX):]
+                  private_tag = f'public-{tag}'
+                  region = os.environ['AWS_REGION']
+                  account_id = boto3.client('sts').get_caller_identity()['Account']
+                  ecr = boto3.client('ecr', region_name=region)
+
+                  # Ensure private ECR repo exists
+                  try:
+                      ecr.create_repository(repositoryName=PRIVATE_REPO_NAME)
+                      print(f'Created private ECR repository: {PRIVATE_REPO_NAME}')
+                  except ecr.exceptions.RepositoryAlreadyExistsException:
+                      pass
+
+                  # Get auth token for public ECR and fetch manifest
+                  token = _get_public_token()
+                  manifest_json = _get_manifest(token, tag)
+                  public_digest = 'sha256:' + hashlib.sha256(manifest_json.encode('utf-8')).hexdigest()
+
+                  # Check if private ECR already has this exact image
+                  private_digest = _get_private_digest(ecr, private_tag)
+                  if private_digest == public_digest:
+                      print(f'Private image {private_tag} is already up to date (digest: {public_digest[:20]}...).')
+                  else:
+                      if private_digest:
+                          print(f'Private image {private_tag} is outdated (have: {private_digest[:20]}..., want: {public_digest[:20]}...). Updating.')
+                      else:
+                          print(f'Private image {private_tag} does not exist. Copying.')
+
+                      manifest = json.loads(manifest_json)
+
+                      # Copy config blob + layer blobs to private ECR
+                      _copy_blob(token, manifest['config']['digest'], ecr)
+                      for layer in manifest['layers']:
+                          _copy_blob(token, layer['digest'], ecr)
+
+                      # Register the manifest in private ECR
+                      try:
+                          ecr.put_image(
+                              repositoryName=PRIVATE_REPO_NAME,
+                              imageManifest=manifest_json,
+                              imageTag=private_tag,
+                          )
+                      except ecr.exceptions.ImageAlreadyExistsException:
+                          pass
+
+                  private_uri = (
+                      f'{account_id}.dkr.ecr.{region}.amazonaws.com'
+                      f'/{PRIVATE_REPO_NAME}:{private_tag}'
+                  )
+                  print(f'Image available at: {private_uri}')
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'ImageUri': private_uri})
+              except Exception as e:
+                  print(f'Error: {e}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=str(e))
+
+          def _get_public_token():
+              url = (
+                  'https://public.ecr.aws/token/'
+                  '?service=public.ecr.aws'
+                  '&scope=repository:g0h6z3c9/crystal-on-aws:pull'
+              )
+              with urllib.request.urlopen(url) as resp:
+                  return json.loads(resp.read())['token']
+
+          def _get_manifest(token, tag):
+              url = f'https://public.ecr.aws/v2/g0h6z3c9/crystal-on-aws/manifests/{tag}'
+              req = urllib.request.Request(url, headers={
+                  'Authorization': f'Bearer {token}',
+                  'Accept': 'application/vnd.docker.distribution.manifest.v2+json',
+              })
+              with urllib.request.urlopen(req) as resp:
+                  return resp.read().decode('utf-8')
+
+          def _get_private_digest(ecr, tag):
+              """Return the manifest digest for a tag in private ECR, or None."""
+              try:
+                  resp = ecr.batch_get_image(
+                      repositoryName=PRIVATE_REPO_NAME,
+                      imageIds=[{'imageTag': tag}],
+                      acceptedMediaTypes=['application/vnd.docker.distribution.manifest.v2+json'],
+                  )
+                  images = resp.get('images', [])
+                  if images:
+                      manifest = images[0]['imageManifest']
+                      return 'sha256:' + hashlib.sha256(manifest.encode('utf-8')).hexdigest()
+              except Exception:
+                  pass
+              return None
+
+          def _copy_blob(token, digest, ecr):
+              # Skip if layer already in private ECR
+              check = ecr.batch_check_layer_availability(
+                  repositoryName=PRIVATE_REPO_NAME,
+                  layerDigests=[digest],
+              )
+              if (check.get('layers') and
+                      check['layers'][0]['layerAvailability'] == 'AVAILABLE'):
+                  print(f'  Layer {digest[:20]}... already exists, skipping.')
+                  return
+
+              print(f'  Copying layer {digest[:20]}...')
+
+              # Download from public ECR to /tmp
+              url = f'https://public.ecr.aws/v2/g0h6z3c9/crystal-on-aws/blobs/{digest}'
+              req = urllib.request.Request(url, headers={
+                  'Authorization': f'Bearer {token}',
+              })
+              tmp_path = f'/tmp/{digest.replace(":", "_")}'
+              with urllib.request.urlopen(req) as resp:
+                  with open(tmp_path, 'wb') as f:
+                      while True:
+                          chunk = resp.read(8 * 1024 * 1024)
+                          if not chunk:
+                              break
+                          f.write(chunk)
+
+              # Upload to private ECR in parts
+              upload = ecr.initiate_layer_upload(repositoryName=PRIVATE_REPO_NAME)
+              upload_id = upload['uploadId']
+              file_size = os.path.getsize(tmp_path)
+              part_size = 8 * 1024 * 1024
+
+              with open(tmp_path, 'rb') as f:
+                  offset = 0
+                  while offset < file_size:
+                      part = f.read(part_size)
+                      ecr.upload_layer_part(
+                          repositoryName=PRIVATE_REPO_NAME,
+                          uploadId=upload_id,
+                          partFirstByte=offset,
+                          partLastByte=offset + len(part) - 1,
+                          layerPartBlob=part,
+                      )
+                      offset += len(part)
+
+              ecr.complete_layer_upload(
+                  repositoryName=PRIVATE_REPO_NAME,
+                  uploadId=upload_id,
+                  layerDigests=[digest],
+              )
+              os.remove(tmp_path)
+              print(f'  Layer {digest[:20]}... copied ({file_size} bytes).')
+
+  ResolvedImage:
+    Type: Custom::ImageCopier
+    Properties:
+      ServiceToken: !GetAtt ImageCopierFunction.Arn
+      ImageUri: !Ref ImageUri
+      # Changing RefreshToken triggers CF to re-invoke this custom resource
+      # even if ImageUri hasn't changed, allowing it to pick up new images
+      # published to the same tag (e.g. "latest").
+      RefreshToken: !Ref ImageRefreshToken
+
+  # ---------------------------------------------------------------------------
+  # IAM Role
+  # ---------------------------------------------------------------------------
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Grants permission to write logs to CloudWatch
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CrystalS3ReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Scoped to the .crystalproj directory only.
+              - Sid: GetObjectsInProject
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub
+                  - 'arn:aws:s3:::${BucketName}/${ProjectKey}/*'
+                  - BucketName: !GetAtt ParsedProjectUrl.BucketName
+                    ProjectKey: !GetAtt ParsedProjectUrl.ProjectKey
+              - Sid: ListBucket
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub
+                  - 'arn:aws:s3:::${BucketName}'
+                  - BucketName: !GetAtt ParsedProjectUrl.BucketName
+
+  # ---------------------------------------------------------------------------
+  # Log Groups (7-day retention)
+  # ---------------------------------------------------------------------------
+  # Pre-creating log groups ensures they have a retention policy.
+  # Without this, Lambda auto-creates them with infinite retention.
+
+  UrlParserLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${UrlParserFunction}'
+      RetentionInDays: 7
+
+  ImageCopierLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ImageCopierFunction}'
+      RetentionInDays: 7
+
+  CrystalFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}'
+      RetentionInDays: 7
+
+  # ---------------------------------------------------------------------------
+  # Lambda Function
+  # ---------------------------------------------------------------------------
+
+  CrystalFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref AWS::StackName
+      PackageType: Image
+      Code:
+        ImageUri: !GetAtt ResolvedImage.ImageUri
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: !Ref LambdaMemorySize
+      Timeout: !Ref LambdaTimeout
+      Tags:
+        - Key: crystal-lambda
+          Value: 'true'
+      Environment:
+        Variables:
+          CRYSTAL_PROJECT_URL: !Sub
+            - 's3://${BucketName}/${ProjectKey}?region=${AWS::Region}'
+            - BucketName: !GetAtt ParsedProjectUrl.BucketName
+              ProjectKey: !GetAtt ParsedProjectUrl.ProjectKey
+          CRYSTAL_REQUEST_HOST: !Ref CustomDomainHost
+
+  # ---------------------------------------------------------------------------
+  # Function URL (public, with response streaming)
+  # ---------------------------------------------------------------------------
+
+  FunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt CrystalFunction.Arn
+      AuthType: NONE
+      InvokeMode: RESPONSE_STREAM
+
+  FunctionUrlPublicAccess:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CrystalFunction.Arn
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+
+# =============================================================================
+# Outputs
+# =============================================================================
+
+Outputs:
+
+  SiteUrl1:
+    Description: Public URL of the archived site (Lambda Function URL)
+    Value: !GetAtt FunctionUrl.FunctionUrl
+
+  SiteUrl2:
+    Description: Public URL of the archived site (custom domain)
+    Value: !If
+      - HasCustomDomain
+      - !Sub 'https://${CustomDomainHost}/'
+      - ''
+
+  FunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref CrystalFunction
+
+  FunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt CrystalFunction.Arn
+
+  ExecutionRoleArn:
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt LambdaExecutionRole.Arn

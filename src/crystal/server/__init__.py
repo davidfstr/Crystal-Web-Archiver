@@ -592,7 +592,13 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     @property
     def request_host(self) -> str:
-        return self.headers.get('Host', self._server_host)
+        return (
+            # CRYSTAL_REQUEST_HOST: Overrides the Host header. Useful when a
+            # reverse proxy (e.g. CloudFront) replaces Host with the origin
+            # domain rather than preserving the viewer's original Host.
+            os.environ.get('CRYSTAL_REQUEST_HOST', '') or
+            self.headers.get('Host', self._server_host)
+        )
     
     @property
     def referer(self) -> str | None:
