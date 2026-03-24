@@ -759,7 +759,7 @@ def not_in_archive_html(
             </div>
             
             <div class="cr-page__actions">
-                <button onclick="history.back()" class="cr-button cr-button--secondary">
+                <button id="cr-back-button" onclick="history.back()" class="cr-button cr-button--secondary">
                     ← Go Back
                 </button>
                 <button id="cr-action-button" {'disabled ' if readonly else ''}onclick="onActionButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
