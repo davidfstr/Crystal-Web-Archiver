@@ -64,6 +64,14 @@ Release Notes ⋮
     * wxPython is now never even loaded in headless mode.
       Therefore Crystal can now be run (in headless mode) if wxPython isn't installed.
 
+* Security improvements
+    * Apple Developer secrets are no longer exposed to CI runs that
+      are not creating a distribution artifact.
+      Previously the secrets (`CERTIFICATE_NAME`, `APPLE_ID`,
+      `APPLE_TEAM_ID`, `APPLE_APP_SPECIFIC_PASSWORD`) were injected
+      into the macOS build step's environment on every CI run,
+      including routine pushes to `main`.
+
 * Development improvements
     * WaitTimeout failures during automated tests take image screenshots 
       and text snapshots automatically when running remotely,

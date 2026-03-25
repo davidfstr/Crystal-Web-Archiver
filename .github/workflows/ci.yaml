@@ -456,8 +456,24 @@ jobs:
           # in the unlocked keychain without prompting for a password
           security set-key-partition-list -S apple-tool:,apple: -k "" build.keychain > /dev/null
 
-      - name: Build .app and disk image
+      # Build the app without secrets when not creating a distribution artifact.
+      # Keeping secrets out of the environment limits their exposure.
+      - name: Build .app (not distributing)
+        id: build_app
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.build_dist_artifact == 'true') }}
+        working-directory: "./setup"
+        run: |
+          # --app-only:
+          # 1. Don't build the disk image because it intermittently fails
+          #    with "hdiutil create failed - Resource busy" in CI.
+          # 2. Don't build the disk image because it takes a long time.
+          ${POETRY_RUN}./make-mac.sh --app-only
+
+      # Build the app and disk image with secrets only when creating a distribution
+      # artifact, so that Apple Developer secrets are not exposed to all CI runs.
+      - name: Build .app and disk image (distributing)
         id: build_app_and_disk_image
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_dist_artifact == 'true' }}
         working-directory: "./setup"
         env:
           # ex: "Developer ID Application: John Smith (##########)"
@@ -471,17 +487,7 @@ jobs:
           # Pass the workflow_dispatch input to the script
           SHOW_NOTARIZATION_LOG: ${{ github.event.inputs.show_notarization_log }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.build_dist_artifact }}" == "true" ]]; then
-            # If building a distribution artifact then also build the disk image
-            MAKE_POST_ARGS=""
-          else
-            # --app-only:
-            # 1. Don't build the disk image because it intermittently fails
-            #    with "hdiutil create failed - Resource busy" in CI.
-            # 2. Don't build the disk image because it takes a long time.
-            MAKE_POST_ARGS="--app-only"
-          fi
-          ${POETRY_RUN}./make-mac.sh $MAKE_POST_ARGS
+          ${POETRY_RUN}./make-mac.sh
 
       - name: Verify universal2 build
         if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_dist_artifact == 'true' || github.event.inputs.build_arch_macos == 'universal2') }}
@@ -491,7 +497,7 @@ jobs:
 
       # Upload py2app logs on .app build failure
       - name: Upload py2app logs
-        if: failure() && steps.build_app_and_disk_image.outcome == 'failure'
+        if: failure() && (steps.build_app.outcome == 'failure' || steps.build_app_and_disk_image.outcome == 'failure')
         uses: actions/upload-artifact@v4
         with:
           name: py2app-logs-${{ matrix.os }}-${{ matrix.python-version }}
