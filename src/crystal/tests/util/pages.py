@@ -128,6 +128,10 @@ class NotInArchivePage(AbstractPage):
     # === Action Button ===
     
     @property
+    def go_back_button(self) -> Locator:
+        return self.raw_page.locator('#cr-back-button')
+    
+    @property
     def action_button(self) -> Locator:
         return self.raw_page.locator('#cr-action-button')
     
