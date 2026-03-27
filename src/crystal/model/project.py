@@ -237,6 +237,8 @@ class Project(ListenableMixin):
         * ProjectReadOnlyError --
             if a new project could not be created because the path is 
             on a read-only filesystem or a filesystem that SQLite cannot write to
+        * ProjectMissingOrIncompleteError (a kind of ProjectFormatError) --
+            if there is no project at the specified path or it is missing critical project files
         * ProjectFormatError -- if the project at the specified path is invalid
         * ProjectTooNewError -- 
             if the project is a version newer than this version of Crystal can open safely
@@ -668,7 +670,7 @@ class Project(ListenableMixin):
         
         try:
             Project._ensure_directory_structure_valid(FilesystemPath(fs, normalized_path))
-        except ProjectFormatError:
+        except ProjectMissingOrIncompleteError:
             return False
         else:
             return True
@@ -718,22 +720,26 @@ class Project(ListenableMixin):
     def _ensure_directory_structure_valid(cls, fs_path: FilesystemPath) -> None:
         """
         Raises:
-        * ProjectFormatError -- if the project at the specified path is invalid
+        * ProjectMissingOrIncompleteError (a kind of ProjectFormatError) --
+            if there is no project at the specified path or it is missing critical project files
         * PermissionError
         """
         (fs, path) = fs_path
         db_path = fs.join(path, Project._DB_FILENAME)
         if isinstance(fs, LocalFilesystem):
             if not fs.isdir(path):
-                raise ProjectFormatError(f'Project is missing outermost directory: {path}')
+                raise ProjectMissingOrIncompleteError(
+                    f'Project does not exist: {path}')
 
             # Ensure database exists
             if not fs.isfile(db_path):
-                raise ProjectFormatError(f'Project is missing database: {db_path}')
+                raise ProjectMissingOrIncompleteError(
+                    f'Project is missing database: {db_path}')
 
             revision_dirpath = fs.join(path, Project._REVISIONS_DIRNAME)
             if not fs.isdir(revision_dirpath):
-                raise ProjectFormatError(f'Project is missing revisions directory: {revision_dirpath}')
+                raise ProjectMissingOrIncompleteError(
+                    f'Project is missing revisions directory: {revision_dirpath}')
         elif isinstance(fs, S3Filesystem):
             import botocore.exceptions
             
@@ -760,7 +766,8 @@ class Project(ListenableMixin):
                     '- the s3:// URL for the project, e.g. "s3://{access_key_id}:{secret_access_key.replace("/", "%2F")}@my-bucket/My Project.crystalproj?region=us-east-1"'
                 ) from e
             except FileNotFoundError as e:
-                raise ProjectFormatError(f'Project is missing database: {db_path}') from e
+                raise ProjectMissingOrIncompleteError(
+                    f'Project does not exist or is missing database: {db_path}') from e
             else:
                 # Database exists and is accessible
                 pass
@@ -3439,6 +3446,10 @@ class CrossProjectReferenceError(Exception):
 
 class ProjectFormatError(Exception):
     """The on-disk format of a Project is corrupted in some way."""
+
+
+class ProjectMissingOrIncompleteError(ProjectFormatError):
+    """Project does not exist or critical project files are missing."""
 
 
 class RevisionBodyMissingError(ProjectFormatError):

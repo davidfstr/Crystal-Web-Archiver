@@ -13,6 +13,14 @@ Release Notes ⋮
 ### main / v2.3.0
 
 * Workflow improvements
+    * **Crystal on AWS:** Crystal can now serve an archived website directly
+      from AWS, making it accessible to anyone with a web browser.
+        * Deploy with a single click using the [Launch Stack] button on the
+          wiki, or upload the CloudFormation template manually.
+          Only one parameter is required: the S3 URL of your `.crystalproj`.
+        * Optionally add a custom domain (e.g. `mysite.example.com`) using
+          [AWS CloudShell]. No local tools required.
+        * See [[Crystal on AWS]] in the wiki for full setup instructions.
     * Projects can now be opened from AWS S3 cloud hosting.
         * Use **File > Open Project from S3...** in the menu bar to open
           a project stored on S3.
@@ -77,6 +85,9 @@ Release Notes ⋮
       upgrading wxPython 4.2.4 -> 4.2.5, which is compatible with
       the latest version of Python's setuptools.
 
+[Launch Stack]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Crystal-on-AWS#option-1-quick-deploy-recommended
+[AWS CloudShell]: https://console.aws.amazon.com/cloudshell/
+[Crystal on AWS]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Crystal-on-AWS
 [Projects on AWS S3]: https://github.com/davidfstr/Crystal-Web-Archiver/wiki/Projects-on-AWS-S3
 
 ### v2.2.0 (January 27, 2026)

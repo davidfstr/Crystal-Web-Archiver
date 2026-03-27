@@ -76,10 +76,36 @@ def is_foreground_thread(*, _expect: bool | None=None) -> bool:
 def has_foreground_thread() -> bool:
     """
     Returns whether any foreground thread exists.
-    
+
     If it doesn't exist, it may not have been created yet or it may have exited.
     """
     return _fg_thread is not None
+
+
+# ------------------------------------------------------------------------------
+# Single-Threaded Mode
+
+_single_threaded_mode = False
+
+
+def set_single_threaded_mode(enabled: bool) -> None:
+    """
+    Enables or disables single-threaded mode.
+
+    In single-threaded mode the foreground thread is permitted to call functions
+    decorated with @bg_affinity. This is useful in environments like AWS Lambda
+    where there is only one thread and it must act as both foreground and
+    background.
+
+    Must be called before any @bg_affinity-decorated function is called from
+    the foreground thread.
+    """
+    global _single_threaded_mode
+    _single_threaded_mode = enabled
+
+
+def is_single_threaded_mode() -> bool:
+    return _single_threaded_mode
 
 
 # ------------------------------------------------------------------------------
@@ -113,18 +139,21 @@ def bg_affinity(func: Callable[_P, _R]) -> Callable[_P, _R]:
     """
     Marks the decorated function as needing to be called from a
     background thread only, and in particular not from the foreground thread.
-    
+
     Calling the decorated function from an inappropriate thread will immediately
     raise an AssertionError.
-    
+
     The following kinds of manipulations need to happen on background threads:
     - Blocking I/O (except for database I/O)
     - Long-running tasks that would block the UI if run on the foreground thread
+
+    In single-threaded mode (see set_single_threaded_mode()), the foreground
+    thread is also permitted to call functions decorated with @bg_affinity.
     """
     if __debug__:  # no -O passed on command line?
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if is_foreground_thread(_expect=False):
+            if is_foreground_thread(_expect=False) and not _single_threaded_mode:
                 raise AssertionError(
                     f'bg_affinity: Expected call on not foreground thread: {func}')
             return func(*args, **kwargs)  # cr-traceback: ignore

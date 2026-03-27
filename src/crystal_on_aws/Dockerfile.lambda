@@ -1,0 +1,86 @@
+# Builds a container image for running Crystal as an AWS Lambda function.
+#
+# The resulting image serves an archived Crystal project (.crystalproj)
+# stored on S3 over HTTP, using the same request-handling logic as
+# ProjectServer.
+#
+# Lambda Web Adapter (LWA) is included to enable response streaming, which
+# lifts the 6 MB buffered-response size limit imposed by Lambda Function URLs.
+#
+# Build:
+#   docker build -f src/crystal_on_aws/Dockerfile.lambda -t crystal-lambda .
+#
+# Test locally (requires AWS credentials in the environment):
+#   docker run --rm -p 9000:8080 \
+#     -e CRYSTAL_PROJECT_URL=s3://my-bucket/My Site.crystalproj \
+#     -e AWS_ACCESS_KEY_ID=... \
+#     -e AWS_SECRET_ACCESS_KEY=... \
+#     -e AWS_DEFAULT_REGION=us-east-1 \
+#     crystal-lambda
+#
+#   curl "http://localhost:9000/_/https/example.com/"
+#
+# See deploy-image.sh for how to push and deploy to AWS.
+
+FROM public.ecr.aws/lambda/python:3.13
+
+# Lambda Web Adapter: enables response streaming for Lambda Function URLs.
+# LWA intercepts Lambda invocations and forwards them as HTTP requests to
+# Crystal's HTTP server (port 8080), streaming responses back to the caller.
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
+
+WORKDIR /var/task
+
+# ---------------------------------------------------------------------------
+# System dependencies
+# ---------------------------------------------------------------------------
+
+# NOTE: wxPython is NOT installed — Crystal runs in headless mode on Lambda.
+#       No GTK or display libraries are needed.
+
+# ---------------------------------------------------------------------------
+# Python dependencies
+# ---------------------------------------------------------------------------
+
+# Install Poetry (needed only to export the dependency list).
+# NOTE: poetry-plugin-export is no longer bundled with Poetry 2.x.
+RUN pip install --quiet "poetry==2.1.1" poetry-plugin-export
+
+# Export all production dependencies, excluding packages that are:
+#   - GUI-only (wxPython — requires GTK3 and a display)
+#   - macOS-only (py2app, xattr)
+#   - Windows-only (py2exe, wmi)
+#   - Python version-restricted in a way that may conflict (guppy3 <3.14)
+# The resulting requirements.txt is used by pip so that we avoid pulling in
+# the Poetry build system at runtime.
+COPY pyproject.toml poetry.lock ./
+RUN poetry export --without dev --without-hashes \
+        | grep -Ev '^(wxpython|py2app|py2exe|guppy3|xattr|wmi)==' \
+        > /tmp/requirements-lambda.txt && \
+    pip install --quiet -r /tmp/requirements-lambda.txt && \
+    pip uninstall --quiet --yes poetry && \
+    rm /tmp/requirements-lambda.txt pyproject.toml poetry.lock
+
+# ---------------------------------------------------------------------------
+# Crystal source and Lambda server
+# ---------------------------------------------------------------------------
+
+# Install the crystal package from source (without re-installing deps).
+COPY src/crystal ./crystal
+COPY src/crystal_on_aws/lambda_server.py ./
+
+# ---------------------------------------------------------------------------
+# Lambda entrypoint
+# ---------------------------------------------------------------------------
+
+# Run Crystal's HTTP server directly on port 8080.
+# Lambda Web Adapter (LWA) will proxy Lambda invocations to this server and
+# stream responses back to the caller when deployed on AWS Lambda.
+#
+# Set CRYSTAL_PROJECT_URL at deploy time (see deploy-image.sh or the
+# Lambda console under Configuration → Environment variables).
+EXPOSE 8080
+ENV AWS_LWA_INVOKE_MODE=response_stream
+ENV AWS_LWA_READINESS_CHECK_PATH=/_/crystal/health
+ENTRYPOINT ["python", "-u", "/var/task/lambda_server.py"]
+CMD []

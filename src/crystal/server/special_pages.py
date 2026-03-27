@@ -1542,12 +1542,45 @@ def fetch_error_html(
     return _base_page_html(
         title_html='Fetch Error | Crystal',
         style_html=(
-            _URL_BOX_STYLES + '\n\n' + 
-            _DOWNLOAD_PROGRESS_BAR_STYLES + '\n\n' + 
+            _URL_BOX_STYLES + '\n\n' +
+            _DOWNLOAD_PROGRESS_BAR_STYLES + '\n\n' +
             fetch_error_styles
         ),
         content_html=content_html,
         script_html=script_html,
+    )
+
+
+def internal_server_error_html(
+        *, error_type_html: str,
+        error_message_html: str,
+        ) -> str:
+    content_html = dedent(
+        f"""
+        <div class="cr-page__icon">⚠️</div>
+
+        <div class="cr-page__title">
+            <strong>Internal Server Error</strong>
+        </div>
+
+        <p>
+            A <code>{error_type_html}</code> error with message <code>{error_message_html}</code>
+            was encountered when starting this server.
+        </p>
+
+        <div class="cr-page__actions">
+            <button onclick="history.back()" class="cr-button cr-button--secondary">
+                ← Go Back
+            </button>
+        </div>
+        """
+    ).strip()
+
+    return _base_page_html(
+        title_html='Internal Server Error | Crystal',
+        style_html='',
+        content_html=content_html,
+        script_html='',
     )
 
 

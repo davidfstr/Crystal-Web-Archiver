@@ -32,6 +32,7 @@ from .project import (
     Project,
     ProjectClosedError,
     ProjectFormatError,
+    ProjectMissingOrIncompleteError,
     ProjectReadOnlyError,
     ProjectTooNewError,
     RevisionBodyMissingError,
