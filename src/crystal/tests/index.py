@@ -57,6 +57,7 @@ Tests, by hierarchy:
         - test_ssd.py
         - test_xthreading.py
     - workflows -- Complete workflows a user may want to accomplish using the Crystal app
+        - test_crystal_on_aws.py
         - test_lambda_function.py
         - test_open_project.py
         - test_workflows.py 👑
@@ -75,7 +76,7 @@ from crystal.tests.task import test_download, test_download_body, test_tasks
 from crystal.tests.ui import test_about_box, test_callout, test_edit_alias, test_edit_group, test_edit_root_url, test_menus, test_new_alias, test_new_group, test_new_root_url, test_preferences, test_window_modal_titles
 from crystal.tests.ui.main_window import test_entitytree, test_load_urls, test_log_drawer, test_main_window, test_tasktree
 from crystal.tests.util_tests import test_bulkheads, test_profile, test_ssd, test_xthreading
-from crystal.tests.workflows import test_lambda_function, test_open_project, test_workflows
+from crystal.tests.workflows import test_crystal_on_aws, test_lambda_function, test_open_project, test_workflows
 
 
 # === Index ===
@@ -102,10 +103,11 @@ TEST_FUNCS = (
     _test_functions_in_module(test_bulkheads) +
     _test_functions_in_module(test_callout) +
     _test_functions_in_module(test_cli) +
+    _test_functions_in_module(test_crystal_on_aws) +
     _test_functions_in_module(test_disk_io_errors) +
     _test_functions_in_module(test_do_not_download_groups) +
-    _test_functions_in_module(test_download) +
     _test_functions_in_module(test_download_body) +
+    _test_functions_in_module(test_download) +
     _test_functions_in_module(test_edit_alias) +
     _test_functions_in_module(test_edit_group) +
     _test_functions_in_module(test_edit_root_url) +
@@ -115,6 +117,7 @@ TEST_FUNCS = (
     _test_functions_in_module(test_hibernate) +
     _test_functions_in_module(test_icons) +
     _test_functions_in_module(test_install_to_desktop) +
+    _test_functions_in_module(test_lambda_function) +
     _test_functions_in_module(test_load_urls) +
     _test_functions_in_module(test_log_drawer) +
     _test_functions_in_module(test_main_window) +
@@ -140,7 +143,6 @@ TEST_FUNCS = (
     _test_functions_in_module(test_untitled_projects) +
     _test_functions_in_module(test_url_normalization) +
     _test_functions_in_module(test_window_modal_titles) +
-    _test_functions_in_module(test_lambda_function) +
     _test_functions_in_module(test_workflows) +
     _test_functions_in_module(test_xthreading) +
     []
