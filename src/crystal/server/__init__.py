@@ -5,9 +5,11 @@ Runs on its own daemon thread.
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable, Generator, Iterator, Mapping
 from concurrent.futures import Future
 from contextlib import contextmanager
+from functools import cache
 from crystal.doc.generic import Document, Link
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import (
@@ -47,10 +49,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
 import re
+import secrets
 import shutil
 import socket
 import socketserver
-import sys
 from textwrap import dedent
 import threading
 import time
@@ -603,7 +605,70 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @property
     def referer(self) -> str | None:
         return self.headers.get('Referer')
-    
+
+    # === Authentication ===
+
+    def _ensure_request_is_authorized(self) -> bool:
+        """
+        Checks HTTP Basic Auth credentials against CRYSTAL_SERVER_CREDENTIAL.
+        Returns True if the request is authorized (or no credential is configured).
+        Returns False if the request is NOT authorized and an appropriate response has been sent.
+        
+        Error Responses:
+        * HTTP 400 Bad Request
+        * HTTP 401 Unauthorized
+        """
+        credential_padded = _get_padded_server_credential()
+        if credential_padded is None:
+            return True  # no credential configured; allow all requests
+        (expected_username_padded, expected_password_padded) = credential_padded
+        
+        def send_bad_request_response() -> None:
+            self.send_response(400)  # Bad Request
+            self.end_headers()
+        
+        def send_unauthorized_response() -> None:
+            # NOTE: HTTP 401 with a WWW-Authenticate header will cause
+            #       a web browser to (re)prompt for credentials, so it
+            #       is appropriate to send for both missing and 
+            #       rejected credentials
+            self.send_response(401)  # Unauthorized
+            self.send_header('WWW-Authenticate', 'Basic realm="Crystal"')
+            self.end_headers()
+        
+        auth_header = self.headers.get('Authorization')
+        if auth_header is None or not auth_header.startswith('Basic '):
+            # Missing credentials
+            send_unauthorized_response()
+            return False
+        
+        try:
+            decoded = base64.b64decode(auth_header.removeprefix('Basic ')).decode('utf-8')
+        except Exception:
+            # Malformed credentials
+            send_bad_request_response()
+            return False
+        else:
+            if ':' not in decoded:
+                # Malformed credentials
+                send_bad_request_response()
+                return False
+            
+            (username, password) = decoded.split(':', 1)
+            username_padded = username.rjust(_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH)
+            password_padded = password.rjust(_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH)
+            # NOTE: All operations involving {expected_username_padded, expected_password_padded}
+            #       must be kept constant-time to avoid exposing the configured
+            #       server credential through timing attacks
+            if (secrets.compare_digest(username_padded, expected_username_padded) &
+                    secrets.compare_digest(password_padded, expected_password_padded)):
+                # Accepted credentials
+                return True
+            else:
+                # Rejected credentials
+                send_unauthorized_response()
+                return False
+
     # === Handle ===
     
     def parse_request(self):  # override
@@ -674,6 +739,15 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.path = urlunparse(pathurl_parts._replace(scheme='', netloc=''))
             self.headers['Host'] = pathurl_parts.netloc  # replace any that existed before
 
+        # Handle: Health check (before auth, for Lambda readiness probes)
+        if self.path == '/_/crystal/health':
+            self._serve_health_check_response()
+            return
+
+        # Handle: Authentication
+        if not self._ensure_request_is_authorized():
+            return
+
         # Serve pin_date.js if requested
         m = _PIN_DATE_JS_PATH_RE.fullmatch(self.path)
         if m is not None:
@@ -697,11 +771,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self._handle_get_download_progress()
             return
 
-        # Handle: Health check
-        if self.path == '/_/crystal/health':
-            self._serve_health_check_response()
-            return
-        
         # Reserve 404.html in the root directory for exported projects
         if self.path == '/404.html':
             self.send_not_found_page(vary_referer=True)
@@ -729,7 +798,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     def _do_POST(self) -> Generator[SwitchToThread]:
         self._strip_trailing_empty_query()
-        
+
+        # Handle: Authentication
+        if not self._ensure_request_is_authorized():
+            return
+
         # Handle: "Not in Archive" Endpoints
         if self.path == '/_/crystal/create-url':
             yield SwitchToThread.BACKGROUND
@@ -2090,6 +2163,32 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @property
     def _stdout(self) -> TextIO | None:
         return self.server.stdout
+
+
+# Any username or password with a shorter length than defined here could
+# be discovered through a timing attack on Crystal's authorization code.
+_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH = 100
+
+# NOTE: @cache makes this function constant-time after initial invocation
+@cache
+def _get_padded_server_credential() -> tuple[str, str] | None:
+    """
+    Returns (username, password) from the CRYSTAL_SERVER_CREDENTIAL
+    environment variable, padded to length _MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH,
+    or None if not configured.
+
+    The env var format is: username:password
+    """
+    credential = os.environ.get('CRYSTAL_SERVER_CREDENTIAL', '')
+    if not credential:
+        return None
+    if ':' not in credential:
+        return None
+    (username, password) = credential.split(':', 1)
+    return (
+        username.rjust(_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH),
+        password.rjust(_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH)
+    )
 
 
 # ------------------------------------------------------------------------------

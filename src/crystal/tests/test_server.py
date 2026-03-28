@@ -1,11 +1,13 @@
-from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager, closing, redirect_stdout
+import base64
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import asynccontextmanager, closing, contextmanager, redirect_stdout
 from copy import deepcopy
 from crystal.doc.html.soup import HtmlDocument
 from crystal.model import Project, Resource, ResourceGroup, ResourceRevision, RootResource
 import crystal.server
 from crystal.server import (
-    _DEFAULT_SERVER_PORT, _HEADER_ALLOWLIST, _HEADER_DENYLIST,
+    _DEFAULT_SERVER_PORT, _get_padded_server_credential,
+    _HEADER_ALLOWLIST, _HEADER_DENYLIST,
     _IGNORE_UNKNOWN_X_HEADERS, default_port_in_use_warnings_disabled,
     get_request_url, ProjectServer,
 )
@@ -38,6 +40,7 @@ from crystal.util.ports import is_port_in_use, port_in_use
 from http.client import BadStatusLine, RemoteDisconnected
 from io import StringIO
 import json
+import os
 import re
 from textwrap import dedent
 from unittest import skip
@@ -104,6 +107,69 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
             # Ensure can fetch the revision through the server
             server_page = await fetch_archive_url(home_url, expected_port)
             assert 200 == server_page.status
+
+
+# ------------------------------------------------------------------------------
+# Test: Basic Auth (CRYSTAL_SERVER_CREDENTIAL)
+
+async def test_given_server_credential_set_when_request_without_auth_then_returns_401() -> None:
+    with _server_credential('admin:secret123'), \
+            Project() as project, \
+            closing(ProjectServer(project, port=None)) as sp:
+        page = await bg_fetch_url(f'http://127.0.0.1:{sp.port}/')
+        assertEqual(401, page.status)
+        assertIn('Basic', page.headers.get('WWW-Authenticate', ''))
+
+
+async def test_given_server_credential_set_when_request_with_valid_auth_then_returns_200() -> None:
+    with _server_credential('admin:secret123'), \
+            Project() as project, \
+            closing(ProjectServer(project, port=None)) as sp:
+        creds = base64.b64encode(b'admin:secret123').decode()
+        page = await bg_fetch_url(
+            f'http://127.0.0.1:{sp.port}/',
+            headers={'Authorization': f'Basic {creds}'})
+        assertEqual(200, page.status)
+
+
+async def test_given_server_credential_set_when_request_with_wrong_auth_then_returns_401() -> None:
+    with _server_credential('admin:secret123'), \
+            Project() as project, \
+            closing(ProjectServer(project, port=None)) as sp:
+        creds = base64.b64encode(b'admin:wrongpassword').decode()
+        page = await bg_fetch_url(
+            f'http://127.0.0.1:{sp.port}/',
+            headers={'Authorization': f'Basic {creds}'})
+        assertEqual(401, page.status)
+
+
+async def test_given_no_server_credential_when_request_without_auth_then_returns_200() -> None:
+    assert 'CRYSTAL_SERVER_CREDENTIAL' not in os.environ
+    with Project() as project, \
+            closing(ProjectServer(project, port=None)) as sp:
+        page = await bg_fetch_url(f'http://127.0.0.1:{sp.port}/')
+        assertEqual(200, page.status)
+
+
+async def test_given_server_credential_set_when_health_check_requested_then_returns_200_without_auth() -> None:
+    with _server_credential('admin:secret123'), \
+            Project() as project, \
+            closing(ProjectServer(project, port=None)) as sp:
+        page = await bg_fetch_url(f'http://127.0.0.1:{sp.port}/_/crystal/health')
+        assertEqual(200, page.status)
+
+
+@contextmanager
+def _server_credential(credential: str) -> Iterator[None]:
+    """
+    Sets CRYSTAL_SERVER_CREDENTIAL for the duration of the block
+    and clears the _get_padded_server_credential() cache on exit.
+    """
+    with patch.dict('os.environ', {'CRYSTAL_SERVER_CREDENTIAL': credential}):
+        try:
+            yield
+        finally:
+            _get_padded_server_credential.cache_clear()
 
 
 # ------------------------------------------------------------------------------
