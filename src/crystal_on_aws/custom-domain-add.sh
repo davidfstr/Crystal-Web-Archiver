@@ -95,7 +95,7 @@ if [[ -n "${CURRENT_DOMAIN}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Clean up orphaned resources from a previous interrupted run
+# Detect orphaned resources from a previous interrupted run
 # ---------------------------------------------------------------------------
 
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
@@ -116,9 +116,42 @@ ORPHAN_CERT_ARNS="$(aws resourcegroupstaggingapi get-resources \
     --query 'ResourceTagMappingList[].ResourceARN' \
     --output text 2>/dev/null || true)"
 
-if [[ -n "${ORPHAN_CF_ARNS}" || -n "${ORPHAN_CERT_ARNS}" ]]; then
+CERT_ARN=""
+CF_DIST_ID=""
+CF_DOMAIN=""
+CERT_ALREADY_ISSUED=false
+ALIAS_ALREADY_ATTACHED=false
+
+if [[ -n "${ORPHAN_CF_ARNS}" && -n "${ORPHAN_CERT_ARNS}" ]]; then
+    # Both resources exist from a previous run — reuse them instead of deleting and recreating
+    CERT_ARN="${ORPHAN_CERT_ARNS}"
+    CF_DIST_ID="${ORPHAN_CF_ARNS##*/}"
+    CF_DOMAIN="$(aws cloudfront get-distribution \
+        --id "${CF_DIST_ID}" \
+        --query 'Distribution.DomainName' \
+        --output text)"
     echo ""
-    echo "    Found resources from a previous interrupted run:"
+    echo "    Resuming with resources from a previous interrupted run:"
+    echo "      CloudFront distribution: ${CF_DIST_ID} (${CF_DOMAIN})"
+    echo "      ACM certificate: ${CERT_ARN}"
+
+    CERT_STATUS="$(aws acm describe-certificate \
+        --certificate-arn "${CERT_ARN}" \
+        --region us-east-1 \
+        --query 'Certificate.Status' \
+        --output text)"
+    [[ "${CERT_STATUS}" == "ISSUED" ]] && CERT_ALREADY_ISSUED=true
+
+    ALIAS_COUNT="$(aws cloudfront get-distribution-config \
+        --id "${CF_DIST_ID}" \
+        --query 'DistributionConfig.Aliases.Quantity' \
+        --output text)"
+    [[ "${ALIAS_COUNT}" -gt 0 ]] && ALIAS_ALREADY_ATTACHED=true
+
+elif [[ -n "${ORPHAN_CF_ARNS}" || -n "${ORPHAN_CERT_ARNS}" ]]; then
+    # Only one resource found — unexpected partial state; offer cleanup
+    echo ""
+    echo "    Found partial resources from a previous interrupted run:"
     [[ -n "${ORPHAN_CF_ARNS}" ]] && echo "      CloudFront distribution: ${ORPHAN_CF_ARNS##*/}"
     [[ -n "${ORPHAN_CERT_ARNS}" ]] && echo "      ACM certificate: ${ORPHAN_CERT_ARNS}"
     echo ""
@@ -166,55 +199,65 @@ fi
 # Step 1: Request ACM certificate (must be in us-east-1 for CloudFront)
 # ---------------------------------------------------------------------------
 
-echo ""
-echo "==> Requesting ACM certificate for ${CUSTOM_DOMAIN} (in us-east-1)..."
-CERT_ARN="$(aws acm request-certificate \
-    --domain-name "${CUSTOM_DOMAIN}" \
-    --validation-method DNS \
-    --tags "Key=crystal-stack,Value=${STACK_NAME}" \
-    --region us-east-1 \
-    --query CertificateArn \
-    --output text)"
-echo "    Certificate ARN: ${CERT_ARN}"
-
-# Wait for the validation record to become available
-echo "    Waiting for validation details..."
-for i in {1..12}; do
-    VALIDATION_NAME="$(aws acm describe-certificate \
-        --certificate-arn "${CERT_ARN}" \
+if [[ -z "${CERT_ARN}" ]]; then
+    echo ""
+    echo "==> Requesting ACM certificate for ${CUSTOM_DOMAIN} (in us-east-1)..."
+    CERT_ARN="$(aws acm request-certificate \
+        --domain-name "${CUSTOM_DOMAIN}" \
+        --validation-method DNS \
+        --tags "Key=crystal-stack,Value=${STACK_NAME}" \
         --region us-east-1 \
-        --query 'Certificate.DomainValidationOptions[0].ResourceRecord.Name' \
-        --output text 2>/dev/null || true)"
-    if [[ -n "${VALIDATION_NAME}" && "${VALIDATION_NAME}" != "None" ]]; then
-        break
-    fi
-    sleep 5
-done
-
-if [[ -z "${VALIDATION_NAME}" || "${VALIDATION_NAME}" == "None" ]]; then
-    echo "ERROR: Timed out waiting for ACM validation details."
-    echo "       Certificate ARN: ${CERT_ARN}"
-    echo "       Check the ACM console in us-east-1 manually."
-    exit 1
+        --query CertificateArn \
+        --output text)"
+    echo "    Certificate ARN: ${CERT_ARN}"
+else
+    echo ""
+    echo "==> Reusing existing ACM certificate: ${CERT_ARN}"
 fi
 
-VALIDATION_VALUE="$(aws acm describe-certificate \
-    --certificate-arn "${CERT_ARN}" \
-    --region us-east-1 \
-    --query 'Certificate.DomainValidationOptions[0].ResourceRecord.Value' \
-    --output text)"
+# Fetch validation record details (needed for step 3 if cert not yet issued)
+VALIDATION_NAME=""
+VALIDATION_VALUE=""
+if [[ "${CERT_ALREADY_ISSUED}" == "false" ]]; then
+    echo "    Waiting for validation details..."
+    for i in {1..12}; do
+        VALIDATION_NAME="$(aws acm describe-certificate \
+            --certificate-arn "${CERT_ARN}" \
+            --region us-east-1 \
+            --query 'Certificate.DomainValidationOptions[0].ResourceRecord.Name' \
+            --output text 2>/dev/null || true)"
+        if [[ -n "${VALIDATION_NAME}" && "${VALIDATION_NAME}" != "None" ]]; then
+            break
+        fi
+        sleep 5
+    done
+
+    if [[ -z "${VALIDATION_NAME}" || "${VALIDATION_NAME}" == "None" ]]; then
+        echo "ERROR: Timed out waiting for ACM validation details."
+        echo "       Certificate ARN: ${CERT_ARN}"
+        echo "       Check the ACM console in us-east-1 manually."
+        exit 1
+    fi
+
+    VALIDATION_VALUE="$(aws acm describe-certificate \
+        --certificate-arn "${CERT_ARN}" \
+        --region us-east-1 \
+        --query 'Certificate.DomainValidationOptions[0].ResourceRecord.Value' \
+        --output text)"
+fi
 
 # ---------------------------------------------------------------------------
 # Step 2: Create CloudFront distribution (without custom domain yet)
 # ---------------------------------------------------------------------------
 
-echo ""
-echo "==> Creating CloudFront distribution (origin: ${LAMBDA_DOMAIN})..."
+if [[ -z "${CF_DIST_ID}" ]]; then
+    echo ""
+    echo "==> Creating CloudFront distribution (origin: ${LAMBDA_DOMAIN})..."
 
-# Well-known AWS managed policy IDs:
-#   CachingDisabled:            4135ea2d-6df8-44a3-9df3-4b5a84be39ad
-#   AllViewerExceptHostHeader:  b689b0a8-53d0-40ab-baf2-68738e2966ac
-CF_CONFIG="$(cat <<EOF
+    # Well-known AWS managed policy IDs:
+    #   CachingDisabled:            4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+    #   AllViewerExceptHostHeader:  b689b0a8-53d0-40ab-baf2-68738e2966ac
+    CF_CONFIG="$(cat <<EOF
 {
   "CallerReference": "${STACK_NAME}-custom-domain-$(date +%s)",
   "Comment": "${STACK_NAME}",
@@ -252,18 +295,22 @@ CF_CONFIG="$(cat <<EOF
 EOF
 )"
 
-CF_RESULT="$(aws cloudfront create-distribution \
-    --distribution-config "${CF_CONFIG}" \
-    --output json)"
-CF_DIST_ID="$(echo "${CF_RESULT}" | jq -r '.Distribution.Id')"
-CF_DOMAIN="$(echo "${CF_RESULT}" | jq -r '.Distribution.DomainName')"
-echo "    Distribution ID: ${CF_DIST_ID}"
-echo "    Distribution domain: ${CF_DOMAIN}"
+    CF_RESULT="$(aws cloudfront create-distribution \
+        --distribution-config "${CF_CONFIG}" \
+        --output json)"
+    CF_DIST_ID="$(echo "${CF_RESULT}" | jq -r '.Distribution.Id')"
+    CF_DOMAIN="$(echo "${CF_RESULT}" | jq -r '.Distribution.DomainName')"
+    echo "    Distribution ID: ${CF_DIST_ID}"
+    echo "    Distribution domain: ${CF_DOMAIN}"
 
-# Tag the distribution so custom-domain-remove.sh can find it
-aws cloudfront tag-resource \
-    --resource "arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${CF_DIST_ID}" \
-    --tags "Items=[{Key=crystal-stack,Value=${STACK_NAME}}]"
+    # Tag the distribution so custom-domain-remove.sh can find it
+    aws cloudfront tag-resource \
+        --resource "arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${CF_DIST_ID}" \
+        --tags "Items=[{Key=crystal-stack,Value=${STACK_NAME}}]"
+else
+    echo ""
+    echo "==> Reusing existing CloudFront distribution: ${CF_DIST_ID} (${CF_DOMAIN})"
+fi
 
 # ---------------------------------------------------------------------------
 # Step 3: Display DNS records for the user
@@ -274,27 +321,38 @@ aws cloudfront tag-resource \
 #   "_abc.xkcd2.daarchive.net." -> "_abc.xkcd2"
 #   "xkcd2.daarchive.net"      -> "xkcd2"
 BASE_DOMAIN="$(echo "${CUSTOM_DOMAIN}" | sed 's/^[^.]*\.//')"
-VALIDATION_HOST="$(echo "${VALIDATION_NAME}" | sed "s/\.${BASE_DOMAIN}\.$//")"
 CUSTOM_HOST="$(echo "${CUSTOM_DOMAIN}" | sed "s/\.${BASE_DOMAIN}$//")"
 
-echo ""
-echo "========================================================================"
-echo ""
-echo "  Add these 2 CNAME records at your domain registrar:"
-echo ""
-echo "  1. Certificate validation:"
-echo "     Type:  CNAME"
-echo "     Host:  ${VALIDATION_HOST}"
-echo "     Value: ${VALIDATION_VALUE}"
-echo ""
-echo "  2. Custom domain:"
-echo "     Type:  CNAME"
-echo "     Host:  ${CUSTOM_HOST}"
-echo "     Value: ${CF_DOMAIN}"
-echo ""
-echo "========================================================================"
-echo ""
-read -rp "Press Enter after adding both records (Ctrl-C to abort)... " < /dev/tty
+if [[ "${ALIAS_ALREADY_ATTACHED}" == "false" ]]; then
+    echo ""
+    echo "========================================================================"
+    echo ""
+    if [[ "${CERT_ALREADY_ISSUED}" == "false" ]]; then
+        VALIDATION_HOST="$(echo "${VALIDATION_NAME}" | sed "s/\.${BASE_DOMAIN}\.$//")"
+        echo "  Add these 2 CNAME records at your domain registrar:"
+        echo ""
+        echo "  1. Certificate validation:"
+        echo "     Type:  CNAME"
+        echo "     Host:  ${VALIDATION_HOST}"
+        echo "     Value: ${VALIDATION_VALUE}"
+        echo ""
+        echo "  2. Custom domain:"
+        echo "     Type:  CNAME"
+        echo "     Host:  ${CUSTOM_HOST}"
+        echo "     Value: ${CF_DOMAIN}"
+    else
+        echo "  Add this CNAME record at your domain registrar (if not already done):"
+        echo ""
+        echo "  Custom domain:"
+        echo "     Type:  CNAME"
+        echo "     Host:  ${CUSTOM_HOST}"
+        echo "     Value: ${CF_DOMAIN}"
+    fi
+    echo ""
+    echo "========================================================================"
+    echo ""
+    read -rp "Press Enter after adding the records (Ctrl-C to abort)... " < /dev/tty
+fi
 
 # ---------------------------------------------------------------------------
 # Step 4: Wait for certificate validation
@@ -308,56 +366,57 @@ if ! aws acm wait certificate-validated \
     echo ""
     echo "ERROR: Certificate validation timed out."
     echo "       The DNS CNAME record may be missing or incorrect."
+    if [[ -n "${VALIDATION_NAME}" ]]; then
+        echo ""
+        echo "       To debug, verify the validation CNAME resolves:"
+        echo "         dig CNAME ${VALIDATION_NAME}"
+    fi
     echo ""
-    echo "       To debug, verify the validation CNAME resolves:"
-    echo "         dig CNAME ${VALIDATION_NAME}"
-    echo ""
-    echo "       Re-run this script to retry (orphaned resources will be cleaned up)."
+    echo "       Re-run this script to retry (orphaned resources will be reused)."
     exit 1
 fi
 echo "    Certificate issued."
 
 # ---------------------------------------------------------------------------
-# Step 5: Wait for CloudFront distribution to be deployed
+# Steps 5+6: Wait for CloudFront distribution to be deployed, then attach
+#            custom domain + certificate (skipped if already attached)
 # ---------------------------------------------------------------------------
 
-echo ""
-echo "==> Waiting for CloudFront distribution to be deployed (this may take a few minutes)..."
-aws cloudfront wait distribution-deployed \
-    --id "${CF_DIST_ID}"
-echo "    Distribution deployed."
+if [[ "${ALIAS_ALREADY_ATTACHED}" == "false" ]]; then
+    echo ""
+    echo "==> Waiting for CloudFront distribution to be deployed (this may take a few minutes)..."
+    aws cloudfront wait distribution-deployed \
+        --id "${CF_DIST_ID}"
+    echo "    Distribution deployed."
 
-# ---------------------------------------------------------------------------
-# Step 6: Attach custom domain + certificate to CloudFront distribution
-# ---------------------------------------------------------------------------
+    echo ""
+    echo "==> Attaching custom domain to CloudFront distribution..."
 
-echo ""
-echo "==> Attaching custom domain to CloudFront distribution..."
+    # Get current config and ETag (required for update)
+    DIST_CONFIG_RESULT="$(aws cloudfront get-distribution-config --id "${CF_DIST_ID}")"
+    ETAG="$(echo "${DIST_CONFIG_RESULT}" | jq -r '.ETag')"
+    UPDATED_CONFIG="$(echo "${DIST_CONFIG_RESULT}" | jq \
+        --arg domain "${CUSTOM_DOMAIN}" \
+        --arg cert_arn "${CERT_ARN}" \
+        '.DistributionConfig |
+         .Aliases = {"Quantity": 1, "Items": [$domain]} |
+         .ViewerCertificate = {
+           "ACMCertificateArn": $cert_arn,
+           "SSLSupportMethod": "sni-only",
+           "MinimumProtocolVersion": "TLSv1.2_2021"
+         }')"
 
-# Get current config and ETag (required for update)
-DIST_CONFIG_RESULT="$(aws cloudfront get-distribution-config --id "${CF_DIST_ID}")"
-ETAG="$(echo "${DIST_CONFIG_RESULT}" | jq -r '.ETag')"
-UPDATED_CONFIG="$(echo "${DIST_CONFIG_RESULT}" | jq \
-    --arg domain "${CUSTOM_DOMAIN}" \
-    --arg cert_arn "${CERT_ARN}" \
-    '.DistributionConfig |
-     .Aliases = {"Quantity": 1, "Items": [$domain]} |
-     .ViewerCertificate = {
-       "ACMCertificateArn": $cert_arn,
-       "SSLSupportMethod": "sni-only",
-       "MinimumProtocolVersion": "TLSv1.2_2021"
-     }')"
+    aws cloudfront update-distribution \
+        --id "${CF_DIST_ID}" \
+        --distribution-config "${UPDATED_CONFIG}" \
+        --if-match "${ETAG}" \
+        --no-cli-pager > /dev/null
 
-aws cloudfront update-distribution \
-    --id "${CF_DIST_ID}" \
-    --distribution-config "${UPDATED_CONFIG}" \
-    --if-match "${ETAG}" \
-    --no-cli-pager > /dev/null
-
-echo "    Waiting for distribution update (this may take a few minutes)..."
-aws cloudfront wait distribution-deployed \
-    --id "${CF_DIST_ID}"
-echo "    Custom domain attached."
+    echo "    Waiting for distribution update (this may take a few minutes)..."
+    aws cloudfront wait distribution-deployed \
+        --id "${CF_DIST_ID}"
+    echo "    Custom domain attached."
+fi
 
 # ---------------------------------------------------------------------------
 # Step 7: Update CloudFormation stack to set CRYSTAL_REQUEST_HOST
