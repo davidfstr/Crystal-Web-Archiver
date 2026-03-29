@@ -8,7 +8,7 @@
 #   - AWS CLI installed and configured (aws configure, or env vars)
 #
 # Usage:
-#   src/crystal_on_aws/deploy-image.sh              Push "latest" to private ECR
+#   src/crystal_on_aws/deploy-image.sh                     Push "latest" to private ECR
 #   src/crystal_on_aws/deploy-image.sh --public --dev      Push "dev" to public ECR
 #   src/crystal_on_aws/deploy-image.sh --public --release  Push "2.2.0" + "latest" to public ECR
 #
