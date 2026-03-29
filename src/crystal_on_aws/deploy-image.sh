@@ -186,9 +186,23 @@ done
 # Push to ECR
 # ---------------------------------------------------------------------------
 
+# For public ECR pushes we need the manifest digest so we can wait for CDN
+# propagation before triggering the ImageCopierFunction (see below).
+PUSHED_DIGEST=''  # sha256 of the first pushed image (public ECR only)
+
 for IMG in "${FULL_IMAGES[@]}"; do
     echo "==> Pushing image: ${IMG}"
-    docker push "${IMG}"
+    if ${USE_PUBLIC}; then
+        # Capture push output to a temp file while still streaming it to the user.
+        PUSH_TMP="$(mktemp)"
+        docker push "${IMG}" 2>&1 | tee "${PUSH_TMP}"
+        if [[ -z "${PUSHED_DIGEST}" ]]; then
+            PUSHED_DIGEST="$(grep -oE ': digest: sha256:[0-9a-f]+' "${PUSH_TMP}" | grep -oE 'sha256:[0-9a-f]+' | head -1)"
+        fi
+        rm -f "${PUSH_TMP}"
+    else
+        docker push "${IMG}"
+    fi
 done
 
 # ---------------------------------------------------------------------------
@@ -221,21 +235,9 @@ for IMG in "${FULL_IMAGES[@]}"; do
     PUSHED_SET["${IMG}"]=1
 done
 
-# When pushing to public ECR, also match Lambda functions that use a private
-# mirror of the pushed image.  CloudFormation copies
-#   public.ecr.aws/g0h6z3c9/crystal-on-aws:{tag}
-# to
-#   {account}.dkr.ecr.{region}.amazonaws.com/crystal-on-aws:public-{tag}
-declare -A MIRROR_SET  # private mirror image URI (without @digest) -> 1
-if ${USE_PUBLIC}; then
-    if [[ -z "${ACCOUNT_ID:-}" ]]; then
-        ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-    fi
-    PRIVATE_MIRROR_REPO="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/crystal-on-aws"
-    for TAG in "${TAGS_TO_PUSH[@]}"; do
-        MIRROR_SET["${PRIVATE_MIRROR_REPO}:public-${TAG}"]=1
-    done
-fi
+# When pushing to public ECR, Lambda functions are updated via CF stack
+# parameter (ImageRefreshToken). The IS_MIRROR detection below reads the
+# CF stack's ImageUri parameter to find which stacks need updating.
 
 UPDATED_COUNT=0
 UPDATED_ARNS=()
@@ -262,15 +264,37 @@ for ARN in ${FUNCTION_ARNS}; do
         fi
     done
 
-    # Check if the current image matches a private mirror of a pushed image
+    # Check if a CF stack manages this Lambda and its ImageUri parameter
+    # matches one of the pushed public images.
+    # NOTE: We check the stack parameter rather than the Lambda's current
+    # Code.ImageUri, because the ImageCopierFunction now returns a digest URI
+    # (e.g. ...crystal-on-aws@sha256:...) which doesn't match the mirror set.
     IS_MIRROR=false
-    if ! ${SHOULD_UPDATE}; then
-        for MIRROR_IMG in "${!MIRROR_SET[@]}"; do
-            if [[ "${CURRENT_IMAGE}" == "${MIRROR_IMG}" || "${CURRENT_IMAGE}" == "${MIRROR_IMG}@"* ]]; then
-                IS_MIRROR=true
-                break
-            fi
-        done
+    STACK_NAME_TMP=''
+    STACK_IMAGE_URI=''
+    if ! ${SHOULD_UPDATE} && ${USE_PUBLIC}; then
+        STACK_NAME_TMP="$(
+            aws lambda get-function \
+                --function-name "${FNAME}" \
+                --region "${AWS_REGION}" \
+                --query 'Tags."aws:cloudformation:stack-name"' \
+                --output text 2>/dev/null || true
+        )"
+        if [[ -n "${STACK_NAME_TMP}" && "${STACK_NAME_TMP}" != "None" ]]; then
+            STACK_IMAGE_URI="$(
+                aws cloudformation describe-stacks \
+                    --stack-name "${STACK_NAME_TMP}" \
+                    --region "${AWS_REGION}" \
+                    --query 'Stacks[0].Parameters[?ParameterKey==`ImageUri`].ParameterValue' \
+                    --output text 2>/dev/null || true
+            )"
+            for IMG in "${FULL_IMAGES[@]}"; do
+                if [[ "${STACK_IMAGE_URI}" == "${IMG}" ]]; then
+                    IS_MIRROR=true
+                    break
+                fi
+            done
+        fi
     fi
 
     if ${SHOULD_UPDATE}; then
@@ -284,17 +308,10 @@ for ARN in ${FUNCTION_ARNS}; do
         UPDATED_COUNT=$((UPDATED_COUNT + 1))
     elif ${IS_MIRROR}; then
         # Lambda uses a private mirror managed by CloudFormation.
-        # Find its CF stack and update ImageRefreshToken to trigger a re-pull.
-        STACK_NAME="$(
-            aws lambda get-function \
-                --function-name "${FNAME}" \
-                --region "${AWS_REGION}" \
-                --query 'Tags."aws:cloudformation:stack-name"' \
-                --output text 2>/dev/null || true
-        )"
-        if [[ -n "${STACK_NAME}" && "${STACK_NAME}" != "None" ]]; then
-            echo "==> Queuing CF stack update: ${STACK_NAME} (${FNAME} uses mirror ${CURRENT_IMAGE})"
-            STACKS_TO_UPDATE["${STACK_NAME}"]=1
+        # STACK_NAME_TMP was already resolved during IS_MIRROR detection above.
+        if [[ -n "${STACK_NAME_TMP}" && "${STACK_NAME_TMP}" != "None" ]]; then
+            echo "==> Queuing CF stack update: ${STACK_NAME_TMP} (${FNAME} uses mirror ${STACK_IMAGE_URI})"
+            STACKS_TO_UPDATE["${STACK_NAME_TMP}"]=1
             UPDATED_COUNT=$((UPDATED_COUNT + 1))
         else
             echo "    WARNING: ${FNAME} uses a private mirror image but has no CF stack tag. Skipping."
