@@ -183,6 +183,29 @@ for (( i=1; i<${#FULL_IMAGES[@]}; i++ )); do
 done
 
 # ---------------------------------------------------------------------------
+# Ensure private ECR repository exists
+# ---------------------------------------------------------------------------
+
+if ! ${USE_PUBLIC}; then
+    REPO_NAME="${ECR_REPO##*/}"
+    echo ""
+    echo "==> Ensuring private ECR repository exists: ${REPO_NAME}..."
+    if ! aws ecr describe-repositories \
+            --repository-names "${REPO_NAME}" \
+            --region "${AWS_REGION}" \
+            --no-cli-pager > /dev/null 2>&1; then
+        echo "    Repository not found. Creating..."
+        aws ecr create-repository \
+            --repository-name "${REPO_NAME}" \
+            --region "${AWS_REGION}" \
+            --no-cli-pager > /dev/null
+        echo "    Created."
+    else
+        echo "    Repository already exists."
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Push to ECR
 # ---------------------------------------------------------------------------
 
