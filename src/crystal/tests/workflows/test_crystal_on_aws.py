@@ -11,6 +11,8 @@ artifacts work correctly in a real AWS environment.
 
 from unittest import skip
 
+from crystal.tests.util.subtests import SubtestsContext, with_subtests
+
 
 # === Tests: Launch Stack Buttons ===
 
@@ -65,6 +67,77 @@ def test_given_username_and_password_are_defined_then_crystal_configured_to_requ
     # parameters and correctly sets the CRYSTAL_SERVER_CREDENTIAL env var
     # on the Lambda function when both are provided
     pass
+
+
+# === Tests: Local Development Scripts ===
+
+@skip('not yet implemented')
+@with_subtests
+def test_deploy_image_builds_and_pushes_image_to_ecr_and_refreshes_stacks_using_image(subtests: SubtestsContext) -> None:
+    with subtests.test(flags='<none>', pushes_to='private_ecr', tag='latest'):
+        # Verify that deploy-image.sh (with no flags):
+        # - Builds a container image from the local source tree
+        # - Creates the private ECR repository if it doesn't already exist
+        # - Pushes the image to private ECR
+        # - Refreshes all Lambda functions whose stacks reference the private ECR image
+        pass
+    
+    with subtests.test(flags='--public --dev', pushes_to='public_ecr', tag='dev'):
+        # Verify that deploy-image.sh --public --dev:
+        # - Builds a container image from the local source tree
+        # - Pushes the image to public ECR with the "dev" tag
+        # - Refreshes all Lambda functions whose stacks reference the public dev image
+        pass
+    
+    with subtests.test(flags='--public --release', pushes_to='public_ecr', tag='<version>, latest'):
+        # Verify that deploy-image.sh --public --release:
+        # - Builds a container image from the local source tree
+        # - Pushes the image to public ECR with both the version tag and "latest"
+        # - Refreshes all Lambda functions whose stacks reference the public release image
+        pass
+
+
+@skip('not yet implemented')
+@with_subtests
+def test_deploy_cf_template_uploads_template_to_s3_for_launch_button(subtests: SubtestsContext) -> None:
+    with subtests.test(flags='--public --dev', updates_button='dev'):
+        # Verify that deploy-cf-template.sh --public --dev:
+        # - Uploads crystal.cloudformation.yaml to the S3 location
+        #   referenced by the Dev "Launch Stack" button in the wiki
+        # - Does NOT update any already-deployed stacks
+        pass
+    
+    with subtests.test(flags='--public --release', updates_button='stable'):
+        # Verify that deploy-cf-template.sh --public --release:
+        # - Uploads crystal.cloudformation.yaml to the S3 location
+        #   referenced by the Stable "Launch Stack" button in the wiki
+        # - Does NOT update any already-deployed stacks
+        pass
+
+
+@skip('not yet implemented')
+@with_subtests
+def test_switch_stack_version_points_stack_at_specified_image(subtests: SubtestsContext) -> None:
+    with subtests.test(flags='<none>', points_to='private_ecr', tag='latest'):
+        # Verify that switch-stack-version.sh <stack-name> (with no flags):
+        # - Updates the stack's ImageUri parameter to the private ECR image
+        # - Bumps ImageRefreshToken so the stack re-pulls the image
+        # - The stack update completes successfully and serves from the new image
+        pass
+    
+    with subtests.test(flags='--public --dev', points_to='public_ecr', tag='dev'):
+        # Verify that switch-stack-version.sh <stack-name> --public --dev:
+        # - Updates the stack's ImageUri parameter to the public ECR "dev" image
+        # - Bumps ImageRefreshToken so the stack re-pulls the image
+        # - The stack update completes successfully and serves from the dev image
+        pass
+    
+    with subtests.test(flags='--public --release', points_to='public_ecr', tag='latest'):
+        # Verify that switch-stack-version.sh <stack-name> --public --release:
+        # - Updates the stack's ImageUri parameter to the public ECR "latest" image
+        # - Bumps ImageRefreshToken so the stack re-pulls the image
+        # - The stack update completes successfully and serves from the release image
+        pass
 
 
 # === Tests: Release Procedure ===
