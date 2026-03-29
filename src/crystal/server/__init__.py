@@ -1516,6 +1516,11 @@ class _RequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', 'text/html')
         self.send_header('Cache-Control', 'no-store')
+        # Temporary debug header: always emitted, different name, to verify this code path is reached.
+        # If X-Crystal-Auth-Key-Id (from end_headers override) appears but this doesn't, something is wrong.
+        # Remove once Lambda session-persistence issue is confirmed/resolved.
+        key_id = hashlib.sha256(_AUTH_SECRET_KEY).hexdigest()[:16]
+        self.send_header('X-Crystal-Auth-Key-Id-4', key_id)
         self.end_headers()
         html_content = login_page_html(redirect_to=redirect_to, error=error)
         self.wfile.write(html_content.encode('utf-8'))
