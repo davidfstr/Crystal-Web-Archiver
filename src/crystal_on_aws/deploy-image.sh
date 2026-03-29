@@ -81,7 +81,7 @@ fi
 # Private ECR repository (default target)
 if [[ -z "${PRIVATE_ECR_REPO:-}" ]]; then
     ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-    PRIVATE_ECR_REPO="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/crystal-lambda"
+    PRIVATE_ECR_REPO="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/crystal-on-aws"
 fi
 
 # Public ECR repository
