@@ -2234,16 +2234,29 @@ def _get_padded_server_credential() -> tuple[str, str] | None:
     )
 
 
-# Random secret key generated once per process, used to sign auth cookies.
-# Changing this (i.e. restarting the server) invalidates all existing cookies.
-_AUTH_SECRET_KEY: bytes = secrets.token_bytes(32)
+# NOTE: @cache makes this function constant-time after initial invocation
+@cache
+def _get_auth_secret_key() -> bytes:
+    """
+    Returns the secret key used to sign auth cookies.
+    Only available/meaningful when CRYSTAL_SERVER_CREDENTIAL is set.
+    """
+    some_secret = os.environ.get('CRYSTAL_SERVER_CREDENTIAL', '')
+    if some_secret:
+        return hashlib.sha256(
+            b'crystal-auth-signing-key\x00' + 
+            some_secret.encode('utf-8')
+        ).digest()
+    else:
+        raise ValueError('Auth secret key should not be used because auth is not configured')
+
 
 _AUTH_COOKIE_SEP = '.'
 
 def _make_auth_cookie(username: str) -> str:
     """Returns a signed cookie value for the given username."""
     payload = base64.urlsafe_b64encode(username.encode('utf-8')).decode('ascii')
-    sig = hmac.new(_AUTH_SECRET_KEY, payload.encode('ascii'), hashlib.sha256).hexdigest()
+    sig = hmac.new(_get_auth_secret_key(), payload.encode('ascii'), hashlib.sha256).hexdigest()
     return f'{payload}{_AUTH_COOKIE_SEP}{sig}'
 
 def _verify_auth_cookie(cookie_value: str | None) -> bool:
@@ -2253,7 +2266,7 @@ def _verify_auth_cookie(cookie_value: str | None) -> bool:
     if _AUTH_COOKIE_SEP not in cookie_value:
         return False
     (payload, provided_sig) = cookie_value.split(_AUTH_COOKIE_SEP, 1)
-    expected_sig = hmac.new(_AUTH_SECRET_KEY, payload.encode('ascii'), hashlib.sha256).hexdigest()
+    expected_sig = hmac.new(_get_auth_secret_key(), payload.encode('ascii'), hashlib.sha256).hexdigest()
     return secrets.compare_digest(provided_sig, expected_sig)
 
 def _url_encode(value: str) -> str:
