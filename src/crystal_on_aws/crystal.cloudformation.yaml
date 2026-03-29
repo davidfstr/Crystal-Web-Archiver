@@ -26,6 +26,11 @@ Metadata:
         Parameters:
           - CustomDomainHost
       - Label:
+          default: Password Protection
+        Parameters:
+          - Username
+          - Password
+      - Label:
           default: Advanced Options
         Parameters:
           - ImageUri
@@ -41,6 +46,10 @@ Metadata:
         default: Image Refresh Token
       CustomDomainHost:
         default: Custom Domain
+      Username:
+        default: Username
+      Password:
+        default: Password
       LambdaMemorySize:
         default: Memory (MB)
       LambdaTimeout:
@@ -80,6 +89,23 @@ Parameters:
       to configure a custom domain. Those scripts create the required CloudFront
       distribution and ACM certificate in addition to setting this value.
 
+  Username:
+    Type: String
+    Default: ''
+    Description: >-
+      Username for HTTP Basic Auth. If both Username and Password are set,
+      visitors must enter these credentials to access the archived site.
+      Leave empty to allow public access.
+
+  Password:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: >-
+      Password for HTTP Basic Auth. If both Username and Password are set,
+      visitors must enter these credentials to access the archived site.
+      Leave empty to allow public access.
+
   LambdaMemorySize:
     Type: Number
     Default: 512
@@ -101,6 +127,9 @@ Parameters:
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref CustomDomainHost, '']]
+  HasCredential: !And
+    - !Not [!Equals [!Ref Username, '']]
+    - !Not [!Equals [!Ref Password, '']]
 
 
 # =============================================================================
@@ -290,9 +319,14 @@ Resources:
                       except ecr.exceptions.ImageAlreadyExistsException:
                           pass
 
+                  # Use digest-only URI (no tag) so that the returned value
+                  # changes with every image push, causing CloudFormation to
+                  # call update-function-code and re-pull the new image.
+                  # Format: account.dkr.ecr.region.amazonaws.com/repo@sha256:...
+                  # (tag+digest combined is invalid for Lambda; digest-only is fine)
                   private_uri = (
                       f'{account_id}.dkr.ecr.{region}.amazonaws.com'
-                      f'/{PRIVATE_REPO_NAME}:{private_tag}'
+                      f'/{PRIVATE_REPO_NAME}@{public_digest}'
                   )
                   print(f'Image available at: {private_uri}')
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, {'ImageUri': private_uri})
@@ -484,6 +518,10 @@ Resources:
             - BucketName: !GetAtt ParsedProjectUrl.BucketName
               ProjectKey: !GetAtt ParsedProjectUrl.ProjectKey
           CRYSTAL_REQUEST_HOST: !Ref CustomDomainHost
+          CRYSTAL_SERVER_CREDENTIAL: !If
+            - HasCredential
+            - !Sub '${Username}:${Password}'
+            - !Ref 'AWS::NoValue'
 
   # ---------------------------------------------------------------------------
   # Function URL (public, with response streaming)

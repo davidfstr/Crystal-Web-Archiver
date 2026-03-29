@@ -57,6 +57,16 @@ def test_custom_domain_remove_works_in_aws_cloudshell() -> None:
     pass
 
 
+# === Tests: Password Protection ===
+
+@skip('not yet implemented')
+def test_given_username_and_password_are_defined_then_crystal_configured_to_require_auth_for_all_requests() -> None:
+    # Verify that the CloudFormation template accepts Username and Password
+    # parameters and correctly sets the CRYSTAL_SERVER_CREDENTIAL env var
+    # on the Lambda function when both are provided
+    pass
+
+
 # === Tests: Release Procedure ===
 
 @skip('not yet implemented')

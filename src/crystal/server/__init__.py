@@ -5,6 +5,7 @@ Runs on its own daemon thread.
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable, Generator, Iterator, Mapping
 from concurrent.futures import Future
 from contextlib import contextmanager
@@ -21,8 +22,8 @@ from crystal.predict_group import (
 )
 from crystal.server.api import CreateGroupErrorResponse, CreateGroupFormData, CreateGroupRequest, CreateGroupResponse, CreateGroupSuccessResponse, SourceChoice, SourceChoiceValue
 from crystal.server.special_pages import (
-    download_in_progress_html, fetch_error_html, not_found_page_html, 
-    not_in_archive_html, welcome_page_html,
+    download_in_progress_html, fetch_error_html, login_page_html,
+    not_found_page_html, not_in_archive_html, welcome_page_html,
 )
 from crystal.util.bulkheads import capture_crashes_to_stderr
 from crystal.util.cli import (
@@ -41,16 +42,19 @@ from crystal.util.xthreading import (
 from crystal.util.xtyping import intstr_from
 import datetime
 from email.message import Message
+from functools import cache
+import hashlib
+import hmac
 from html import escape as html_escape  # type: ignore[attr-defined]
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
 import re
+import secrets
 import shutil
 import socket
 import socketserver
-import sys
 from textwrap import dedent
 import threading
 import time
@@ -60,7 +64,7 @@ from trycast import checkcast
 from typing import (
     Any, BinaryIO, assert_never, Literal, cast, override, TextIO, TypeAlias, TYPE_CHECKING,
 )
-from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
+from urllib.parse import parse_qs, quote, urljoin, urlparse, urlunparse
 
 if TYPE_CHECKING:
     from crystal.task import Task
@@ -603,7 +607,44 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @property
     def referer(self) -> str | None:
         return self.headers.get('Referer')
+
+    # === Authentication ===
+
+    def _ensure_request_is_authorized(self) -> bool:
+        """
+        Returns whether the request is authorized.
+        
+        If a CRYSTAL_SERVER_CREDENTIAL is configured, verifies the request
+        carries a valid signed auth cookie. If the cookie is absent or invalid,
+        redirects to the HTML login form.
+        
+        Returns True if the request is authorized (or no credential is configured).
+        Returns False if the request is NOT authorized and an appropriate response has been sent.
+        """
+        credential_padded = _get_padded_server_credential()
+        if credential_padded is None:
+            return True  # no credential configured; allow all requests
+        
+        if _verify_auth_cookie(self._get_auth_cookie()):
+            return True
+        
+        # Not authenticated. Redirect to login page.
+        login_url = '/_/crystal/login?redirect_to=' + _url_encode(self.path)
+        self.send_response(302)  # Found
+        self.send_header('Location', login_url)
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        return False
     
+    def _get_auth_cookie(self) -> str | None:
+        """Returns the value of the cr-auth cookie, or None if absent."""
+        cookie_header = self.headers.get('Cookie', '')
+        for part in cookie_header.split(';'):
+            part = part.strip()
+            if part.startswith('cr-auth='):
+                return part.removeprefix('cr-auth=')
+        return None
+
     # === Handle ===
     
     def parse_request(self):  # override
@@ -674,6 +715,24 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self.path = urlunparse(pathurl_parts._replace(scheme='', netloc=''))
             self.headers['Host'] = pathurl_parts.netloc  # replace any that existed before
 
+        # Handle: Health check (before auth, for Lambda readiness probes)
+        if self.path == '/_/crystal/health':
+            self._serve_health_check_response()
+            return
+
+        # Handle: Login page (before auth)
+        if self.path == '/_/crystal/login' or self.path.startswith('/_/crystal/login?'):
+            path_parts = urlparse(self.path)
+            query = parse_qs(path_parts.query)
+            redirect_to = query.get('redirect_to', ['/'])[0]
+            yield SwitchToThread.BACKGROUND
+            self._serve_login_page(redirect_to=redirect_to, error=False)
+            return
+
+        # Handle: Authorization
+        if not self._ensure_request_is_authorized():
+            return
+
         # Serve pin_date.js if requested
         m = _PIN_DATE_JS_PATH_RE.fullmatch(self.path)
         if m is not None:
@@ -697,11 +756,6 @@ class _RequestHandler(BaseHTTPRequestHandler):
             self._handle_get_download_progress()
             return
 
-        # Handle: Health check
-        if self.path == '/_/crystal/health':
-            self._serve_health_check_response()
-            return
-        
         # Reserve 404.html in the root directory for exported projects
         if self.path == '/404.html':
             self.send_not_found_page(vary_referer=True)
@@ -729,7 +783,17 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     def _do_POST(self) -> Generator[SwitchToThread]:
         self._strip_trailing_empty_query()
-        
+
+        # Handle: Login form submission (before auth)
+        if self.path == '/_/crystal/login':
+            yield SwitchToThread.BACKGROUND
+            self._handle_login_post()
+            return
+
+        # Handle: Authorization
+        if not self._ensure_request_is_authorized():
+            return
+
         # Handle: "Not in Archive" Endpoints
         if self.path == '/_/crystal/create-url':
             yield SwitchToThread.BACKGROUND
@@ -1448,6 +1512,55 @@ class _RequestHandler(BaseHTTPRequestHandler):
     
     # === Send Page ===
     
+    def _serve_login_page(self, *, redirect_to: str, error: bool) -> None:
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        html_content = login_page_html(redirect_to=redirect_to, error=error)
+        self.wfile.write(html_content.encode('utf-8'))
+    
+    @bg_affinity
+    def _handle_login_post(self) -> None:
+        # Parse form data
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else ''
+        params = parse_qs(body)
+        username = params.get('username', [''])[0]
+        password = params.get('password', [''])[0]
+        redirect_to = params.get('redirect_to', ['/'])[0]
+        
+        # Validate redirect target. Must be a (site-)relative path to prevent open redirects.
+        redirect_ok = redirect_to.startswith('/') and not redirect_to.startswith('//')
+        if not redirect_ok:
+            redirect_to = '/'
+        
+        # Validate credentials
+        expected_credential_padded = _get_padded_server_credential()
+        if expected_credential_padded is not None:
+            (expected_username_padded, expected_password_padded) = expected_credential_padded
+            username_padded = username.rjust(_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH)
+            password_padded = password.rjust(_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH)
+            # NOTE: All comparisons involving expected_* credentials must be constant-time,
+            #       to prevent exposure/exfiltration through timing attacks
+            credentials_valid = (
+                secrets.compare_digest(username_padded, expected_username_padded) &
+                secrets.compare_digest(password_padded, expected_password_padded)
+            )
+        else:
+            credentials_valid = True
+        if not credentials_valid:
+            self._serve_login_page(redirect_to=redirect_to, error=True)
+            return
+        
+        # Credentials accepted. Issue signed cookie and redirect.
+        cookie_value = _make_auth_cookie(username)
+        self.send_response(302)  # Found
+        self.send_header('Location', redirect_to)
+        self.send_header('Set-Cookie', f'cr-auth={cookie_value}; HttpOnly; SameSite=Strict; Path=/')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+    
     @bg_affinity
     def send_welcome_page(self, query_params: dict[str, list[str]], *, vary_referer: bool) -> None:
         if 'url' in query_params:
@@ -2090,6 +2203,62 @@ class _RequestHandler(BaseHTTPRequestHandler):
     @property
     def _stdout(self) -> TextIO | None:
         return self.server.stdout
+
+
+# ------------------------------------------------------------------------------
+# Credential Handling
+
+# Any username or password with a shorter length than defined here could
+# be discovered through a timing attack on Crystal's authentication code.
+_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH = 100
+
+# NOTE: @cache makes this function constant-time after initial invocation
+@cache
+def _get_padded_server_credential() -> tuple[str, str] | None:
+    """
+    Returns (username, password) from the CRYSTAL_SERVER_CREDENTIAL
+    environment variable, padded to length _MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH,
+    or None if not configured.
+
+    The env var format is: username:password
+    """
+    credential = os.environ.get('CRYSTAL_SERVER_CREDENTIAL', '')
+    if not credential:
+        return None
+    if ':' not in credential:
+        return None
+    (username, password) = credential.split(':', 1)
+    return (
+        username.rjust(_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH),
+        password.rjust(_MAX_SAFE_USERNAME_OR_PASSWORD_LENGTH)
+    )
+
+
+# Random secret key generated once per process, used to sign auth cookies.
+# Changing this (i.e. restarting the server) invalidates all existing cookies.
+_AUTH_SECRET_KEY: bytes = secrets.token_bytes(32)
+
+_AUTH_COOKIE_SEP = '.'
+
+def _make_auth_cookie(username: str) -> str:
+    """Returns a signed cookie value for the given username."""
+    payload = base64.urlsafe_b64encode(username.encode('utf-8')).decode('ascii')
+    sig = hmac.new(_AUTH_SECRET_KEY, payload.encode('ascii'), hashlib.sha256).hexdigest()
+    return f'{payload}{_AUTH_COOKIE_SEP}{sig}'
+
+def _verify_auth_cookie(cookie_value: str | None) -> bool:
+    """Returns whether cookie_value is a valid signed auth cookie."""
+    if cookie_value is None:
+        return False
+    if _AUTH_COOKIE_SEP not in cookie_value:
+        return False
+    (payload, provided_sig) = cookie_value.split(_AUTH_COOKIE_SEP, 1)
+    expected_sig = hmac.new(_AUTH_SECRET_KEY, payload.encode('ascii'), hashlib.sha256).hexdigest()
+    return secrets.compare_digest(provided_sig, expected_sig)
+
+def _url_encode(value: str) -> str:
+    """Percent-encodes a string for use in a URL query parameter value."""
+    return quote(value, safe='')
 
 
 # ------------------------------------------------------------------------------

@@ -19,6 +19,128 @@ SHOW_GENERIC_404_PAGE_INSTEAD_OF_NOT_IN_ARCHIVE_PAGE = (
 )
 
 
+def login_page_html(*, redirect_to: str, error: bool) -> str:
+    login_styles = dedent(
+        """
+        .cr-login-form {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #4A90E2;
+        }
+        
+        .cr-form-row {
+            margin-bottom: 16px;
+        }
+        
+        .cr-form-row__label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            font-size: 14px;
+            color: #495057;
+        }
+        
+        .cr-form-row__input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.15s ease;
+            box-sizing: border-box;
+        }
+        
+        .cr-form-row__input:focus {
+            outline: none;
+            border-color: #4A90E2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+        
+        .cr-login-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 10px 14px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+            .cr-login-form {
+                background: #404040;
+                border-left: 4px solid #6BB6FF;
+            }
+            
+            .cr-form-row__label {
+                color: #e2e8f0;
+            }
+            
+            .cr-form-row__input {
+                background: #4a5568;
+                border-color: #555;
+                color: #e0e0e0;
+            }
+            
+            .cr-form-row__input:focus {
+                border-color: #6BB6FF;
+                box-shadow: 0 0 0 3px rgba(107, 182, 255, 0.1);
+            }
+            
+            .cr-login-error {
+                background: #5a2d32;
+                border-color: #842029;
+                color: #f8d7da;
+            }
+        }
+        """
+    ).strip()
+    
+    redirect_to_html_attr = html_escape(redirect_to, quote=True)
+    error_html = (
+        '<div class="cr-login-error">Incorrect username or password. Please try again.</div>'
+        if error else ''
+    )
+    
+    content_html = dedent(
+        f"""
+        <div class="cr-page__icon">🔒</div>
+        
+        <div class="cr-page__title">
+            <strong>Sign In</strong>
+        </div>
+        
+        <p>This archive is password-protected. Please sign in to continue.</p>
+        
+        <div class="cr-login-form">
+            {error_html}
+            <form method="POST" action="/_/crystal/login">
+                <input type="hidden" name="redirect_to" value="{redirect_to_html_attr}" />
+                <div class="cr-form-row">
+                    <label for="cr-username-input" class="cr-form-row__label">Username</label>
+                    <input type="text" id="cr-username-input" name="username" autocomplete="username" class="cr-form-row__input" autofocus />
+                </div>
+                <div class="cr-form-row">
+                    <label for="cr-password-input" class="cr-form-row__label">Password</label>
+                    <input type="password" id="cr-password-input" name="password" autocomplete="current-password" class="cr-form-row__input" />
+                </div>
+                <input type="submit" value="Sign In" class="cr-button cr-button--primary" />
+            </form>
+        </div>
+        """
+    ).strip()
+    
+    return _base_page_html(
+        title_html='Sign In | Crystal',
+        style_html=login_styles,
+        content_html=content_html,
+        script_html='',
+    )
+
+
 def welcome_page_html() -> str:
     welcome_styles = dedent(
         """
@@ -155,8 +277,9 @@ def not_found_page_html() -> str:
 
 # NOTE: Crystal itself prefers to serve a Not in Archive page rather than a
 #       generic HTTP 404 page. However a generic HTTP 404 page is useful
-#       when exporting a Crystal project. In that context a single HTTP 404 page
-#       must be suitable as the HTTP 404 response for any page in the same project.
+#       when exporting a Crystal project as a static website.
+#       In that context a single HTTP 404 page must be suitable as the 
+#       HTTP 404 response for any page in the same project.
 def generic_404_page_html(default_url_prefix: str | None) -> str:
     default_url_prefix_b64 = (
         base64.b64encode(default_url_prefix.encode('utf-8')).decode('ascii')
