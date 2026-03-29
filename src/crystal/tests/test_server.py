@@ -10,6 +10,7 @@ from crystal.server import (
     _HEADER_ALLOWLIST, _HEADER_DENYLIST,
     _IGNORE_UNKNOWN_X_HEADERS, default_port_in_use_warnings_disabled,
     get_request_url, ProjectServer,
+    _make_auth_cookie,
 )
 from crystal.server.footer_banner import _FOOTER_BANNER_MESSAGE
 from crystal.server.special_pages import generic_404_page_html
@@ -110,37 +111,54 @@ async def test_given_default_serving_port_in_use_when_start_serving_project_then
 
 
 # ------------------------------------------------------------------------------
-# Test: Basic Auth (CRYSTAL_SERVER_CREDENTIAL)
+# Test: Auth (CRYSTAL_SERVER_CREDENTIAL)
 
-async def test_given_server_credential_set_when_request_without_auth_then_returns_401() -> None:
+async def test_given_server_credential_set_when_request_without_auth_then_redirects_to_login() -> None:
     with _server_credential('admin:secret123'), \
             Project() as project, \
             closing(ProjectServer(project, port=None)) as sp:
-        page = await bg_fetch_url(f'http://127.0.0.1:{sp.port}/')
-        assertEqual(401, page.status)
-        assertIn('Basic', page.headers.get('WWW-Authenticate', ''))
+        page = await bg_fetch_url(f'http://127.0.0.1:{sp.port}/', follow_redirects=False)
+        assertEqual(302, page.status)
+        assertIn('/_/crystal/login', page.headers.get('Location', ''))
 
 
-async def test_given_server_credential_set_when_request_with_valid_auth_then_returns_200() -> None:
+async def test_given_server_credential_set_when_request_with_valid_auth_cookie_then_returns_200() -> None:
     with _server_credential('admin:secret123'), \
             Project() as project, \
             closing(ProjectServer(project, port=None)) as sp:
-        creds = base64.b64encode(b'admin:secret123').decode()
+        cookie = _make_auth_cookie('admin')
         page = await bg_fetch_url(
             f'http://127.0.0.1:{sp.port}/',
-            headers={'Authorization': f'Basic {creds}'})
+            headers={'Cookie': f'cr-auth={cookie}'})
         assertEqual(200, page.status)
 
 
-async def test_given_server_credential_set_when_request_with_wrong_auth_then_returns_401() -> None:
+async def test_given_server_credential_set_when_login_post_with_valid_credentials_then_sets_cookie_and_redirects() -> None:
     with _server_credential('admin:secret123'), \
             Project() as project, \
             closing(ProjectServer(project, port=None)) as sp:
-        creds = base64.b64encode(b'admin:wrongpassword').decode()
         page = await bg_fetch_url(
-            f'http://127.0.0.1:{sp.port}/',
-            headers={'Authorization': f'Basic {creds}'})
-        assertEqual(401, page.status)
+            f'http://127.0.0.1:{sp.port}/_/crystal/login',
+            method='POST',
+            data=b'username=admin&password=secret123&redirect_to=%2F',
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            follow_redirects=False)
+        assertEqual(302, page.status)
+        assertIn('cr-auth=', page.headers.get('Set-Cookie', ''))
+        assertEqual('/', page.headers.get('Location', ''))
+
+
+async def test_given_server_credential_set_when_login_post_with_wrong_credentials_then_returns_login_page_with_error() -> None:
+    with _server_credential('admin:secret123'), \
+            Project() as project, \
+            closing(ProjectServer(project, port=None)) as sp:
+        page = await bg_fetch_url(
+            f'http://127.0.0.1:{sp.port}/_/crystal/login',
+            method='POST',
+            data=b'username=admin&password=wrongpassword&redirect_to=%2F',
+            headers={'Content-Type': 'application/x-www-form-urlencoded'})
+        assertEqual(200, page.status)
+        assertIn('Incorrect username or password', page.content)
 
 
 async def test_given_no_server_credential_when_request_without_auth_then_returns_200() -> None:
