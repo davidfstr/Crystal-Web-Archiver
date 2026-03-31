@@ -1081,6 +1081,36 @@ async def test_when_download_fails_then_download_button_enables_and_page_does_no
         await pw.run(pw_task)
 
 
+@awith_playwright
+async def test_given_nia_page_when_download_starts_then_all_controls_except_go_back_button_are_disabled(pw: Playwright) -> None:
+    async with _not_in_archive_page_visible_temporarily() as (comic1_url_in_archive, *_):
+        def pw_task(raw_page: RawPage, *args, **kwargs) -> None:
+            page = NotInArchivePage.open(raw_page, url_in_archive=comic1_url_in_archive)
+            
+            # Verify all controls are initially enabled
+            expect(page.action_button).to_be_enabled()
+            expect(page.go_back_button).to_be_enabled()
+            
+            with reloads_paused(raw_page):
+                # Start download (default action type: Create Root URL)
+                page.action_button.click()
+                
+                # Wait for progress bar to appear, which means the server has
+                # acknowledged the download request and it is now in progress
+                page.progress_bar.wait_for(state='visible')
+                
+                # Verify all controls are disabled while download is in progress
+                expect(page.create_root_url_radio).to_be_disabled()
+                expect(page.create_group_radio).to_be_disabled()
+                expect(page.download_only_radio).to_be_disabled()
+                expect(page.root_url_name_field).to_be_disabled()
+                expect(page.action_button).to_be_disabled()
+                
+                # Verify the "← Go Back" button is still enabled
+                expect(page.go_back_button).to_be_enabled()
+        await pw.run(pw_task)
+
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 # Test: "Not in Archive" Page: Create Group
 

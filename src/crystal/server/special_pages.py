@@ -882,7 +882,7 @@ def not_in_archive_html(
             </div>
             
             <div class="cr-page__actions">
-                <button onclick="history.back()" class="cr-button cr-button--secondary">
+                <button id="cr-back-button" onclick="history.back()" class="cr-button cr-button--secondary">
                     ← Go Back
                 </button>
                 <button id="cr-action-button" {'disabled ' if readonly else ''}onclick="onActionButtonClicked()" class="cr-button cr-button--primary">⬇ Download</button>
@@ -1166,14 +1166,9 @@ def not_in_archive_html(
                 const name = document.getElementById('cr-root-url-name').value.trim();
                 
                 clearActionMessage();
-                setActionInProgress(true);
-                
-                try {
-                    // Start individual URL download (which will create the root URL automatically)
-                    await startUrlDownload(/*isRoot=*/true, /*rootName=*/name);
-                } finally {
-                    setActionInProgress(false);
-                }
+                // Start individual URL download (which will create the root URL automatically).
+                // NOTE: startUrlDownload() manages setActionInProgress() internally.
+                await startUrlDownload(/*isRoot=*/true, /*rootName=*/name);
             }
             
             // -----------------------------------------------------------------
@@ -1193,6 +1188,7 @@ def not_in_archive_html(
                 clearActionMessage();
                 setActionInProgress(true);
                 
+                let downloadStarted = false;
                 try {
                     const createUrl = '/_/crystal/create-group';
                     const response = await fetch(createUrl, {
@@ -1223,6 +1219,8 @@ def not_in_archive_html(
                     // If download was requested, start individual URL download
                     // otherwise collapse the disabled form to show only essential elements
                     if (downloadGroupImmediately) {
+                        downloadStarted = true;
+                        // NOTE: startUrlDownload() manages setActionInProgress() internally.
                         await startUrlDownload(/*isRoot=*/false, /*rootName=*/'');
                     } else {
                         collapseCreateGroupForm();
@@ -1231,7 +1229,9 @@ def not_in_archive_html(
                     console.error('Group action error:', error);
                     showActionMessage('✖️ Failed to create group', /*isSuccess=*/false);
                 } finally {
-                    setActionInProgress(false);
+                    if (!downloadStarted) {
+                        setActionInProgress(false);
+                    }
                 }
             }
             
