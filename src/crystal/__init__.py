@@ -1,4 +1,4 @@
-__version__ = '2.2.0'
+__version__ = '2.3.0'
 _build_year = 2026
 
 APP_NAME = 'Crystal'

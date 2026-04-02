@@ -10,13 +10,13 @@
 # Usage:
 #   src/crystal_on_aws/deploy-image.sh                     Push "latest" to private ECR
 #   src/crystal_on_aws/deploy-image.sh --public --dev      Push "dev" to public ECR
-#   src/crystal_on_aws/deploy-image.sh --public --release  Push "2.2.0" + "latest" to public ECR
+#   src/crystal_on_aws/deploy-image.sh --public --release  Push "2.3.0" + "latest" to public ECR
 #
 # Options:
 #   --public    Target the public ECR repository (public.ecr.aws)
 #               instead of the private one. Requires --dev or --release.
 #   --dev       Push with the "dev" tag. Requires --public.
-#   --release   Push with the version tag (e.g. "2.2.0") and "latest".
+#   --release   Push with the version tag (e.g. "2.3.0") and "latest".
 #               Fails if the version tag already exists. Requires --public.
 #
 # Environment variables (optional overrides):
