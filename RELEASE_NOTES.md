@@ -10,7 +10,14 @@ Release Notes ⋮
 [high-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-high
 [medium-priority issues]: https://github.com/davidfstr/Crystal-Web-Archiver/issues?q=is%3Aopen+is%3Aissue+label%3Apriority-medium
 
-### main / v2.3.0
+### v2.3.0 (April 2, 2026)
+
+Crystal can now open projects saved to AWS S3 cloud hosting,
+which is a great location to archive very large projects to. Projects upgraded
+to use the new Pack16 format are especially efficient to store in the cloud.
+
+Crystal can now also publish archived websites to an AWS Lambda Function,
+making them publicly available to anybody with a web browser.
 
 * Workflow improvements
     * **Crystal on AWS:** Crystal can now serve an archived website directly
