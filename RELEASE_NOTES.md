@@ -29,7 +29,7 @@ making them publicly available to anybody with a web browser.
           [AWS CloudShell]. No local tools required.
         * Optionally password-protect the site
           by setting a username and password in the CloudFormation template.
-        * See [[Crystal on AWS]] in the wiki for full setup instructions.
+        * See [Crystal on AWS] in the wiki for full setup instructions.
     * Projects can now be opened from AWS S3 cloud hosting.
         * Use **File > Open Project from S3...** in the menu bar to open
           a project stored on S3.
