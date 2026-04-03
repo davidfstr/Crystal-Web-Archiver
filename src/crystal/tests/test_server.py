@@ -184,6 +184,7 @@ def _server_credential(credential: str) -> Iterator[None]:
     and clears the _get_padded_server_credential() cache on exit.
     """
     with patch.dict('os.environ', {'CRYSTAL_SERVER_CREDENTIAL': credential}):
+        _get_padded_server_credential.cache_clear()
         try:
             yield
         finally:
