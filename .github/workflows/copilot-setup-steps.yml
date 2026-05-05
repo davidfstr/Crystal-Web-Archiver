@@ -34,7 +34,7 @@ jobs:
       # BEGIN: Duplicate steps from build-linux job in ci.yaml
       
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.14.0
         uses: actions/setup-python@v5
