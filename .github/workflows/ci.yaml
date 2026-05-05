@@ -408,9 +408,13 @@ jobs:
         run: poetry install
 
       - name: Determine how to run python in virtual environment
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BUILD_DIST_ARTIFACT: ${{ github.event.inputs.build_dist_artifact }}
+          BUILD_ARCH_MACOS: ${{ github.event.inputs.build_arch_macos }}
         run: |
           # Determine if we should use poetry run prefix
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ("${{ github.event.inputs.build_dist_artifact }}" == "true" || "${{ github.event.inputs.build_arch_macos }}" == "universal2") ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && ("$BUILD_DIST_ARTIFACT" == "true" || "$BUILD_ARCH_MACOS" == "universal2") ]]; then
             echo "POETRY_RUN=" >> $GITHUB_ENV
           else
             echo "POETRY_RUN=poetry run " >> $GITHUB_ENV
@@ -469,6 +473,9 @@ jobs:
         id: build_app_and_disk_image
         working-directory: "./setup"
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          BUILD_DIST_ARTIFACT: ${{ github.event.inputs.build_dist_artifact }}
+          
           # ex: "Developer ID Application: John Smith (##########)"
           CERTIFICATE_NAME: ${{ secrets.CERTIFICATE_NAME }}
           # ex: "me@example.com"
@@ -480,7 +487,7 @@ jobs:
           # Pass the workflow_dispatch input to the script
           SHOW_NOTARIZATION_LOG: ${{ github.event.inputs.show_notarization_log }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.build_dist_artifact }}" == "true" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$BUILD_DIST_ARTIFACT" == "true" ]]; then
             # If building a distribution artifact then also build the disk image
             MAKE_POST_ARGS=""
           else
