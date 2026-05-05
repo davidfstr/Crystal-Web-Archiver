@@ -50,6 +50,9 @@ run-name: >
 env:
   TEST_NAMES: ""
 
+# Disallow all GITHUB_TOKEN permissions by default
+permissions: {}
+
 # 1. Test Crystal binary on each supported OS
 # 2. Test Crystal with Address Sanitizer on macOS specially
 #    because segfaults more common on macOS
