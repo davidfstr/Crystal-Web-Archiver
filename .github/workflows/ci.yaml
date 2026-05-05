@@ -193,7 +193,7 @@ jobs:
       # NOTE: Compiler choice taken from: https://github.com/python/cpython/actions/runs/17596932916/workflow
       - name: Set up GCC-10 for ASAN
         if: steps.restore-cache.outputs.cache-hit != 'true'
-        uses: egor-tensin/setup-gcc@v1
+        uses: egor-tensin/setup-gcc@v2
         with:
           version: 10
       
