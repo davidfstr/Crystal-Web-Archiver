@@ -492,7 +492,7 @@ jobs:
       # Upload py2app logs on .app build failure
       - name: Upload py2app logs
         if: failure() && steps.build_app_and_disk_image.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: py2app-logs-${{ matrix.os }}-${{ matrix.python-version }}
           path: |
@@ -520,7 +520,7 @@ jobs:
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
           path: screenshots
@@ -531,7 +531,7 @@ jobs:
       - name: "Core dump: Upload if test failure"
         id: upload_core_dump
         if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.run_ui_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coredump-${{ matrix.os }}-${{ matrix.python-version }}
           path: /cores
@@ -544,14 +544,14 @@ jobs:
           tar -czvf "${{ runner.temp }}/tool_cache_python.tar.gz" *
       - name: "Core dump: Upload tool cache artifact"
         if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tool_cache-python-${{ matrix.os }}-${{ matrix.python-version }}
           path: ${{runner.temp}}/tool_cache_python.tar.gz
           compression-level: 0  # no compression
       - name: "Core dump: Upload app artifact"
         if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: setup-dist-${{ matrix.os }}-${{ matrix.python-version }}
           path: setup/dist
@@ -563,7 +563,7 @@ jobs:
                 github.event.inputs.build_dist_artifact == 'true' && 
                 matrix.python-version == '3.13.5' && 
                 matrix.os == 'macos-14' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-mac
           path: setup/dist-mac/*.dmg
@@ -703,7 +703,7 @@ jobs:
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
           path: screenshots
@@ -792,7 +792,7 @@ jobs:
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
           path: screenshots
@@ -803,7 +803,7 @@ jobs:
                 github.event.inputs.build_dist_artifact == 'true' &&
                 matrix.python-version == '3.13.5' &&
                 matrix.os == 'windows-2025' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-win
           path: "setup\\dist-win\\*.exe"
