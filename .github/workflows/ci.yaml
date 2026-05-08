@@ -471,11 +471,13 @@ jobs:
             fi
             exit 0
           fi
-          echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
+          
           # Create a new keychain with an empty password for temporary use in CI
           security create-keychain -p "" build.keychain
           # Import the Developer ID certificate and private key into the new keychain, allowing only codesign to access the key
+          echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
           security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign > /dev/null
+          rm certificate.p12
           # Set the list of keychains where credentials are searched by default to be only the new keychain
           security list-keychains -s build.keychain
           # Set the keychain where codesign stores new credentials
