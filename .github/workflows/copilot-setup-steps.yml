@@ -1,7 +1,7 @@
 name: "Copilot Setup Steps"
 
-on:
-  # Automatically run the setup steps when they are changed 
+on:  # zizmor: ignore[concurrency-limits] - Each Copilot Agent request must run as an independent non-cancellable job
+  # Automatically run the setup steps when they are changed
   # to allow for easy validation
   push:
     paths:
@@ -19,6 +19,7 @@ permissions: {}
 jobs:
   # NOTE: Copilot requires this exact job name
   copilot-setup-steps:
+    name: "Setup Copilot environment"
     # Same as runs-on from build-linux job in ci.yaml
     runs-on: ubuntu-22.04
     
