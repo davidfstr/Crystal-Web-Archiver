@@ -293,8 +293,10 @@ jobs:
 
       - name: Fail if wxPython wagon is not available for this Python version
         if: ${{ !startsWith(matrix.python-version, '3.13.') && !startsWith(matrix.python-version, '3.14.') }}
+        env:
+          MATRIX_PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
-          echo "ERROR: No precompiled wxPython wagon is available for Python ${{ matrix.python-version }} on Linux."
+          echo "ERROR: No precompiled wxPython wagon is available for Python $MATRIX_PYTHON_VERSION on Linux."
           echo "You must build a .wgn for this Python version and update the workflow."
           exit 1
 
@@ -555,9 +557,12 @@ jobs:
         continue-on-error: true
       - name: "Core dump: Archive tool cache"
         if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
+        env:
+          RUNNER_TOOL_CACHE: ${{ runner.tool_cache }}
+          RUNNER_TEMP: ${{ runner.temp }}
         run: |
-          cd "${{ runner.tool_cache }}/Python"
-          tar -czvf "${{ runner.temp }}/tool_cache_python.tar.gz" *
+          cd "$RUNNER_TOOL_CACHE/Python"
+          tar -czvf "$RUNNER_TEMP/tool_cache_python.tar.gz" *
       - name: "Core dump: Upload tool cache artifact"
         if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
@@ -674,8 +679,10 @@ jobs:
 
       - name: Fail if wxPython wagon is not available for this Python version
         if: ${{ !startsWith(matrix.python-version, '3.13.') && !startsWith(matrix.python-version, '3.14.') }}
+        env:
+          MATRIX_PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
-          echo "ERROR: No precompiled wxPython wagon is available for Python ${{ matrix.python-version }} on Linux."
+          echo "ERROR: No precompiled wxPython wagon is available for Python $MATRIX_PYTHON_VERSION on Linux."
           echo "You must build a .wgn for this Python version and update the workflow."
           exit 1
 
