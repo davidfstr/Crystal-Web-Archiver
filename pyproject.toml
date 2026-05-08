@@ -147,6 +147,7 @@ playwright = "^1.48.0"
 dill = "^0.3.8"
 coverage = "^7.11.0"
 pylint = ">=4.0,<4.1"
+zizmor = "*"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
