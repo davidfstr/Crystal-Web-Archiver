@@ -53,6 +53,14 @@ env:
 # Disallow all GITHUB_TOKEN permissions by default
 permissions: {}
 
+# Only allow 1 concurrent set of CI jobs per PR or branch name. Cancel any others.
+# Why:
+# - https://cambridge-iccs.github.io/green-ci/best_practices.html#concurrency
+# - https://docs.zizmor.sh/audits/#concurrency-limits
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 # 1. Test Crystal binary on each supported OS
 # 2. Test Crystal with Address Sanitizer on macOS specially
 #    because segfaults more common on macOS
