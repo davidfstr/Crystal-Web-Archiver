@@ -376,6 +376,10 @@ jobs:
       # TODO: Convert this to a workflow_dispatch input so that it can be
       #       enabled in the GitHub Actions UI.
       ENABLE_CORE_DUMPS: 'false'
+    # Enable access to distribution secrets only if a distribution artifact
+    # was requested and the criteria of the "distribution" environment is met.
+    # Only approved users can use the "distribution" environment.
+    environment: ${{ github.event.inputs.build_dist_artifact == 'true' && 'distribution' || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
