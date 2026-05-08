@@ -1,7 +1,7 @@
 # Useful documentation for GitHub Actions workflows:
 # https://docs.github.com/en/actions/using-workflows/about-workflows
 
-name: ci
+name: "Continuous Integration"
 
 # Useful documentation for `on`:
 # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#on
@@ -61,6 +61,7 @@ jobs:
   # CAUTION: macOS runners cost 10x a Linux runner and 5x a Windows runner.
   #          Keep the matrix small to avoid high costs.
   build-macos-asan:
+    name: "Build for macOS (with ASAN)"
     # Only run this expensive job when explicitly requested or when building distribution artifacts
     if: ${{ github.event.inputs.run_asan_tests == 'true' || github.event.inputs.build_dist_artifact == 'true' }}
     strategy:
@@ -164,6 +165,7 @@ jobs:
           crystal test --parallel ${TEST_NAMES}
   
   build-linux-asan:
+    name: "Build for Linux (with ASAN)"
     # Only run this expensive job when explicitly requested or when building distribution artifacts
     if: ${{ github.event.inputs.run_asan_tests == 'true' || github.event.inputs.build_dist_artifact == 'true' }}
     strategy:
@@ -344,6 +346,7 @@ jobs:
   # CAUTION: macOS runners cost 10x a Linux runner and 5x a Windows runner.
   #          Keep the matrix small to avoid high costs.
   build-macos:
+    name: "Build for macOS"
     strategy:
       matrix:
         os:
@@ -591,6 +594,7 @@ jobs:
           if-no-files-found: warn
 
   build-linux:
+    name: "Build for Linux"
     strategy:
       matrix:
         os:
@@ -735,6 +739,7 @@ jobs:
           if-no-files-found: ignore
 
   build-windows:
+    name: "Build for Windows"
     strategy:
       matrix:
         os:
