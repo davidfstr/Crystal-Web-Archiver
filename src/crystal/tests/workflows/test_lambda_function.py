@@ -342,19 +342,22 @@ def _lambda_container_serving_xkcd_project(
 def _build_lambda_image() -> None:
     """Build the Lambda Docker image from src/crystal_on_aws/Dockerfile.lambda."""
     project_root = _get_project_root()
-    subprocess.check_call(
-        [
-            'docker', 'build',
-            '--platform', 'linux/amd64',
-            '--provenance=false',
-            '-f', 'src/crystal_on_aws/Dockerfile.lambda',
-            '-t', _DOCKER_IMAGE_NAME,
-            '.',
-        ],
-        cwd=project_root,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        subprocess.check_output(
+            [
+                'docker', 'build',
+                '--platform', 'linux/amd64',
+                '--provenance=false',
+                '-f', 'src/crystal_on_aws/Dockerfile.lambda',
+                '-t', _DOCKER_IMAGE_NAME,
+                '.',
+            ],
+            cwd=project_root,
+            stderr=subprocess.STDOUT,
+            encoding='utf-8',
+        )
+    except subprocess.CalledProcessError as e:
+        raise Exception(f'Failed to build Lambda Docker image:\n\n{e.output}')
 
 
 def _wait_for_container_ready(container_url: str, container_id: str) -> None:
