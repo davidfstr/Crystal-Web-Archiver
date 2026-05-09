@@ -103,7 +103,7 @@ class BeautifulFastSoup(FastSoup):
             tag_name: str | None=None, 
             **attrs: str | Pattern | Literal[True]
             ) -> Iterable[Tag]:
-        return self._base.find_all(tag_name, **attrs)  # type: ignore[arg-type]
+        return self._base.find_all(tag_name, **attrs)  # type: ignore[call-overload]
     
     # NOTE: BeautifulFastSoup doesn't actually support precompiling find_all() queries
     @classmethod
