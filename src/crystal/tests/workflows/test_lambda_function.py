@@ -10,6 +10,7 @@ from crystal.tests.util.server import extracted_project
 from crystal.tests.util.subtests import SubtestsContext, awith_subtests, with_subtests
 from crystal.tests.util import xtempfile
 import base64
+from functools import cache
 import http.client
 import os
 import re
@@ -339,25 +340,51 @@ def _lambda_container_serving_xkcd_project(
                 )
 
 
+@cache  # only run once
 def _build_lambda_image() -> None:
     """Build the Lambda Docker image from src/crystal_on_aws/Dockerfile.lambda."""
     project_root = _get_project_root()
-    try:
-        subprocess.check_output(
-            [
-                'docker', 'build',
-                '--platform', 'linux/amd64',
-                '--provenance=false',
-                '-f', 'src/crystal_on_aws/Dockerfile.lambda',
-                '-t', _DOCKER_IMAGE_NAME,
-                '.',
-            ],
-            cwd=project_root,
-            stderr=subprocess.STDOUT,
-            encoding='utf-8',
-        )
-    except subprocess.CalledProcessError as e:
-        raise Exception(f'Failed to build Lambda Docker image:\n\n{e.output}')
+    
+    did_try_fix_ec2_credentials = False
+    while True:
+        try:
+            subprocess.check_output(
+                [
+                    'docker', 'build',
+                    '--platform', 'linux/amd64',
+                    '--provenance=false',
+                    '-f', 'src/crystal_on_aws/Dockerfile.lambda',
+                    '-t', _DOCKER_IMAGE_NAME,
+                    '.',
+                ],
+                cwd=project_root,
+                stderr=subprocess.STDOUT,
+                encoding='utf-8',
+            )
+        except subprocess.CalledProcessError as e:
+            is_ecr_auth_error = (
+                'public.ecr.aws' in e.output and 
+                '403 Forbidden' in e.output
+            )
+            if is_ecr_auth_error and not did_try_fix_ec2_credentials:
+                # Fix ECR credentials
+                print(
+                    'WARNING: Stale public.ecr.aws credentials detected; '
+                    'running "docker logout public.ecr.aws" to clear them. '
+                    'Retrying build...'
+                )
+                subprocess.run(
+                    ['docker', 'logout', 'public.ecr.aws'],
+                    capture_output=True,
+                )
+                did_try_fix_ec2_credentials = True
+                
+                # Try again (1 time)
+                continue
+            
+            raise Exception(f'Failed to build Lambda Docker image:\n\n{e.output}')
+        else:
+            break
 
 
 def _wait_for_container_ready(container_url: str, container_id: str) -> None:
