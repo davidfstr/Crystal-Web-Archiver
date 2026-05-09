@@ -1,7 +1,7 @@
 # Useful documentation for GitHub Actions workflows:
 # https://docs.github.com/en/actions/using-workflows/about-workflows
 
-name: ci
+name: "Continuous Integration"
 
 # Useful documentation for `on`:
 # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#on
@@ -50,6 +50,17 @@ run-name: >
 env:
   TEST_NAMES: ""
 
+# Disallow all GITHUB_TOKEN permissions by default
+permissions: {}
+
+# Only allow 1 concurrent set of CI jobs per PR or branch name. Cancel any others.
+# Why:
+# - https://cambridge-iccs.github.io/green-ci/best_practices.html#concurrency
+# - https://docs.zizmor.sh/audits/#concurrency-limits
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 # 1. Test Crystal binary on each supported OS
 # 2. Test Crystal with Address Sanitizer on macOS specially
 #    because segfaults more common on macOS
@@ -58,6 +69,7 @@ jobs:
   # CAUTION: macOS runners cost 10x a Linux runner and 5x a Windows runner.
   #          Keep the matrix small to avoid high costs.
   build-macos-asan:
+    name: "Build for macOS (with ASAN)"
     # Only run this expensive job when explicitly requested or when building distribution artifacts
     if: ${{ github.event.inputs.run_asan_tests == 'true' || github.event.inputs.build_dist_artifact == 'true' }}
     strategy:
@@ -77,11 +89,13 @@ jobs:
       MallocNanoZone: 0
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
       
       - name: Restore cached Python and virtual environment
         id: restore-cache
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: |
             cpython
@@ -108,7 +122,7 @@ jobs:
       
       - name: Install non-ASAN Python for Playwright
         id: install-nonasan-python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: ${{ matrix.python-version }}
           update-environment: false
@@ -132,7 +146,7 @@ jobs:
         run: poetry install
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: ~/Library/Caches/ms-playwright
           key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
@@ -159,6 +173,7 @@ jobs:
           crystal test --parallel ${TEST_NAMES}
   
   build-linux-asan:
+    name: "Build for Linux (with ASAN)"
     # Only run this expensive job when explicitly requested or when building distribution artifacts
     if: ${{ github.event.inputs.run_asan_tests == 'true' || github.event.inputs.build_dist_artifact == 'true' }}
     strategy:
@@ -176,11 +191,13 @@ jobs:
       ASAN_OPTIONS: detect_leaks=0:allocator_may_return_null=1:handle_segv=0
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
       
       - name: Restore cached Python and virtual environment
         id: restore-cache
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: |
             cpython
@@ -193,7 +210,7 @@ jobs:
       # NOTE: Compiler choice taken from: https://github.com/python/cpython/actions/runs/17596932916/workflow
       - name: Set up GCC-10 for ASAN
         if: steps.restore-cache.outputs.cache-hit != 'true'
-        uses: egor-tensin/setup-gcc@v1
+        uses: egor-tensin/setup-gcc@a2861a8b8538f49cf2850980acccf6b05a1b2ae4  # v2
         with:
           version: 10
       
@@ -220,7 +237,7 @@ jobs:
       
       - name: Install non-ASAN Python for Playwright
         id: install-nonasan-python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: ${{ matrix.python-version }}
           update-environment: false
@@ -286,8 +303,10 @@ jobs:
 
       - name: Fail if wxPython wagon is not available for this Python version
         if: ${{ !startsWith(matrix.python-version, '3.13.') && !startsWith(matrix.python-version, '3.14.') }}
+        env:
+          MATRIX_PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
-          echo "ERROR: No precompiled wxPython wagon is available for Python ${{ matrix.python-version }} on Linux."
+          echo "ERROR: No precompiled wxPython wagon is available for Python $MATRIX_PYTHON_VERSION on Linux."
           echo "You must build a .wgn for this Python version and update the workflow."
           exit 1
 
@@ -301,7 +320,7 @@ jobs:
         run: poetry install
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
@@ -335,6 +354,7 @@ jobs:
   # CAUTION: macOS runners cost 10x a Linux runner and 5x a Windows runner.
   #          Keep the matrix small to avoid high costs.
   build-macos:
+    name: "Build for macOS"
     strategy:
       matrix:
         os:
@@ -356,12 +376,18 @@ jobs:
       # TODO: Convert this to a workflow_dispatch input so that it can be
       #       enabled in the GitHub Actions UI.
       ENABLE_CORE_DUMPS: 'false'
+    # Enable access to distribution secrets only if a distribution artifact
+    # was requested and the criteria of the "distribution" environment is met.
+    # Only approved users can use the "distribution" environment.
+    environment: ${{ github.event.inputs.build_dist_artifact == 'true' && 'distribution' || '' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -399,16 +425,20 @@ jobs:
         run: poetry install
 
       - name: Determine how to run python in virtual environment
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BUILD_DIST_ARTIFACT: ${{ github.event.inputs.build_dist_artifact }}
+          BUILD_ARCH_MACOS: ${{ github.event.inputs.build_arch_macos }}
         run: |
           # Determine if we should use poetry run prefix
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ("${{ github.event.inputs.build_dist_artifact }}" == "true" || "${{ github.event.inputs.build_arch_macos }}" == "universal2") ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && ("$BUILD_DIST_ARTIFACT" == "true" || "$BUILD_ARCH_MACOS" == "universal2") ]]; then
             echo "POETRY_RUN=" >> $GITHUB_ENV
           else
             echo "POETRY_RUN=poetry run " >> $GITHUB_ENV
           fi
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: ~/Library/Caches/ms-playwright
           key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
@@ -441,11 +471,13 @@ jobs:
             fi
             exit 0
           fi
-          echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
+          
           # Create a new keychain with an empty password for temporary use in CI
           security create-keychain -p "" build.keychain
           # Import the Developer ID certificate and private key into the new keychain, allowing only codesign to access the key
+          echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
           security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign > /dev/null
+          rm certificate.p12
           # Set the list of keychains where credentials are searched by default to be only the new keychain
           security list-keychains -s build.keychain
           # Set the keychain where codesign stores new credentials
@@ -460,6 +492,9 @@ jobs:
         id: build_app_and_disk_image
         working-directory: "./setup"
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          BUILD_DIST_ARTIFACT: ${{ github.event.inputs.build_dist_artifact }}
+          
           # ex: "Developer ID Application: John Smith (##########)"
           CERTIFICATE_NAME: ${{ secrets.CERTIFICATE_NAME }}
           # ex: "me@example.com"
@@ -471,7 +506,7 @@ jobs:
           # Pass the workflow_dispatch input to the script
           SHOW_NOTARIZATION_LOG: ${{ github.event.inputs.show_notarization_log }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.build_dist_artifact }}" == "true" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$BUILD_DIST_ARTIFACT" == "true" ]]; then
             # If building a distribution artifact then also build the disk image
             MAKE_POST_ARGS=""
           else
@@ -492,7 +527,7 @@ jobs:
       # Upload py2app logs on .app build failure
       - name: Upload py2app logs
         if: failure() && steps.build_app_and_disk_image.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: py2app-logs-${{ matrix.os }}-${{ matrix.python-version }}
           path: |
@@ -520,7 +555,7 @@ jobs:
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
           path: screenshots
@@ -531,7 +566,7 @@ jobs:
       - name: "Core dump: Upload if test failure"
         id: upload_core_dump
         if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.run_ui_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: coredump-${{ matrix.os }}-${{ matrix.python-version }}
           path: /cores
@@ -539,19 +574,22 @@ jobs:
         continue-on-error: true
       - name: "Core dump: Archive tool cache"
         if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
+        env:
+          RUNNER_TOOL_CACHE: ${{ runner.tool_cache }}
+          RUNNER_TEMP: ${{ runner.temp }}
         run: |
-          cd "${{ runner.tool_cache }}/Python"
-          tar -czvf "${{ runner.temp }}/tool_cache_python.tar.gz" *
+          cd "$RUNNER_TOOL_CACHE/Python"
+          tar -czvf "$RUNNER_TEMP/tool_cache_python.tar.gz" *
       - name: "Core dump: Upload tool cache artifact"
         if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: tool_cache-python-${{ matrix.os }}-${{ matrix.python-version }}
           path: ${{runner.temp}}/tool_cache_python.tar.gz
           compression-level: 0  # no compression
       - name: "Core dump: Upload app artifact"
         if: env.ENABLE_CORE_DUMPS == 'true' && failure() && steps.upload_core_dump.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: setup-dist-${{ matrix.os }}-${{ matrix.python-version }}
           path: setup/dist
@@ -563,13 +601,14 @@ jobs:
                 github.event.inputs.build_dist_artifact == 'true' && 
                 matrix.python-version == '3.13.5' && 
                 matrix.os == 'macos-14' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: dist-mac
           path: setup/dist-mac/*.dmg
           if-no-files-found: warn
 
   build-linux:
+    name: "Build for Linux"
     strategy:
       matrix:
         os:
@@ -589,10 +628,12 @@ jobs:
     timeout-minutes: 18  # 150% of normal time: 12 min, as of 2025-09-17
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: ${{ matrix.python-version }}
       
@@ -656,8 +697,10 @@ jobs:
 
       - name: Fail if wxPython wagon is not available for this Python version
         if: ${{ !startsWith(matrix.python-version, '3.13.') && !startsWith(matrix.python-version, '3.14.') }}
+        env:
+          MATRIX_PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
-          echo "ERROR: No precompiled wxPython wagon is available for Python ${{ matrix.python-version }} on Linux."
+          echo "ERROR: No precompiled wxPython wagon is available for Python $MATRIX_PYTHON_VERSION on Linux."
           echo "You must build a .wgn for this Python version and update the workflow."
           exit 1
 
@@ -671,7 +714,7 @@ jobs:
         run: poetry install
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
@@ -703,13 +746,14 @@ jobs:
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
           path: screenshots
           if-no-files-found: ignore
 
   build-windows:
+    name: "Build for Windows"
     strategy:
       matrix:
         os:
@@ -725,10 +769,12 @@ jobs:
     timeout-minutes: 30  # 150% of normal time: 20 min, as of 2025-11-29
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: ${{ matrix.python-version }}
       
@@ -747,7 +793,7 @@ jobs:
         run: poetry install
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: ~\AppData\Local\ms-playwright
           key: playwright-browsers-${{ matrix.os }}-${{ hashFiles('**/pyproject.toml') }}
@@ -792,7 +838,7 @@ jobs:
 
       - name: Upload screenshot if test failure
         if: failure() && steps.run_ui_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: screenshots-${{ matrix.os }}-${{ matrix.python-version }}
           path: screenshots
@@ -803,7 +849,7 @@ jobs:
                 github.event.inputs.build_dist_artifact == 'true' &&
                 matrix.python-version == '3.13.5' &&
                 matrix.os == 'windows-2025' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: dist-win
           path: "setup\\dist-win\\*.exe"

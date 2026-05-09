@@ -1,7 +1,7 @@
 name: "Copilot Setup Steps"
 
-on:
-  # Automatically run the setup steps when they are changed 
+on:  # zizmor: ignore[concurrency-limits] - Each Copilot Agent request must run as an independent non-cancellable job
+  # Automatically run the setup steps when they are changed
   # to allow for easy validation
   push:
     paths:
@@ -13,9 +13,13 @@ on:
   # Allow manual testing through the repository's "Actions" tab
   workflow_dispatch:
 
+# Disallow all GITHUB_TOKEN permissions by default
+permissions: {}
+
 jobs:
   # NOTE: Copilot requires this exact job name
   copilot-setup-steps:
+    name: "Setup Copilot environment"
     # Same as runs-on from build-linux job in ci.yaml
     runs-on: ubuntu-22.04
     
@@ -34,10 +38,12 @@ jobs:
       # BEGIN: Duplicate steps from build-linux job in ci.yaml
       
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Python 3.14.0
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: 3.14.0
       
@@ -99,7 +105,7 @@ jobs:
         run: poetry install
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-ubuntu-22.04-${{ hashFiles('**/pyproject.toml') }}
