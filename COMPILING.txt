@@ -4,8 +4,8 @@ Building a Package for Distribution
 macOS 13 and later:
 1. Install the prerequisites:
     * Python >=3.13,<3.14, from Mac installer on python.org
-    * Poetry 2.1.1: https://python-poetry.org/
-        $ python -m pip install poetry==2.1.1
+    * Poetry 2.4.0: https://python-poetry.org/
+        $ python -m pip install poetry==2.4.0
 2. Run the following commands in a Terminal window from this directory:
     $ poetry install
     $ cd setup
@@ -18,12 +18,12 @@ Windows 11 and later:
         - Do select the option to alter the system PATH.
         - Ensure Python works in Command Prompt:
             $ python -V
-    * Poetry 2.1.1: https://python-poetry.org/
+    * Poetry 2.4.0: https://python-poetry.org/
         - Manually download the get-poetry.py script if needed
         - Run the get-poetry.py script in Command Prompt:
             $ python get-poetry.py
         - Or install directly:
-            $ python -m pip install poetry==2.1.1
+            $ python -m pip install poetry==2.4.0
         - Add to the end of your ';'-separated system PATH:
             C:\Users\__YOUR_USERNAME__\.poetry\bin
         - Ensure Poetry works in Command Prompt:

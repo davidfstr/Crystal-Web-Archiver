@@ -44,7 +44,7 @@ WORKDIR /var/task
 
 # Install Poetry (needed only to export the dependency list).
 # NOTE: poetry-plugin-export is no longer bundled with Poetry 2.x.
-RUN pip install --quiet "poetry==2.1.1" poetry-plugin-export
+RUN pip install --quiet "poetry==2.4.0" poetry-plugin-export
 
 # Export all production dependencies, excluding packages that are:
 #   - GUI-only (wxPython — requires GTK3 and a display)
