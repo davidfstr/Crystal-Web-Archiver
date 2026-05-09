@@ -1007,15 +1007,15 @@ async def _did_launch(
                             del app_prefs.unsaved_untitled_project_path
                             raise
                     else:
-                        # NOTE: Can raise SystemExit
+                        # NOTE: Can raise SystemExit, CancelOpenProject
                         retry_on_cancel = True
                         project = await _prompt_for_project(progress_listener, **project_kwargs)
                 elif filepath == '__new__':
-                    # NOTE: Can raise SystemExit
+                    # NOTE: Can raise SystemExit, CancelOpenProject
                     retry_on_cancel = True
                     project = await _prompt_for_project(progress_listener, initial_choice=wx.ID_YES, **project_kwargs)
                 elif filepath == '__open__':
-                    # NOTE: Can raise SystemExit
+                    # NOTE: Can raise SystemExit, CancelOpenProject
                     retry_on_cancel = True
                     project = await _prompt_for_project(progress_listener, initial_choice=wx.ID_NO, **project_kwargs)
                 elif filepath == '__open_s3__':
@@ -1106,9 +1106,9 @@ async def _prompt_for_project(
     """
     Raises:
     * SystemExit -- if the user quits rather than providing a project
+    * CancelOpenProject -- if the user cancels a project-picking sub-dialog
     """
     from crystal.browser.main_window import MainWindow
-    from crystal.progress.interface import CancelOpenProject
     from crystal.ui.dialog import BetterMessageDialog
     from crystal.util.wx_bind import bind
     from crystal.util.wx_window import SetFocus
@@ -1203,43 +1203,38 @@ async def _prompt_for_project(
                         initial_choice
                     ))
                 
-                while True:
-                    from crystal.util.wx_dialog import ShowModalAsync
-                    choice = await ShowModalAsync(dialog)
-                    
-                    project_kwargs = {
-                        **project_kwargs,
-                        **dict(readonly=dialog.IsCheckBoxChecked()),
-                    }  # reinterpret
-                    
-                    try:
-                        if choice == wx.ID_YES:  # New Project
-                            return _create_untitled_project(dialog, progress_listener, **project_kwargs)
-                        elif choice == wx.ID_NO:  # Open
-                            # If MacOpenFile queued a project to be opened, open it
-                            global _project_to_open_soon
-                            if _project_to_open_soon is not None:
-                                (filepath, is_untitled) = _project_to_open_soon
-                                _project_to_open_soon = None  # consume
+                from crystal.util.wx_dialog import ShowModalAsync
+                choice = await ShowModalAsync(dialog)
 
-                                if filepath == '__open_s3__':
-                                    return _prompt_to_open_project_from_s3(
-                                        progress_listener, **project_kwargs)
+                project_kwargs = {
+                    **project_kwargs,
+                    **dict(readonly=dialog.IsCheckBoxChecked()),
+                }  # reinterpret
 
-                                project_kwargs['is_untitled'] = is_untitled
-                                return _load_project(
-                                    filepath,
-                                    progress_listener,
-                                    **project_kwargs)  # type: ignore[arg-type]
+                if choice == wx.ID_YES:  # New Project
+                    return _create_untitled_project(dialog, progress_listener, **project_kwargs)
+                elif choice == wx.ID_NO:  # Open
+                    # If MacOpenFile queued a project to be opened, open it
+                    global _project_to_open_soon
+                    if _project_to_open_soon is not None:
+                        (filepath, is_untitled) = _project_to_open_soon
+                        _project_to_open_soon = None  # consume
 
-                            return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
-                        elif choice == wx.ID_CANCEL:
-                            raise SystemExit()
-                        else:
-                            raise AssertionError()
-                    except CancelOpenProject:
-                        progress_listener.reset()
-                        continue
+                        if filepath == '__open_s3__':
+                            return _prompt_to_open_project_from_s3(
+                                progress_listener, **project_kwargs)
+
+                        project_kwargs['is_untitled'] = is_untitled
+                        return _load_project(
+                            filepath,
+                            progress_listener,
+                            **project_kwargs)  # type: ignore[arg-type]
+
+                    return _prompt_to_open_project(dialog, progress_listener, **project_kwargs)
+                elif choice == wx.ID_CANCEL:
+                    raise SystemExit()
+                else:
+                    raise AssertionError()
             finally:
                 _interrupt_prompt_for_project_to_open_project = None
     finally:
