@@ -951,6 +951,8 @@ async def test_can_download_and_serve_a_static_site_using_using_keyboard() -> No
                 
                 selected_ti = TreeItem.GetSelection(mw.entity_tree.window)
                 assert selected_ti is not None
+                if selected_ti.Text == 'Cannot download: Disk is full':
+                    raise AssertionError('Disk is full')
                 if selected_ti.Text.startswith('/_/https/xkcd.com/150/ - '):
                     break
             else:
