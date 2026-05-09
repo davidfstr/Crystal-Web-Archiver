@@ -1,0 +1,4 @@
+[solver]
+# Don't update to versions of packages until they've been released for a few days,
+# to avoid pulling compromised dependencies before they are yanked
+min-release-age = 4
