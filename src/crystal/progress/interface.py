@@ -77,6 +77,9 @@ class CancelLoadUrls(Exception):
 # NOTE: See subclass LoadUrlsProgressDialog for the documentation of
 #       the various methods in this interface.
 class LoadUrlsProgressListener:
+    def reset(self) -> None:
+        pass
+    
     def will_load_resources(self, approx_resource_count: int) -> None:
         pass
     
@@ -87,9 +90,6 @@ class LoadUrlsProgressListener:
         pass
     
     def indexing_resources(self) -> None:
-        pass
-    
-    def reset(self) -> None:
         pass
 
 
@@ -106,6 +106,9 @@ class CancelSaveAs(Exception):
 # NOTE: See subclass SaveAsProgressDialog for the documentation of
 #       the various methods in this interface.
 class SaveAsProgressListener:
+    def reset(self) -> None:
+        pass
+    
     def calculating_total_size(self, message: str) -> None:
         pass
     
@@ -116,9 +119,6 @@ class SaveAsProgressListener:
         pass
     
     def did_copy_files(self) -> None:
-        pass
-    
-    def reset(self) -> None:
         pass
 
 
