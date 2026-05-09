@@ -62,9 +62,6 @@ class OpenProjectProgressListener:
     
     def creating_entity_tree_nodes(self, entity_tree_node_count: int) -> None:
         pass
-    
-    def reset(self) -> None:
-        pass
 
 
 DummyOpenProjectProgressListener = OpenProjectProgressListener
