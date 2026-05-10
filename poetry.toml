@@ -2,3 +2,12 @@
 # Don't update to versions of packages until they've been released for a few days,
 # to avoid pulling compromised dependencies before they are yanked
 min-release-age = 4
+
+[installer]
+# Only allow installation of wheels, which do NOT execute arbitrary setup.py code,
+# unlike legacy sdist distributions
+only-binary = [":all:"]
+# flameprof 0.4 is allowed to install an sdist with a setup.py because its setup.py
+# was audited, determined to be safe, and because flameprof 0.4 is so old that it
+# does not offer a wheel-based distribution
+no-binary = ["flameprof"]

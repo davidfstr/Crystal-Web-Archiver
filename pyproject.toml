@@ -134,7 +134,13 @@ pytest = ">=9.0.3,<10.0"
 mypy = ">=1.19,<1.20"
 types-tqdm = "^4.66.0.20240106"
 types-tzlocal = "^4.2.0"
-flameprof = "^0.4"
+# NOTE: Be careful when upgrading flameprof because it is allowed to run arbitrary
+#       setup.py code during installation via Poetry's `no-binary = ["flameprof"]` setting.
+#       
+#       The setup.py for flameprof 0.4 was audited manually and appears to be safe.
+#       The only reason flameprof 0.4 is allowed to run setup.py is because it does not offer
+#       a wheel-based distribution, which would eliminate the need to eval setup.py.
+flameprof = "==0.4"
 # Declare setuptools explicitly for setup.py and py2exe.
 # NOTE: setuptools >= 78.1.1 avoids a security vulnerability:
 #       https://github.com/davidfstr/Crystal-Web-Archiver/security/dependabot/15
