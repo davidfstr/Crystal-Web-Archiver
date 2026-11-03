@@ -32,6 +32,7 @@ from crystal.util.xthreading import (
 )
 from functools import wraps
 import os
+import random
 import shutil
 import sys
 import threading
@@ -872,6 +873,7 @@ from urllib.parse import urljoin
 # Limit how fast Crystal can download from a remote server to avoid overwhelming
 # any particular remote server.
 DELAY_BETWEEN_DOWNLOADS = 1.0  # secs
+DOWNLOAD_DELAY_JITTER = 0.1  # secs
 
 # Configures where the DELAY_BETWEEN_DOWNLOADS delay is inserted
 # into the download process. Options are:
@@ -1012,7 +1014,10 @@ class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
                 else:
                     self.subtitle = 'Waiting before performing next request...'
                     assert not is_foreground_thread()
-                    sleep(DELAY_BETWEEN_DOWNLOADS)
+                    sleep(DELAY_BETWEEN_DOWNLOADS + random.uniform(
+                        -DOWNLOAD_DELAY_JITTER,
+                        DOWNLOAD_DELAY_JITTER,
+                    ))
     
     # === Utility ===
     
