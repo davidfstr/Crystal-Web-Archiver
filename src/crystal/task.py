@@ -875,6 +875,13 @@ from urllib.parse import urljoin
 DELAY_BETWEEN_DOWNLOADS = 1.0  # secs
 DOWNLOAD_DELAY_JITTER = 0.1  # secs
 
+
+def _download_delay_seconds() -> float:
+    return max(0.0, DELAY_BETWEEN_DOWNLOADS + random.uniform(
+        -DOWNLOAD_DELAY_JITTER,
+        DOWNLOAD_DELAY_JITTER,
+    ))
+
 # Configures where the DELAY_BETWEEN_DOWNLOADS delay is inserted
 # into the download process. Options are:
 # * 'after_every_page' -- 
@@ -1014,10 +1021,7 @@ class DownloadResourceBodyTask(_LeafTask['ResourceRevision']):
                 else:
                     self.subtitle = 'Waiting before performing next request...'
                     assert not is_foreground_thread()
-                    sleep(DELAY_BETWEEN_DOWNLOADS + random.uniform(
-                        -DOWNLOAD_DELAY_JITTER,
-                        DOWNLOAD_DELAY_JITTER,
-                    ))
+                    sleep(_download_delay_seconds())
     
     # === Utility ===
     
@@ -1407,7 +1411,7 @@ class DownloadResourceTask(Task['ResourceRevision']):
                             'called unexpectedly on foreground thread. '
                             'Cannot safely wait between downloads without '
                             'blocking the foreground thread.')
-                    sleep(DELAY_BETWEEN_DOWNLOADS)
+                    sleep(_download_delay_seconds())
             
             self.finish()
     
