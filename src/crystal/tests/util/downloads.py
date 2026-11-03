@@ -13,11 +13,14 @@ if TYPE_CHECKING:
 @contextmanager
 def delay_between_downloads_minimized() -> Iterator[None]:
     old_value = crystal.task.DELAY_BETWEEN_DOWNLOADS
+    old_jitter = crystal.task.DOWNLOAD_DELAY_JITTER
     crystal.task.DELAY_BETWEEN_DOWNLOADS = 0
+    crystal.task.DOWNLOAD_DELAY_JITTER = 0
     try:
         yield
     finally:
         crystal.task.DELAY_BETWEEN_DOWNLOADS = old_value
+        crystal.task.DOWNLOAD_DELAY_JITTER = old_jitter
 
 
 def load_children_of_drg_task(

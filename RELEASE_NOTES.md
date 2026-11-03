@@ -3,6 +3,9 @@ Release Notes ⋮
 
 ### Future
 
+* Resource downloads now use a small random delay variation to avoid
+  multiple Crystal instances remaining synchronized.
+
 * See the [Roadmap].
 * See open [high-priority issues] and [medium-priority issues].
 
